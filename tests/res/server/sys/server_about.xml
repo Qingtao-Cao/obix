@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Copyright (c) 2009 Andrey Litvinov
+
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License version 2 as
+	published by the Free Software Foundation.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+	See the GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program; if not, write to the Free Software
+	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+-->
+	<!--About object for oBIX server-->
+<obj href="/obix/about/" is="obix:About" display="Obix About" hidden="true">
+	<str name="obixVersion" val="1.0" href="obixVersion" displayName="oBIX Version" />
+
+	<str name="serverName" val="C oBIX Server" href="serverName"
+		displayName="Server Name" />
+	<abstime name="serverTime" null="true" href="serverTime"
+		displayName="Server Time" />
+	<abstime name="serverBootTime" null="true" href="serverBootTime"
+		displayName="Server Boot Time" />
+
+	<str name="vendorName" val="Andrey Litvinov" href="vendorName"
+		displayName="Vendor Name" />
+	<uri name="vendorUrl" val="http://no.url" href="vendorUrl"
+		displayName="Vendor Url" />
+
+	<str name="productName" val="C oBIX Tools" href="productName"
+		displayName="Product Name" />
+	<str name="productVersion" val="0.1" href="productVersion"
+		displayName="Product Version" />
+	<uri name="productUrl" val="http://code.google.com/p/c-obix-tools/"
+		href="productUrl" displayName="Product Url" />
+</obj>

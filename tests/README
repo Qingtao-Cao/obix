@@ -1,0 +1,34 @@
+# oBIX tests
+
+
+## Pre-requisites
+
+You need to be able to compile oBIX. This means you need to install any libraries as listed in the oBIX README.
+
+## Automatically running the tests
+
+Run the tests automatically via CMake:
+
+1. Enable CMakeTests in CMakeLists.txt
+
+~~~~
+ENABLE_TESTING()
+
+~~~~
+~~~~
+$ cmake .
+$ make
+$ make test
+~~~~
+
+## Manually running the tests
+
+1. Run tests/scripts/setup.sh to update paths in config files
+2. Start the server: lighttpd -D -f tests/lighttpd/lighttpd.conf
+3. First run? Add example devices: tests/scripts/signUp
+4. Run any individual script you want
+
+## TODO
+
+1. Get autotests to do something more than just start the server :)
+1. Get rid of the abs path

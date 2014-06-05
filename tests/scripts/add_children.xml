@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<obj name="reset" href="/obix/deviceRoot/example/parent/reset" val="true">
+	<ref name="int_ref" href="/obix/deviceRoot/TestDevice/int"/>
+	<str href="string" name="string" val="123"/>
+	<bool href="bool" name="bool" val="false"/>
+</obj>

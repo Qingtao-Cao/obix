@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]
+	Copyright (c) 2009 Andrey Litvinov
+
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License version 2 as
+	published by the Free Software Foundation.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+	See the GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program; if not, write to the Free Software
+	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+-->
+<obj href="/obix/deviceRoot" display="Sandbox for test purpose" hidden="true">
+	<!--
+		Test device with contains various control values which can be changed.
+	-->
+	<obj name="TestDevice" href="TestDevice" displayName="Device for tests">
+		<str name="strValue" href="str" displayName="Custom String" val="test string"
+			writable="true" />
+		<bool name="boolSwitch" href="bool" displayName="Power Switch"
+			val="true" writable="true" />
+		<int name="temperature" href="int" displayName="Temperature" val="25"
+			writable="true" />
+		<enum name="conditionMode" href="enum" displayName="Air Condition Mode"
+			val="homeDay" writable="true">
+			<list href="range" is="obix:Range">
+				<obj name="homeDay" displayName="At home: Day mode" />
+				<obj name="homeNight" displayName="At home: Night mode" />
+				<obj name="away" displayName="Away: Short leave" />
+				<obj name="awayLong" displayName="Away: Vacation" />
+			</list>
+		</enum>
+	</obj>
+</obj>
+

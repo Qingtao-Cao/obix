@@ -1,0 +1,10 @@
+curl -XPOST --data '
+<list is="obix:BatchIn">
+	<uri  val="/obix/test/" />
+	<uri is="obix:Write" >
+		<bool val="true" />
+	</uri>
+	<uri is="obix:Invoke" val="/obix/watchService/make_err" />
+
+</list>
+' http://localhost:4242/obix/batch

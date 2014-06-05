@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<obj name="ExampleTimer" href="/obix/deviceRoot/example" writable="true">
+	<obj href="parent" val="yes">
+		<reltime name="time" href="/obix/deviceRoot/example/parent/time" val="PT0S"/>
+		<bool name="reset" href="/oibx/deviceRoot/example/parent/reset" val="false" writable="true"/>
+	</obj>
+</obj>

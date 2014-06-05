@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Copyright (c) 2009 Andrey Litvinov
+
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License version 2 as
+	published by the Free Software Foundation.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+	See the GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program; if not, write to the Free Software
+	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+-->
+<!--
+	Device lobby that contains the list of all registered devices.
+
+	The href attribute of every reference node must contain the ABSOLUTE URI
+	of relevant node, so that oBIX clients can get to know their real locations.
+
+	Considering that it may contain hundreds of thousands lines of information
+	the device lobby is declared as HIDDEN so as not to overwhelm the oBIX
+	lobby object. Also this will help avoid displaying device lobby along with
+	its reference node in the oBIX lobby already.
+-->
+<list href="/obix/devices" displayName="Device List" of="obix:ref" hidden="true">
+	<ref href="/obix/deviceRoot/TestDevice" name="TestDevice" displayName="Device for tests"/>
+</list>

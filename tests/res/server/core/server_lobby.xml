@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Copyright (c) 2009 Andrey Litvinov
+
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License version 2 as
+	published by the Free Software Foundation.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+	See the GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program; if not, write to the Free Software
+	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+-->
+	<!--Lobby object for the oBIX server-->
+<obj href="/obix/" is="obix:Lobby /obix/def/SignUpLobby /obix/def/DevicesLobby">
+	<ref name="about" href="/obix/about" is="obix:About"/>
+	<op name="batch" href="batch" in="obix:BatchIn" out="obix:BatchOut">
+		<!--
+			op meta attribute is the index of operation handler in post_handler.c
+		-->
+		<meta op="8"/>
+	</op>
+	<ref name="historyService" href="/obix/historyService" is="obix:HistoryService"/>
+	<ref name="watchService" href="/obix/watchService" is="obix:WatchService"/>
+	<ref name="devices" href="/obix/devices" display="Device References" is="obix:list"/>
+	<obj name="deviceRoot" href="deviceRoot" display="Device Lobby" hidden="true"/>
+	<op name="signUp" href="signUp" in="obix:obj" out="obix:obj">
+		<meta op="7"/>
+	</op>
+</obj>

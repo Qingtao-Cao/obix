@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Copyright (c) 2009 Andrey Litvinov
+
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License version 2 as
+	published by the Free Software Foundation.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+	See the GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program; if not, write to the Free Software
+	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+-->
+	<!--
+		Custom contracts definition.
+	-->
+<obj href="/obix/def/" hidden="true">
+	<!--
+		Extension for the Lobby object which allows clients adding their own
+		information to the server using signUp operation.
+	-->
+	<obj href="SignUpLobby" is="obix:Lobby">
+		<op name="signUp" in="obix:obj" out="obix:obj" />
+	</obj>
+	<obj href="DevicesLobby" is="obix:Lobby">
+		<ref name="devices" />
+	</obj>
+	<!--
+		Advanced Watch object, which supports long poll requests (pollChanges
+		operation doesn't answer immediately, but waits for something to be
+		returned for at least pollWaitInterval.min, but no more than
+		pollWaitInterval.max).
+	-->
+	<obj href="LongPollWatch" is="obix:Watch">
+		<obj name="pollWaitInterval">
+			<reltime name="min" min="PT0S" val="PT0S" writable="true" />
+			<reltime name="max" min="PT0S" val="PT0S" writable="true" />
+		</obj>
+	</obj>
+</obj>

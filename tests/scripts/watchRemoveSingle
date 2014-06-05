@@ -1,0 +1,59 @@
+#! /bin/sh -
+#
+# A simple shell script to test Watch.Remove facility
+# 
+# TODO:
+# By far only one uri can be specified by this script, however
+# a watch object may have been monitoring a number of objects.
+#
+# Qingtao Cao <qingtao.cao@nextdc.com>
+#
+
+usage()
+{
+	cat << EOF
+usage:
+	$0 [ -v ] < -w "watch ID" > < -u "URL" >
+Where
+	-v Verbose mode
+	-w ID of the watch object
+	-u URL of the object monitored by the watch, such as
+	   /obix/deviceRoot/TestDevice/bool/
+EOF
+}
+
+verbose= watch= uri=
+
+while getopts :vw:u: opt
+do
+	case $opt in
+	w)	watch=$OPTARG
+		;;
+	u)	uri=$OPTARG
+		;;
+	v)	verbose="-v"
+		;;
+	esac
+done
+
+shift $((OPTIND - 1))
+
+if [ -z "$watch" -o -z "$uri" ]
+then
+	usage
+	exit
+fi
+
+setsize=64
+folder=`expr $watch / $setsize`
+
+# No quotation marks around $verbose or otherwise curl
+# will complain about malformed URL if it is empty
+
+curl $verbose -XPOST --data "
+<obj is=\"obix:WatchIn\">
+	<list names=\"hrefs\">
+		<uri val=\"$uri\"/>
+	</list>
+</obj> " \
+http://localhost:4242/obix/watchService/$folder/watch$watch/remove

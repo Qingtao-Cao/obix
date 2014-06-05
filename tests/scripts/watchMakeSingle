@@ -1,0 +1,33 @@
+#! /bin/sh -
+#
+# A simple shell script to create a single watch object
+#
+# Qingtao Cao <qingtao.cao@nextdc.com>
+#
+
+usage()
+{
+	cat << EOF
+usage:
+	$0 [ -v ]
+Where
+	-v Verbose mode
+EOF
+}
+
+verbose= 
+
+while getopts :v opt
+do
+	case $opt in
+	v)	verbose="-v"
+		;;
+	esac
+done
+
+shift $((OPTIND - 1))
+
+# No quotation marks around $verbose or otherwise curl
+# will complain about malformed URL if it is empty
+
+curl $verbose -XPOST --data '' http://localhost:4242/obix/watchService/make

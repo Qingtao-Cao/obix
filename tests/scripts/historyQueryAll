@@ -1,0 +1,45 @@
+#! /bin/sh -
+#
+# A simple shell script to test History.Query facility to get
+# all history data of the specified device.
+#
+# Qingtao Cao <qingtao.cao@nextdc.com>
+#
+
+usage()
+{
+	cat << EOF
+usage:
+	$0 [ -v ] < -d "device href segment" >
+Where
+	-v Verbose mode
+	-d The href segment of the device, e.g., "/M1/DH1/BCM01/CB01/"
+EOF
+}
+
+device= verbose= 
+
+while getopts :vd: opt
+do
+	case $opt in
+	d)	device=$OPTARG
+		;;
+	v)	verbose="-v"
+		;;
+	esac
+done
+
+shift $((OPTIND - 1))
+
+if [ -z "$device" ]
+then
+	usage
+	exit
+fi
+
+# Discard the potential history lobby URI and preceding and following slash
+device=${device#/obix/historyService/histories/}
+device=${device#/}
+device=${device%/}
+
+curl $verbose -XPOST --data '' http://localhost:4242/obix/historyService/histories/$device/query

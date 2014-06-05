@@ -1,0 +1,78 @@
+#! /bin/sh -
+#
+# A simple shell script to test History.Query facility to get
+# a number of satisfactory history data of the specified device.
+#
+# Qingtao Cao <qingtao.cao@nextdc.com>
+#
+
+usage()
+{
+	cat<<EOF
+usage:
+	$0 [ -v ] < -d "device href segment" > [ -n "number of records" ] [ -s "start timestamp" ] [ -e "end timestamp" ]
+Where
+	-v Verbose mode
+	-d The href segment of the device, e.g., "/M1/DH1/BCM01/CB01/"
+	-n The number of records desirable
+	-s The start timestamp, as in format "$(date +%FT%T)"
+	-e The end timestamp, as in format "$(date +%FT%T)"
+EOF
+}
+
+device= verbose= start_ts= end_ts= number=
+
+while getopts :vd:n:s:e: opt
+do
+	case $opt in
+	d)	device=$OPTARG
+		;;
+	s)	start_ts=$OPTARG
+		;;
+	e)	end_ts=$OPTARG
+		;;
+	n)	number=$OPTARG
+		;;
+	v)	verbose="-v"
+		;;
+	esac
+done
+
+shift $((OPTIND - 1))
+
+if [ -z "$device" ]
+then
+	usage
+	exit
+fi
+
+message=
+
+if [ -n "$number" -a -n "$start_ts" -a -n "$end_ts" ]; then
+	message="<int name=\"limit\" val=\"$number\"/>
+			<abstime name=\"start\" val=\"$start_ts\"/>
+			<abstime name=\"end\" val=\"$end_ts\"/>"
+elif [ -n "$number" -a -n "$start_ts" ]; then
+	message="<int name=\"limit\" val=\"$number\"/>
+			<abstime name=\"start\" val=\"$start_ts\"/>"
+elif [ -n "$number" -a -n "$end_ts" ]; then
+	message="<int name=\"limit\" val=\"$number\"/>
+			<abstime name=\"end\" val=\"$end_ts\"/>"
+elif [ -n "$number" ]; then
+	message="<int name=\"limit\" val=\"$number\"/>"
+elif [ -n "$start_ts" -a -n "$end_ts" ]; then
+	message="<abstime name=\"start\" val=\"$start_ts\"/>
+			<abstime name=\"end\" val=\"$end_ts\"/>"
+elif [ -n "$start_ts" ]; then
+	message="<abstime name=\"start\" val=\"$start_ts\"/>"
+elif [ -n "$end_ts" ]; then
+	message="<abstime name=\"end\" val=\"$end_ts\"/>"
+fi
+
+# Discard the potential history lobby URI and preceding and following slash
+device=${device#/obix/historyService/histories/}
+device=${device#/}
+device=${device%/}
+
+curl $verbose -XPOST --data "<obj is=\"obix:HistoryQuery\"> $message </obj>" \
+	http://localhost:4242/obix/historyService/histories/$device/query

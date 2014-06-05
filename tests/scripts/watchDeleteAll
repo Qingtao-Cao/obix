@@ -1,0 +1,13 @@
+#! /bin/sh -
+#
+# A simple shell script to delete all watch objects
+#
+# Qingtao Cao <qingtao.cao@nextdc.com>
+#
+
+for i in `curl http://localhost:4242/obix/watchService | \
+		  grep LongPollWatch | \
+		  awk -F 'href="watch' '{print $2}' | \
+		  awk -F '" ' '{print $1}'`; do \
+	./watchDeleteSingle -w $i > null 2>&1; \
+done

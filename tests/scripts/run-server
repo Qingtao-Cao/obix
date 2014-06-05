@@ -1,0 +1,19 @@
+#!/bin/bash
+
+OBIX_BINDIR=/work/obix-preview/build/server
+
+sudo killall lighttpd >/dev/null 2>&1
+sudo lighttpd -f /etc/lighttpd/lighttpd.conf
+sleep 1
+
+OBIXBIN=obix-fcgi
+OBIXPID=$(pgrep $OBIXBIN)
+
+if [ -n "$OBIXPID" ]; then
+	echo OBIX found process ID $OBIXPID
+	echo "attach $OBIXPID" >gdb.tmp
+	sudo gdb -tui -x gdb.tmp $OBIX_BINDIR/$OBIXBIN 
+	rm -f gdb.tmp
+else
+	echo "lighttpd failed to start. Check syslog/journal to find out why"
+fi

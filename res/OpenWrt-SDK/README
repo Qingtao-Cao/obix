@@ -1,0 +1,112 @@
+This folder contains scripts which can be used to compile CoT project using 
+OpenWrt SDK (http://openwrt.org).
+
+Tested with the following OpenWrt releases:
+ - kamikaze 7.09
+ - kamikaze 8.09
+
+NOTE:
+
+ I'm not a member of OpenWrt team and most probably know about this platform 
+ even less than you. Thus I do not guarantee any quality of the following 
+ advises. Use them on your own risk. Still they can be helpful, so if you know 
+ any better solution, please send it to me. Thanks. 
+
+USAGE:
+
+1. Obtain a working version of OpenWrt SDK
+
+   You can use ready builds from Downloads section of OpenWrt website 
+   (e.g. http://downloads.openwrt.org/kamikaze/7.09/brcm47xx-2.6/OpenWrt-SDK-br
+   cm47xx-2.6-for-Linux-i686.tar.bz2) or compile it from sources:
+   
+   - Get sources of required OpenWRT release either from svn or from Downloads
+     section of http://openwrt.org.
+   - Go to the root source folder and execute 'make menuconfig'
+   - If everything is OK configuration menu will appear:
+      - Choose required target platform in 'Target System' submenu;
+      - In 'Target Images' submenu uncheck all options;
+      - Check the 'Build the OpenWrt Image Builder' option;
+      - Save and exit menu.
+   - Execute 'make V=99' and have some coffee (or lunch) while OpenWrt SDK is
+     being built for you.
+   - After compilation is completed you will find archive with SDK in ./bin/
+     folder.
+   - If any problems occur refer to the OpenWrt documentation.  
+   
+2. Prepare Makefile
+
+   - Copy the ./cot folder from here (with Makefile in it) to 
+     <OpenWrt SDK>/package/cot/
+   - The Makefile you've just copied says to Open Wrt SDK that it should 
+     download distribution of the project from the Internet. If you don't want
+     SDK to do it (or URL form Makefile is not available, which is quite 
+     possible) than just put the tarball (.tar.bz2 archive of the project) to 
+     the Open Wrt SDK download folder (usually it is <OpenWrt SDK>/dl/).
+      
+3. Get makefiles for dependency libraries
+
+   CoT depends on the following libraries which are not included to the Open Wrt
+   SDK by default:   
+   - libfcgi
+   - libupnp
+   - libcurl
+   These also require following additional libraries to be compiled:
+   - openssl
+   - uclibc++
+   - zlib
+   
+   One way to include these libs to Open Wrt SDK is to compile them as a 
+   separate packages. In order to do so, you'll need to get ready makefiles 
+   which will make all magic for you (of course, you are free to compile them by 
+   yourself instead). Makefiles for these libraries (as well as some patch 
+   files) can be downloaded from the OpenWrt SVN repository:
+   
+   - If you use old Open Wrt SDK release (<= 8.09) than checkout fcgi, libupnp, 
+     curl and uclibc++ folders from 
+     svn://svn.openwrt.org/openwrt/branches/packages_8.09/libs/
+     Otherwise use svn://svn.openwrt.org/openwrt/packages/libs/ for latest 
+     version of makefiles.
+   - Makefiles for two remaining libraries (zlib and openssl) can be found at
+     build root in ./package/ folder: 
+      svn://svn.openwrt.org/openwrt/tags/<release tag>/package - for old 
+                                                                 releases
+      svn://svn.openwrt.org/openwrt/package                    - for latest
+                                                                 version
+   - Save downloaded folders to <OpenWrt SDK>/package/ folder.
+ 
+4. Time to build
+
+   Now everything should be ready for compilation. Go to <OpenWrt SDK> root 
+   folder and execute following command: 'make package/cot-compile V=99'
+   Ideally SDK should start from compiling dependency libraries, by downloading
+   required sources from Internet and making other intelligent stuff.
+   If you are lucky and everything is compiled successfully, than output
+   packages will found at <OpenWrt SDK>/bin folder. You'll need the following 
+   packages from here:   
+   - libcot_<version>.ipk			Common library for oBIX clients and server;
+   - cot-server_<version>.ipk		oBIX server;
+   - cot-adapters_<version>.ipk		oBIX adapters.
+   
+   There will be also packages for all dependency libraries but I don't 
+   recommend using those. It is better to download ready packages from OpenWrt 
+   website if possible, because I can't guarantee that described steps produce 
+   truly correct packages.   
+   
+   In order to recompile CoT use 'make package/cot-clean V=99' first. Command
+   'make clean V=99' will remove everything including compilation outputs of all
+   dependency libraries. Note, that in case if you want OpenWrt SDK to download 
+   a new version of CoT from Internet, you will need to delete cached CoT 
+   tarball from <OpenWrt SDK>/dl folder. Otherwise SDK will use this cached 
+   archive and you will receive the same version compiled. 
+   
+5. Compiling own oBIX client applications     
+
+   After successful compilation of CoT packages it will be possible to compile 
+   packages for your own applications which use libcot library using the same
+   OpenWrt SDK. libcot binaries and headers are installed during compilation to 
+   <OpenWrt SDK>/staging_dir/<target platform>/usr/lib and
+   <OpenWrt SDK>/staging_dir/<target platform>/usr/include/cot respectively.    
+   They can be also automatically located by configure script of your project 
+   (e.g. using AC_SEARCH_LIBS).
+                                                                

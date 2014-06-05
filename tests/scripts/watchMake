@@ -1,0 +1,40 @@
+#! /bin/sh -
+#
+# A simple shell script to create a number of watch objects.
+#
+# Qingtao Cao <qingtao.cao@nextdc.com>
+#
+
+usage()
+{
+	cat << EOF
+usage:
+	$0 < -n num >
+where:
+	-n The number of watches to create
+EOF
+}
+
+verbose= num=
+
+while getopts :vn: opt
+do
+	case $opt in
+	n)	num=$OPTARG
+		;;
+	v)	verbose="-v"
+		;;
+	esac
+done
+
+if [ -z "$num" ]; then
+	usage
+	exit
+fi
+
+declare -i i
+i=0
+while [ $i -lt $num ]; do
+	./watchMakeSingle
+	i=$i+1
+done

@@ -1,0 +1,13 @@
+curl -XPOST --data '
+<list is="obix:BatchIn">
+	<uri is="obix:Write" val="/obix/deviceRoot/TestDevice/bool">
+		<bool val="false"/>
+	</uri>
+	<uri is="obix:Write" val="/obix/deviceRoot/TestDevice/bool">
+		<bool val="true"/>
+	</uri>
+	<uri is="obix:Write" val="/obix/deviceRoot/TestDevice/bool">
+		<bool val="bool"/>
+	</uri>
+</list>
+' http://localhost:4242/obix/batch

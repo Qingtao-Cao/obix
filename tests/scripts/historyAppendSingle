@@ -1,0 +1,62 @@
+#! /bin/sh -
+#
+# A simple shell script to test History.Append facility to append
+# one single history record to the specified device.
+#
+# Qingtao Cao <qingtao.cao@nextdc.com>
+#
+
+usage()
+{
+	cat<<EOF
+usage:
+	$0 [ -v ] < -d "device href segment" > < -s "timestamp" > [ -c "content" ]
+Where
+	-v Verbose mode
+	-d The href segment of the device, e.g., "/M1/DH1/BCM01/CB01/"
+	-s The start timestamp, as in format '$(date +%FT%T)'
+	-c The body of the history record without <obj> and </obj> enclosure
+
+EOF
+}
+
+device= verbose= timestamp= content=
+
+while getopts :vd:s:c: opt
+do
+	case $opt in
+	d)	device=$OPTARG
+		;;
+	s)	timestamp=$OPTARG
+		;;
+	c)	content=$OPTARG
+		;;
+	v)	verbose="-v"
+		;;
+	esac
+done
+
+shift $((OPTIND - 1))
+
+if [ -z "$device" -o -z "$timestamp" ]; then
+	usage
+	exit
+fi
+
+# Discard the potential history lobby URI and preceding and following slash
+device=${device#/obix/historyService/histories/}
+device=${device#/}
+device=${device%/}
+
+curl $verbose -XPOST --data "
+<obj is=\"obix:historyAppendIn\">
+	<list name=\"data\" of=\"obix:HistoryRecord\">
+		<obj is=\"obix:HistoryRecord\">
+			<abstime name=\"timestamp\" val=\"$timestamp\"/> 
+			<obj data=\"$content\"/>
+		</obj>
+	</list>
+</obj>" \
+http://localhost:4242/obix/historyService/histories/$device/append
+
+echo
