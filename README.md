@@ -82,6 +82,8 @@ Below is a short description of the main files in the package:
  
 * src/
 
+    * docs/ - Further documentation.
+
     * libs/ - Source for oBIX library.
 
     * server/ - Source for oBIX server.
