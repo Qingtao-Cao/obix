@@ -104,8 +104,11 @@ FILE(MAKE_DIRECTORY "${CMAKE_BUILD_DIR}/histories")
 INSTALL(DIRECTORY "${CMAKE_BUILD_DIR}/histories"
     DESTINATION "${OBIX_VAR_LIB_DIR}")
 
-# Sym link /var/lib/obix/histories to /etc/obix/res/server
+# chown then sym link /var/lib/obix/histories to /etc/obix/res/server
 IF(CMAKE_HOST_UNIX)
+    INSTALL(CODE "
+        EXECUTE_PROCESS(COMMAND chown -R lighttpd:lighttpd ${OBIX_HISTORY_FILES_DIR})
+        ")
     INSTALL(CODE "
         EXECUTE_PROCESS(COMMAND ln -s ${OBIX_HISTORY_FILES_DIR} ${OBIX_ETC_SERVER_DIR})
         ")
