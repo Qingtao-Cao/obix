@@ -28,17 +28,17 @@ ENDIF(NOT LIGHTTPD_CONF_DIR)
 
 # Location of obix config files
 IF(NOT OBIX_ETC_DIR)
-    SET(OBIX_ETC_DIR "/etc/obix")
+    SET(OBIX_ETC_DIR "/etc/obix" CACHE PATH "Location of oBIX config files")
 ENDIF(NOT OBIX_ETC_DIR)
 
-# Location of resources file
+# Location of resources directory
 IF(NOT OBIX_ETC_RES_DIR)
-    SET(OBIX_ETC_RES_DIR "${OBIX_ETC_DIR}/res")
+    SET(OBIX_ETC_RES_DIR "${OBIX_ETC_DIR}/res" CACHE PATH "Location of resources directory")
 ENDIF(NOT OBIX_ETC_RES_DIR)
 
 # Server file within resources
 IF(NOT OBIX_ETC_SERVER_DIR)
-    SET(OBIX_ETC_SERVER_DIR "${OBIX_ETC_RES_DIR}/server")
+    SET(OBIX_ETC_SERVER_DIR "${OBIX_ETC_RES_DIR}/server" CACHE PATH "Server file within resource")
 ENDIF(NOT OBIX_ETC_SERVER_DIR)
 
 
@@ -89,6 +89,7 @@ INSTALL(DIRECTORY "${CMAKE_BUILD_DIR}/obix"
 INSTALL(DIRECTORY "res"
     DESTINATION "${OBIX_ETC_DIR}")
 
+
 ######################################
 # Install obix-fcgi.conf into /etc/lighttpd/conf.d/
 #
@@ -109,7 +110,8 @@ IF(CMAKE_HOST_UNIX)
         EXECUTE_PROCESS(COMMAND ln -s ${OBIX_HISTORY_FILES_DIR} ${OBIX_ETC_SERVER_DIR})
         ")
 ENDIF(CMAKE_HOST_UNIX)
-    
+
+
 ######################################
 # make obix-clean
 #
