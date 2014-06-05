@@ -12,14 +12,35 @@ CMAKE_POLICY(SET CMP0011 OLD)
 SET(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install dir prefix")
 
 # Location of history files.
+IF(NOT OBIX_VAR_LIB_DIR)
+    SET(OBIX_VAR_LIB_DIR "/var/lib/obix" CACHE PATH "Var lib directory path")
+ENDIF(NOT OBIX_VAR_LIB_DIR)
+
+# Location of history files.
 IF(NOT OBIX_HISTORY_FILES_DIR)
-    SET(OBIX_HISTORY_FILES_DIR "/var/lib/obix" CACHE PATH "Histories directory path")
+    SET(OBIX_HISTORY_FILES_DIR "${OBIX_VAR_LIB_DIR}/histories" CACHE PATH "Histories directory path")
 ENDIF(NOT OBIX_HISTORY_FILES_DIR)
 
 # Location of lighttpd conf directory.
 IF(NOT LIGHTTPD_CONF_DIR)
     SET(LIGHTTPD_CONF_DIR "/etc/lighttpd/conf.d/" CACHE PATH "Lighttpd config directory path")
 ENDIF(NOT LIGHTTPD_CONF_DIR)
+
+# Location of obix config files
+IF(NOT OBIX_ETC_DIR)
+    SET(OBIX_ETC_DIR "/etc/obix")
+ENDIF(NOT OBIX_ETC_DIR)
+
+# Location of resources file
+IF(NOT OBIX_ETC_RES_DIR)
+    SET(OBIX_ETC_RES_DIR "${OBIX_ETC_DIR}/res")
+ENDIF(NOT OBIX_ETC_RES_DIR)
+
+# Server file within resources
+IF(NOT OBIX_ETC_SERVER_DIR)
+    SET(OBIX_ETC_SERVER_DIR "${OBIX_ETC_RES_DIR}/server")
+ENDIF(NOT OBIX_ETC_SERVER_DIR)
+
 
 # Compiler 
 SET(CMAKE_C_COMPILER "gcc")
@@ -62,7 +83,6 @@ SET (CMAKE_LINKER "/usr/bin/ld")
 ######################################
 # Install the res directory structure into /etc/obix
 #
-SET(OBIX_ETC_DIR "/etc/obix")
 FILE(MAKE_DIRECTORY "${CMAKE_BUILD_DIR}/obix")
 INSTALL(DIRECTORY "${CMAKE_BUILD_DIR}/obix"
     DESTINATION "/etc")
@@ -78,11 +98,18 @@ INSTALL(FILES "res/obix-fcgi.conf"
 
 ######################################
 # Create /var/lib/obix/histories
-# Post-install need to sym link from /etc/obix/res/server
+#
 FILE(MAKE_DIRECTORY "${CMAKE_BUILD_DIR}/histories")
 INSTALL(DIRECTORY "${CMAKE_BUILD_DIR}/histories"
-    DESTINATION "${OBIX_HISTORY_FILES_DIR}")
+    DESTINATION "${OBIX_VAR_LIB_DIR}")
 
+# Sym link /var/lib/obix/histories to /etc/obix/res/server
+IF(CMAKE_HOST_UNIX)
+    INSTALL(CODE "
+        EXECUTE_PROCESS(COMMAND ln -s ${OBIX_HISTORY_FILES_DIR} ${OBIX_ETC_SERVER_DIR})
+        ")
+ENDIF(CMAKE_HOST_UNIX)
+    
 ######################################
 # make obix-clean
 #
