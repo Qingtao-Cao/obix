@@ -208,28 +208,8 @@ To configure a standlone instance:
 3. Edit /etc/lighttpd/modules.conf file and add a line to include /etc/lighttpd/conf.d/obix-fcgi.conf:
 
         include "conf.d/obix-fcgi.conf"
-
-4. Create a symbolic link in /etc/obix/res/server to /var/lib/obix/histories.
-
-    ~~~~
-    $ sudo mkdir -p /var/lib/obix/histories
-    $ sudo ls -n /var/lib/obix/histories/ /etc/obix/res/server/
-    ~~~~
-
-    Note: The histories folder can become very large. In a production environment, it is recommended that /var be mounted on a separate partition.
     
-5. Change ownership on the histories folder to the lighttpd user.
-
-        $ sudo chown -R lighttpd:lighttpd /var/lib/obix/histories/
-
-	Note: the owner and group ID of lighttpd are not necessarily "lighttpd". They are defined in lighttpd.conf and may be system specific. Check in /etc/lighttpd/lighttpd.conf:
-	
-	~~~~
-	server.username  = "lighttpd"
-	server.groupname = "lighttpd"
-    ~~~~
-	
-6. Start lighttpd:
+4. Start lighttpd:
 
         $ sudo service lighttpd start
     
@@ -237,7 +217,7 @@ To configure a standlone instance:
     
         $ sudo /sbin/lighttpd -f /etc/lighttpd/lighttpd.conf
     
-7. Check that oBIX Server has started. The lobby object will we accessible from the browser:
+5. Check that oBIX Server has started. The lobby object will we accessible from the browser:
 
         http://localhost/obix
     
