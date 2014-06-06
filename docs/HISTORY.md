@@ -2,10 +2,9 @@
 
 ## Overview
 
-The overall history facility resides under the histories/ sub-folder in the res/server/ folder, along with other configuration files.
+The overall history facility resides under the histories/ sub-folder in the res/server/ folder along with other configuration files. In production a standalone hard drive had better be mounted onto this folder to ensure I/O performance because history facilities are likely to consume a vast amount of space during a long period of time.
 
 oBIX Server supports the creation of a history facility for each device exclusively from one another, which is named after the unique ID of the relevant device. As an example, below are history facilities for a number of CB devices all on the "4A-1A" BCM device in data hall 1, M1 data centre:
-
 
     $ ls -l histories | more
 	drwxr-xr-x. 2 lighttpd lighttpd 4096 May 16 10:43 M1.DH1.4A-1A.CB01
@@ -16,8 +15,7 @@ oBIX Server supports the creation of a history facility for each device exclusiv
 
 oBIX adapters can request the oBIX Server have one history facility created for the devices they control through the History.Get operation. If the required history facility has been established already, the oBIX Server will simply respond with the href, then the oBIX adapter can append data to it while the oBIX client queries records which satisfy the specified criteria.
 
-The history facility for one device is comprised of a single index file and a number of log files named by the date they are generated. The index file is a complete XML file consisting of a list of abstracts for each log file, while log files just contain "raw data", that is, records appended by oBIX adapters without a XML header nor the root element and
-that's why they are all XML fragments. For example:
+The history facility for one device is comprised of a single index file and a number of log files named by the date they are generated. The index file is a complete XML file consisting of a list of abstracts for each log file, while log files just contain "raw data", that is, records appended by oBIX adapters without a XML header nor the root element and that's why they are all XML fragments. For example:
 
     $ tree histories/M1.DH1.4A-1A.CB01
 	histories/M1.DH1.4A-1A.CB01
@@ -60,8 +58,7 @@ If index files are missing, or the suffix of fragments or indexes, or their cont
 
 The History.Get operation will establish a new history facility for a specified device (if it has not yet been set up) and return its href.
 
-On the command line, the requestor needs to specify the unique device ID in the "val" attribute of the "dev_id" XML node as the only parameter. 
-The historyGet script is designed for this purpose. For example:
+On the command line, the requestor needs to specify the unique device ID in the "val" attribute of the "dev_id" XML node as the only parameter. The historyGet script is designed for this purpose. For example:
 
     $ cd tests/scripts
     $ ./historyGet 
@@ -230,5 +227,3 @@ The generate_logs.c in the test/ folder can be used to generate a number of hist
 Be sure the hard drive is spacious enough to accommodate all potential log files before running this program. As an example, log files for 12 months will consume 4.3GB.
 
 If generated log files and their indexes are to be merged with the existing history facility, make sure the merged index file is well-formatted and consistent with available log files.
-
-

@@ -5,8 +5,7 @@ Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]
 Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]    
 Copyright (c) 2009 Andrey Litvinov [litvinov.andrey@gmail.com]
  
-oBIX Server is free software licensed under the GPLv2 License.
-The text for this license can be found in the COPYING file.
+oBIX Server is free software licensed under the GPLv2 License. The text for this license can be found in the COPYING file.
 
 # 1. Project Overview
 
@@ -16,8 +15,7 @@ The whole project is written in C and has tiny resource requirements. It allows 
 
 This package only contains the implementation of oBIX Server. The common library that can be shared among oBIX Server and oBIX client is in a separate package.
 
-All client software such as libraries and adapter program
-s are still using old XML parser provided by libupnp whereas the server implementation has adopted the new XML parser from libxml2, they are organised and distributed as separate packages.
+All client software such as libraries and adapter programs are still using old XML parser provided by libupnp whereas the server implementation has adopted the new XML parser from libxml2, they are organised and distributed as separate packages.
 
 ## 1.1 C oBIX Server
  
@@ -32,8 +30,8 @@ The list of currently implemented oBIX features includes:
  - Lobby object
  - Batch operation
  - HTTP protocol binding
- - WatchService (see below)
- - Histories (see below).
+ - WatchService (see docs/WATCH.md)
+ - Histories (see docs/HISTORY.md).
 
 The list of things that are NOT yet supported:
  - Alarms
@@ -51,8 +49,7 @@ If a feature doesn’t appear in either of the lists above, it is probably not i
 
 # 2. System Requirements
  
-This project has been created for running on Linux platforms. It was tested on various platforms, including embedded devices with OpenWrt (http://openwrt.org) installed. An example of a tested embedded platform is Asus WL-500g Premium V2 
-router (32 MB of RAM and 240 MHz CPU). Any other device capable of running OpenWrt can be used instead.
+This project has been created for running on Linux platforms. It was tested on various platforms, including embedded devices with OpenWrt (http://openwrt.org) installed. An example of a tested embedded platform is Asus WL-500g Premium V2 router (32 MB of RAM and 240 MHz CPU). Any other device capable of running OpenWrt can be used instead.
 
 Other Linux distributions for embedded devices were not tested but may possibly be used if all project dependencies are satisfied.
 
@@ -83,11 +80,8 @@ Below is a short description of the main files in the package:
 * src/
 
     * docs/ - Further documentation.
-
     * libs/ - Source for oBIX library.
-
     * server/ - Source for oBIX server.
- 
 	* tools/ - Some useful simple programs to aid in development or testing.
 
 * res/
@@ -135,12 +129,13 @@ Below is a short description of the main files in the package:
 
 * server/devices/
 
-    In the future, the oBIX Server is likely to support 'Persistent Device' and will have device contracts saved as separate files in the devices/folder on the hard drive and loaded into the global XML database at start-up.
+    In the future, the oBIX Server is likely to support 'Persistent Device' and will have device contracts saved as separate files in this folder on the hard drive and loaded into the global XML database at start-up.
 
 * histories/
 
-    Contains history facilities for various devices. Each device will have its own separate sub-folder that contains an index file and a number of raw history data files named by the date when they are generated. For details see Section 6.
+    Contains history facilities for various devices. Each device will have its own separate sub-folder that contains an index file and a number of raw history data files named by the date when they are generated. For details see docs/HISTORY.md
 
+Note: This folder does not exist in the source code and is created at installation. For the sake of hard disk performance a standalone hard disk had better be mounted onto this folder because history facilities are likely to consume a vast amount of space during a long period of time.
 
 # 4. Build Instructions
 
@@ -185,9 +180,9 @@ To start a local lighttpd instance of oBIX:
 
 This will start a local instance of lighttpd. You can access the server via: localhost:4242/obix
 
-You can run any of the scripts in the directory **test/scripts**.
+You can run any of the scripts in the directory **tests/scripts**.
 
-TODO: Add further automation to the make test build target.
+Note: The port 4242 must be removed from all scripts when used in the case of Standalone Lighttpd Instance as in production.
 
 ## 5.2. Standalone Lighttpd Instance
  
@@ -226,11 +221,13 @@ To configure a standlone instance:
         $ curl http://localhost/obix/
 
 
-## 5.3 Troubleshooting
+## 5.3 Troubleshooting (Standalone Lighttpd Instance)
+
+Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders differ in the case of Self-contained Lighttpd Instance, adjust accordingly.
 
 * On Fedora oBIX Server logs could be observed by journalctl:
 
-		$ journalctl -f <path-to-obix.fcgi>
+		$ journalctl -f /usr/bin/obix-fcgi
 
 * Once lighttpd is started, use the following command to check the status of the oBIX Server:
 
@@ -257,8 +254,4 @@ To configure a standlone instance:
 	Then gdb can be used to analyse the backtrace recorded in the core file.
 
 * If history index files are touched or new log files installed (e.g. for test purposes), be sure to verify the log file abstracts in the index file are consistent with the real log files.
-
-
-
-
 
