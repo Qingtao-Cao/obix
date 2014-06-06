@@ -4,7 +4,7 @@ The coding style adopted by Linux kernel source code is encouraged and should be
 
 Generally speaking, good codes speak for themselves instead of using verbose, distracting long variable names.
 
-The one deviation from the Linux kernel coding style is the size of the tab key. As consistent with the value used in the original CoT package the size of the table key is set to four instead of eight.
+The one deviation from the Linux kernel coding style is the size of the tab key. As consistent with the value used in the original CoT package the size of the table key is set to four instead of eight spaces.
 
 The following content can be put in the ~/.vimrc to this end:
 
