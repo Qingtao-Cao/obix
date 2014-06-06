@@ -1,3 +1,0 @@
-#!/bin/bash
-curl -XPUT --data '<reltime val="PT20S"/>'
-http://localhost:4242/obix/watchService/watch0/pollWaitInterval/max

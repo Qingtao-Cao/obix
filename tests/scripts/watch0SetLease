@@ -1,2 +1,0 @@
-#!/bin/bash
-curl -XPUT --data '<reltime val="PT30S" />' http://localhost:4242/obix/watchService/watch1/lease

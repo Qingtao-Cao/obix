@@ -1,4 +1,0 @@
-<obj name="ExampleTimer2" href="/obix/deviceRoot/example2">
-	<reltime name="time" href="/obix/deviceRoot/example2/time" val="PT0S" writable="true"/>
-	<bool name="reset" href="reset" val="false" writable="true"/>
-</obj>
