@@ -11,6 +11,9 @@ CMAKE_POLICY(SET CMP0011 OLD)
 # Default CMAKE_INSTALL_PREFIX should be set before PROJECT()
 SET(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install dir prefix")
 
+# Default doc directory
+SET(PROJECT_DOC_DIR "/usr/share/doc" CACHE PATH "Install dir for docs")
+
 # Location of history files.
 IF(NOT OBIX_VAR_LIB_DIR)
     SET(OBIX_VAR_LIB_DIR "/var/lib/obix" CACHE PATH "Var lib directory path")
@@ -96,7 +99,17 @@ INSTALL(DIRECTORY "res"
 INSTALL(FILES "res/obix-fcgi.conf"
     DESTINATION "${LIGHTTPD_CONF_DIR}")
 
-
+######################################
+# Install docs
+#
+SET(INSTALL_DOCS README.md COPYING CODING_GUIDELINES.md ${DOCS_DIR_FILES})
+INSTALL(FILES ${INSTALL_DOCS}
+ DESTINATION "${PROJECT_DOC_DIR}/obix")
+INSTALL(DIRECTORY "docs/"
+    DESTINATION "${PROJECT_DOC_DIR}/obix"
+    FILES_MATCHING PATTERN "*.md")
+    
+    
 ######################################
 # Create /var/lib/obix/histories
 #
