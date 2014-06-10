@@ -65,18 +65,18 @@ make %{?_smp_mflags} VERBOSE=1
 
 
 %install
-rm -rf $RPM_BUILD_ROOT
-make DESTDIR=$RPM_BUILD_ROOT install
-find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
+rm -rf %{buildroot}
+make DESTDIR=%{buildroot} install
+find %{buildroot} -name '*.la' -exec rm -f {} ';'
 
-ln -sf %{_sharedstatedir}/obix/histories $RPM_BUILD_ROOT/%{_sysconfdir}/obix/res/server/
+ln -sf %{_sharedstatedir}/obix/histories %{buildroot}/%{_sysconfdir}/obix/res/server/
 
 %post
 
 %postun
 
 %clean
-rm -rf $RPM_BUILD_ROOT
+rm -rf %{buildroot}
 
 %files
 %defattr(-, root, root)
