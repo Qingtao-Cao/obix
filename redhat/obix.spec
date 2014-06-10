@@ -28,6 +28,7 @@ Building Automation solutions based on oBIX standard (http://www.obix.org).
 %package        server
 Summary:        ONEDC oBIX Server
 Requires:       %{name}%{?_isa} = %{version}-%{release}
+Requires:       %{name}-libs
 
 %description    server
 oBIX Server is implemented as a FastCGI script which can be executed 
@@ -68,31 +69,37 @@ rm -rf $RPM_BUILD_ROOT
 make DESTDIR=$RPM_BUILD_ROOT install
 find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 
+ln -sf %{_sharedstatedir}/obix/histories $RPM_BUILD_ROOT/%{_sysconfdir}/obix/res/server/
 
 %post
 
 %postun
 
+%files 
+%doc README.md COPYING CODING_GUIDELINES.md
+
 
 %files server
+%doc README.md
 %defattr(-, root, root)
-%{_sysconfdir}/obix
-%{_sysconfdir}/lighttpd/conf.d/obix-fcgi.conf
+%{_sysconfdir}/obix/*
+%{_sharedstatedir}/obix
 %{_bindir}/obix-fcgi
+
+%config %{_sysconfdir}/lighttpd/conf.d/obix-fcgi.conf
 
 %defattr(-, lighttpd, lighttpd)
 %{_sharedstatedir}/obix/histories
+%{_sysconfdir}/obix/res/server/histories
 
 %files devel
-%doc
 %{_includedir}/*
-%{_libdir}/*.so
-%{_libdir}/*.a
 
 %files libs
+%doc README.md
 %{_libdir}/*.so
 %{_libdir}/*.a
 
 %changelog
 * Thu Jun  5 2014 Andrew Ross <andrew.ross@nextdc.com>
-- 
+- Initial rpm build
