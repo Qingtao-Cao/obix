@@ -75,13 +75,17 @@ ln -sf %{_sharedstatedir}/obix/histories $RPM_BUILD_ROOT/%{_sysconfdir}/obix/res
 
 %postun
 
-%files 
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files
+%defattr(-, root, root)
 %doc README.md COPYING CODING_GUIDELINES.md
 
 
 %files server
-%doc README.md
 %defattr(-, root, root)
+%doc README.md
 %{_sysconfdir}/obix/*
 %{_sharedstatedir}/obix
 %{_bindir}/obix-fcgi
@@ -93,9 +97,12 @@ ln -sf %{_sharedstatedir}/obix/histories $RPM_BUILD_ROOT/%{_sysconfdir}/obix/res
 %{_sysconfdir}/obix/res/server/histories
 
 %files devel
+%defattr(-, root, root)
+
 %{_includedir}/*
 
 %files libs
+%defattr(-, root, root)
 %doc README.md
 %{_libdir}/*.so
 %{_libdir}/*.a
