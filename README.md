@@ -160,6 +160,12 @@ Note: CMAKE_C_FLAGS_DEBUG defined in the top level CMakeList.txt seems unable to
 The make install target copies the executable, libraries, headers, and res directory.
 
     $ sudo make install
+    
+The default install path for the libraries is /usr/lib. To change this to /usr/lib64, set the LIB_SUFFIX option on the command line:
+
+    $ cmake -DLIB_SUFFIX="64" .
+    $ make
+    $ sudo make install
 
 # 5. Running oBIX Server
 
