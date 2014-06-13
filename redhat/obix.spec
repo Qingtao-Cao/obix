@@ -3,7 +3,7 @@ Version:        1.0
 Release:        1%{?dist}
 Summary:        ONEDC oBIX
 
-License:        GPLv2
+License:        GPLv3+
 URL:            https://github.com/ONEDC/obix
 Source:         obix-1.0.tar.gz
 #Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz
@@ -60,7 +60,7 @@ The %{name}-libs package contains libraries for
 
 
 %build
-cmake .
+cmake -DLIB_DIR_PATH="%{_libdir}" .
 make %{?_smp_mflags} VERBOSE=1
 
 
@@ -80,12 +80,14 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-, root, root)
-%doc README.md COPYING CODING_GUIDELINES.md
+%doc %{_docdir}/%{name}/*
+#%doc README.md COPYING CODING_GUIDELINES.md 
+#%doc HISTORY.md  WATCH.md  XML_DB_MANAGEMENT.md
 
 
 %files server
 %defattr(-, root, root)
-%doc README.md
+%doc %{_docdir}/%{name}-server/README.md
 %{_sysconfdir}/obix/*
 %{_sharedstatedir}/obix
 %{_bindir}/obix-fcgi
@@ -94,7 +96,7 @@ rm -rf %{buildroot}
 
 %defattr(-, lighttpd, lighttpd)
 %{_sharedstatedir}/obix/histories
-%{_sysconfdir}/obix/res/server/histories
+
 
 %files devel
 %defattr(-, root, root)
@@ -103,10 +105,10 @@ rm -rf %{buildroot}
 
 %files libs
 %defattr(-, root, root)
-%doc README.md
-%{_libdir}/*.so
-%{_libdir}/*.a
+%doc %{_docdir}/%{name}-libs/README.md
+%{_libdir}/lib%{name}.so
+%{_libdir}/lib%{name}.a
 
 %changelog
-* Thu Jun  5 2014 Andrew Ross <andrew.ross@nextdc.com>
+* Thu Jun  5 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0
 - Initial rpm build
