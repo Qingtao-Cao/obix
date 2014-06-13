@@ -5,7 +5,7 @@ Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]
 Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]    
 Copyright (c) 2009 Andrey Litvinov [litvinov.andrey@gmail.com]
  
-oBIX Server is free software licensed under the GPLv2 License. The text for this license can be found in the COPYING file.
+oBIX Server is free software licensed under the GPLv3+ License. The text for this license can be found in the COPYING file.
 
 # 1. Project Overview
 
@@ -200,7 +200,7 @@ Pre-requisites:
 
     $ sudo yum install obix lighttpd
 
-To configure a standlone instance:
+To configure a standalone instance:
 
 1. Edit /etc/obix/res/server/server_config.xml file with an XML editor. Update server-address and any other fields if required (default is localhost).
 
