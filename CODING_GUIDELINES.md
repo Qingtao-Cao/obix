@@ -12,7 +12,7 @@ Generally, C-style code files (that is, code contained within files suffixed wit
 
 *Note*: Please do not change the indenting of other people''s code if the tab-character in your editor is not set to 4 characters. 
 
-## `Typedef`s
+## USe of `typedef`
 
 The GNU/Linux coding guidelines discourage the type defining of structures and enumerations.  This rule is not followed in ONEDC/oBIX, however typedefines must be suffixed with a `_t`:
 
