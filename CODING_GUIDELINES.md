@@ -12,9 +12,9 @@ Generally, C-style code files (that is, code contained within files suffixed wit
 
 *Note*: Please do not change the indenting of other people''s code if the tab-character in your editor is not set to 4 characters. 
 
-## USe of `typedef`
+## Use of `typedef`
 
-The GNU/Linux coding guidelines discourage the type defining of structures and enumerations.  This rule is not followed in ONEDC/oBIX, however typedefines must be suffixed with a `_t`:
+The GNU/Linux coding guidelines discourage the type defining of structures and enumerations.  This rule is not followed in ONEDC/oBIX, however typedefines **must** be suffixed with a `_t`:
 
 ```c
 
@@ -26,7 +26,7 @@ typedef struct data_structure {
 
 ## Braces
 
-**Braces in conditional statements must be used at all times.**  Leaving out braces in conditionals is considered bad practise and leaves code open for undefined behaviour in quick edits; it''s simply too easy to invoke undefined behaviour modifying code sans braces.
+**Braces in conditional statements must be used at all times.**  Leaving out braces in conditionals is considered bad practise and leaves code open for undefined behaviour in quick edits; it's simply too easy to invoke undefined behaviour modifying code sans braces.
 
 [CVE-2014-0160](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-0160) may have been avoided by the use of braces.
 
@@ -49,9 +49,37 @@ Please use this instead:
 	}
 ```
 
+## Comparisons
+
+Comparisons in C can be tricky.  As such, please always compare the result of a function with it's return type in conditionals and branches.  The use of terse expressions in conditionals is encouraged but only if it does not complicate readability of the expression.
+
+* Please always compare pointer types with NULL, another pointer type, or use the logical NOT operator `!`
+
+```c
+char *buffer;
+if ((buffer = (char *)malloc(64)) == NULL) {
+
+}
+```
+
+* Please avoid using BOOL macros or structures to compare with integers.
+* Please write functions that are not fire-and-forget return an `int` with `0` meaning success, and `<0` on failure.
+* Please refrain from comparing NULL with the `int`eger 0, and vice-versa.
+* Please refrain from using the logical NOT `!` operator to compare integer types:
+
+```c
+if (!strcmp(string, "antoher string")) {
+	this_is_bad();
+}
+
+if (strcmp(string, "another string") == 0) {
+	please_use_this_method();
+}
+```
+
 ## Vi iMproved example
 
-The following content can be put in the ~/.vimrc to this end:
+The following content can be put in the `~/.vimrc` file to help you code for ONEDC/oBIX:
 
 ```bash
 	set ts=4
@@ -63,4 +91,4 @@ The following content can be put in the ~/.vimrc to this end:
 	syntax on
 ```
 
-In particular, enabling "c_space_errors" option helps to highlight any white space errors.
+In particular, enabling `c_space_errors` option helps to highlight any white space errors.
