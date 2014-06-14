@@ -28,7 +28,7 @@ typedef struct data_structure {
 
 **Braces in conditional statements must be used at all times.**  Leaving out braces in conditionals is considered bad practise and leaves code open for undefined behaviour in quick edits; it''s simply too easy to invoke undefined behaviour modifying code sans braces.
 
-[https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-0160](CVE-2014-0160) may have been avoided by the use of braces.
+[CVE-2014-0160](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-0160) may have been avoided by the use of braces.
 
 The following example is discouraged:
 
