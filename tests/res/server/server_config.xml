@@ -1,20 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-	Copyright (c) 2013-2014 Qingtao Cao <harry.cao@nextdc.com>
-	Copyright (c) 2009 Andrey Litvinov
-
-	This program is free software; you can redistribute it and/or modify
-	it under the terms of the GNU General Public License version 2 as
-	published by the Free Software Foundation.
-
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-	See the GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with this program; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+    * Copyright (c) 2013-2014 Qingtao Cao <harry.cao@nextdc.com>
+	* Copyright (c) 2009 Andrey Litvinov
+	*
+	* This file is part of oBIX.
+	*
+	* oBIX is free software: you can redistribute it and/or modify
+	* it under the terms of the GNU General Public License as published by
+	* the Free Software Foundation, either version 3 of the License, or
+	* (at your option) any later version.
+	*
+	* oBIX is distributed in the hope that it will be useful,
+	* but WITHOUT ANY WARRANTY; without even the implied warranty of
+	* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	* GNU General Public License for more details.
+	*
+	* You should have received a copy of the GNU General Public License
+	* along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+	*
 -->
 <config>  
 
@@ -23,7 +26,7 @@
     DO NOT leave this field as localhost because otherwise all remote clients
     will receive responses with wrong URI's.
   -->
-  <server-address val="http://10.72.11.28"/>
+  <server-address val="localhost"/>
   
   <!--
   	 Optional tag, defining maximum number of oBIX server threads for non-poll
