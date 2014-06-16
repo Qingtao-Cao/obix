@@ -56,7 +56,7 @@
 
 static const char *INDEX_HEADER =
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
-"<list name=\"index\" href=\"/obix/historyService/histories/%s/index\" of=\"obix:HistoryFileAbstract\">\r\n";
+"<list name=\"index\" href=\"index\" of=\"obix:HistoryFileAbstract\">\r\n";
 
 static const char *INDEX_FOOTER =
 "</list>\r\n";
