@@ -167,6 +167,23 @@ The default install path for the libraries is /usr/lib. To change this to /usr/l
     $ make
     $ sudo make install
 
+The default install path for documentation is /usr/share/doc/obix. To change this to /usr/share/doc/obix-$version, set the PROJECT_DOC_DIR_SUFFIX:
+
+    $ cmake -D-DPROJECT_DOC_DIR_SUFFIX
+    $ make
+    $ sudo make install
+    
+See redhat/obix.spec for further details.
+
+**RPM build**
+
+Fedora/RHEL systems can use the specfile redhat/obix.spec, and create a local tarball from git. In this example there is a local git tag named "1.0":
+
+    git archive --format=tar --prefix=obix-1.0/ 1.0 | gzip >obix-1.0.tar.gz
+
+    
+TODO: urrently the specfile is looking for a local tarball. Pre-release we need to remove this line and uncomment the link to a tarball on Github.
+
 # 5. Running oBIX Server
 
 oBIX Server is implemented as a FastCGI script which can be executed by any HTTP server with FCGI support.
