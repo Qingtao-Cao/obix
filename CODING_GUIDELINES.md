@@ -1,20 +1,20 @@
 # Coding Guidelines
 
-The coding style for the ONEDC oBIX applications use the GNU/Linux kernel source code guidelines, featured at https://www.kernel.org/doc/Documentation/CodingStyle, with a few exceptions as noted below. 
+The coding style of ONEDC oBIX applications use the GNU / Linux kernel source code guidelines, featured at https://www.kernel.org/doc/Documentation/CodingStyle, with a few exceptions as noted below. 
 
 # Exceptions
 
-A list of exceptions to the GNU/Linux kernel coding guidelines are listed below.
+A list of exceptions to the GNU / Linux kernel coding guidelines are listed below.
 
-## Tabular key
+## Tabular Key
 
-Generally, C-style code files (that is, code contained within files suffixed with a `.c` or `.h` extension) must be indented with a tab key instead of multiple space characters.  The tab key must be set to a size-width of **4 characters** for existing source-code to line up properly.
+Generally, C-style code files (E.g. code contained within files suffixed with a `.c` or `.h` extension) must be indented with a tab key instead of multiple space characters. The tab key must be set to a size-width of **four (4) characters** for the existing source-code to line up properly.
 
-*Note*: Please do not change the indenting of other people''s code if the tab-character in your editor is not set to 4 characters. 
+*Note*: Please do not change the indenting of other people's code if the tab-character in your editor is not set to four (4) characters. 
 
 ## Use of `typedef`
 
-The GNU/Linux coding guidelines discourage the type defining of structures and enumerations.  This rule is not followed in ONEDC/oBIX, however typedefines **must** be suffixed with a `_t`:
+The GNU / Linux coding guidelines discourage the type defining of structures and enumerations. This rule is not followed in ONEDC / oBIX, however typedefines **must** be suffixed with a `_t`:
 
 ```c
 
@@ -26,7 +26,7 @@ typedef struct data_structure {
 
 ## Braces
 
-**Braces in conditional statements must be used at all times.**  Leaving out braces in conditionals is considered bad practise and leaves code open for undefined behaviour in quick edits; it's simply too easy to invoke undefined behaviour modifying code sans braces.
+**Braces in conditional statements must be used at all times.**  Leaving out braces in conditionals is considered bad practice and leaves code open for undefined behaviour in quick edits; it's simply too easy to invoke undefined behaviour modifying code sans braces.
 
 [CVE-2014-1266](http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-1266) may have been avoided by the use of braces.
 
@@ -51,7 +51,7 @@ Please use this instead:
 
 ## Comparisons
 
-Comparisons in C can be tricky.  As such, please always compare the result of a function with it's return type in conditionals and branches.  The use of terse expressions in conditionals is encouraged but only if it does not complicate readability of the expression.
+Comparisons in C can be tricky. As such, always compare the result of a function with its return type in conditionals and branches. The use of terse expressions in conditionals is encouraged, but only if it does not complicate readability of the expression.
 
 * Please always compare pointer types with NULL, another pointer type, or use the logical NOT operator `!`
 
@@ -77,9 +77,9 @@ if (strcmp(string, "another string") == 0) {
 }
 ```
 
-## Vi iMproved example
+## Vi iMproved Example
 
-The following content can be put in the `~/.vimrc` file to help you code for ONEDC/oBIX:
+The following content can be put in the `~/.vimrc` file to help you code for ONEDC / oBIX:
 
 ```bash
 	set ts=4
@@ -91,4 +91,4 @@ The following content can be put in the `~/.vimrc` file to help you code for ONE
 	syntax on
 ```
 
-In particular, enabling `c_space_errors` option helps to highlight any white space errors.
+In particular, enabling the `c_space_errors` option helps to highlight any white space errors.
