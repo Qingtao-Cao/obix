@@ -175,6 +175,8 @@ The default install path for documentation is /usr/share/doc/obix. To change thi
     
 See redhat/obix.spec for further details.
 
+
+
 **RPM build**
 
 Fedora/RHEL systems can use the specfile redhat/obix.spec, and create a local tarball from git. In this example there is a local git tag named "1.0":
@@ -213,15 +215,17 @@ This section describes how to use a standalone instance of lighttpd (http://ligh
  
 Pre-requisites:
 
-1. Install lighttpd and obix. On Fedora/RHEL:
+1. Install obix. On Fedora/RHEL:
 
-    $ sudo yum install obix lighttpd
+    $ sudo yum obix obix-server obix-libs
+
+This will bring in the dependencies of lighttpd and lighttpd-fastcgi.
 
 To configure a standalone instance:
 
 1. Edit /etc/obix/res/server/server_config.xml file with an XML editor. Update server-address and any other fields if required (default is localhost).
 
-2. The default /etc/obix/res/obix-fcgi.conf links /usr/sbin/obix-fcgi to /var/lib/obix/res/server. Update the paths if you wish to deploy to different locations.
+2. The default /etc/obix/res/obix-fcgi.conf links /usr/bin/obix-fcgi to /etc/obix/res/server. Update the paths if you wish to deploy to different locations.
 
 3. Edit /etc/lighttpd/modules.conf file and add a line to include /etc/lighttpd/conf.d/obix-fcgi.conf:
 

@@ -1,6 +1,6 @@
 Name:           obix
 Version:        1.0
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        ONEDC oBIX
 
 License:        GPLv3 or later
@@ -17,6 +17,7 @@ BuildRequires:  gcc
 BuildRequires:  cmake >= 2.6
 Requires:       libxml2
 Requires:       lighttpd
+Requires:       lighttpd-fastcgi
 
 
 %description
@@ -115,6 +116,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Tue Jun 17 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0-3
+- Adding missing Requires for lighttpd-fastcgi
+
 * Tue Jun 17 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0-2
 - Added RHEL specific name-version dir setup for docs
 
