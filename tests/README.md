@@ -339,7 +339,7 @@ Pre-requisites:
 
 1. Add 4 records to example device history
 
-    ```
+    ```XML 
     for value in 70 80 90 100; do ./historyAppendSingle -d example -s $(date +%FT%T) -c "$value"; done;
 
     <?xml version="1.0" encoding="UTF-8"?>
@@ -389,7 +389,7 @@ Pre-requisites:
 
 1. Get the records and check that 70, 80, 90, 100 were written as data.
 
-    ```
+    ```XML 
     ./historyQuery -d example
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryQueryOut">
@@ -492,7 +492,7 @@ In the normal terminal:
 
 1. Check the history record for the example device have been loaded.
 
-    ```
+    ```XML
     ./historyQuery -d example
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryQueryOut">
@@ -545,13 +545,13 @@ Localhost works fine for local testing (VM on your local workstation), but needs
 
 1. If you hit this when trying to run lighttpd:
 
-```
-lighttpd -f /etc/lighttpd/lighttpd.conf 
-2014-05-05 11:36:57: (plugin.c.169) dlopen() failed for: \
-/usr/lib64/lighttpd/mod_fastcgi.so /usr/lib64/lighttpd/mod_fastcgi.so: \
-cannot open shared object file: No such file or directory \
-2014-05-05 11:36:57: (server.c.679) loading plugins finally failed
-```
+    ```
+    lighttpd -f /etc/lighttpd/lighttpd.conf 
+    2014-05-05 11:36:57: (plugin.c.169) dlopen() failed for: \
+    /usr/lib64/lighttpd/mod_fastcgi.so /usr/lib64/lighttpd/mod_fastcgi.so: \
+    cannot open shared object file: No such file or directory \
+    2014-05-05 11:36:57: (server.c.679) loading plugins finally failed
+    ```
 
     Install lighttpd-fastccgi: sudo yum install lighttpd-fastcgi
 
@@ -559,12 +559,12 @@ cannot open shared object file: No such file or directory \
 
 # Logs
 
-View logs. Fedora has journalctl which makes filtering easier. RHEL uses syslog.
+Fedora has journalctl which makes filtering easier. RHEL uses syslog.
 
 Fedora: 
 
 ```
-journalctl -f /work/obix-preview/build/server/obix-fcgi
+journalctl -f /usr/bin/obix-fcgi
 ```
 
 RHEL:
