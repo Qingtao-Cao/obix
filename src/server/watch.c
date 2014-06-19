@@ -1450,7 +1450,7 @@ int obix_watch_init(xml_config_t *config)
 }
 
 
-xmlNode *handlerWatchServiceMake(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchServiceMake(response_t *response, xmlNode *input)
 {
 	xmlNode *node;
 	watch_t *watch;
@@ -1478,7 +1478,7 @@ xmlNode *handlerWatchServiceMake(response_t *response, const char *uri, xmlNode 
 failed:
 	log_error("%s", watch_err_msg[ret].msgs);
 
-	return obix_server_generate_error(uri, watch_err_msg[ret].type,
+	return obix_server_generate_error(response->request_decoded_uri, watch_err_msg[ret].type,
 				"WatchService", watch_err_msg[ret].msgs);
 }
 
@@ -1489,11 +1489,11 @@ failed:
  * 1. Return a Nil object unconditionally, even if the watch
  * object may have been deleted by other deleting thread
  */
-xmlNode *handlerWatchDelete(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchDelete(response_t *response, xmlNode *input)
 {
 	watch_t *watch;
 
-	if ((watch = dequeue_watch(uri)) != NULL) {
+	if ((watch = dequeue_watch(response->request_decoded_uri)) != NULL) {
 		/* Cancel relevant lease task */
 		if (watch->lease_tid) {
 			ptask_cancel(watchset->lease_thread, watch->lease_tid, TRUE);
@@ -1557,14 +1557,14 @@ out:
 				watch_err_msg[ret].msgs);
 }
 
-xmlNode *handlerWatchAdd(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchAdd(response_t *response, xmlNode *input)
 {
-	return watch_item_helper(response, uri, input, 1);
+	return watch_item_helper(response, response->request_decoded_uri, input, 1);
 }
 
-xmlNode *handlerWatchRemove(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchRemove(response_t *response, xmlNode *input)
 {
-	return watch_item_helper(response, uri, input, 0);
+	return watch_item_helper(response, response->request_decoded_uri, input, 0);
 }
 
 /**
@@ -1775,18 +1775,18 @@ out:
 				watch_err_msg[ret].msgs);
 }
 
-xmlNode *handlerWatchPollChanges(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchPollChanges(response_t *response, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(response, uri, 0);
+	return watch_poll_helper(response, response->request_decoded_uri, 0);
 }
 
-xmlNode *handlerWatchPollRefresh(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchPollRefresh(response_t *response, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(response, uri, 1);
+	return watch_poll_helper(response, response->request_decoded_uri, 1);
 }
 
 /**

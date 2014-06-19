@@ -67,8 +67,8 @@ static int server_threads;
 static const char *CONFIG_FILE = "server_config.xml";
 
 static const char *HTTP_STATUS_OK =
-"Status: 200 OK\r\n"
-"Content-Type: text/xml\r\n";
+	"Status: 200 OK\r\n"
+	"Content-Type: text/xml\r\n";
 
 static const char *HTTP_CONTENT_LOCATION = "Content-Location: %s\r\n";
 static const char *HTTP_CONTENT_LENGTH = "Content-Length: %lu\r\n";
@@ -90,26 +90,26 @@ static void printUsageNotice(char *programName)
 
 /**
  * Decodes a URL-Encoded string.
- * 
+ *
  * See http://www.w3schools.com/tags/ref_urlencode.asp
- * 
+ *
  * @param	dst		A pointer to the destination buffer which holds
  * 					enough bytes to decode the result, which should
  * 					always be strlen(source) + 1 for null terminator
  *					or less.
  * @param	src		A pointer to the string that is to be decoded.
- * 
+ *
  * @remarks @see http://stackoverflow.com/a/14530993
  */
 void obix_fcgi_url_decode(char *dst, const char *src)
 {
 	char a, b;
-	
+
 	while (*src) {
-		if ((*src == '%') && ((a = src[1]) 
-			&& (b = src[2])) && (isxdigit(a) 
-			&& isxdigit(b))) {
-			
+		if ((*src == '%') && ((a = src[1])
+							  && (b = src[2])) && (isxdigit(a)
+									  && isxdigit(b))) {
+
 			if (a >= 'a') {
 				a -= 'a' - 'A';
 			}
@@ -118,24 +118,24 @@ void obix_fcgi_url_decode(char *dst, const char *src)
 			} else {
 				a -= '0';
 			}
-			
+
 			if (b >= 'a') {
 				b -= 'a' - 'A';
 			}
-			
+
 			if (b >= 'A') {
 				b -= ('A' - 10);
 			} else {
 				b -= '0';
 			}
-			
+
 			*dst++ = 16 * a + b;
 			src += 3;
 		} else {
 			*dst++ = *src++;
 		}
 	}
-	
+
 	*dst++ = '\0';
 }
 
@@ -210,8 +210,8 @@ void obix_fcgi_sendResponse(response_t *response)
 	}
 
 	/* Header section: content-location: uri */
-	if (response->uri != NULL) {
-		if (FCGX_FPrintF(request->out, HTTP_CONTENT_LOCATION, response->uri) == EOF) {
+	if (response->response_uri != NULL) {
+		if (FCGX_FPrintF(request->out, HTTP_CONTENT_LOCATION, response->response_uri) == EOF) {
 			log_error("Failed to write HTTP \"Content-Location\" header");
 			goto failed;
 		}
@@ -342,54 +342,46 @@ static void obix_handle_request(response_t *response)
 {
 	FCGX_Request *request = response->request;
 	xmlDoc *inputDoc = NULL;
-	const char *uri;
 	const char *requestType;
-	char *decodedUri;
-	
 
-	if (!(uri = FCGX_GetParam(FCGI_REQUEST_URI, request->envp)) ||
-		(*uri != '/')) {
+
+	if (!(response->request_uri = FCGX_GetParam(FCGI_REQUEST_URI, request->envp)) ||
+			(*response->request_uri != '/')) {
 		log_error("Invalid %s in current request", FCGI_REQUEST_URI);
-		obix_server_handleError(response, uri, "Invalid URI");
+		obix_server_handleError(response, response->request_uri, "Invalid URI");
 		return;
 	}
 
-	if (!(decodedUri = (char *)malloc(strlen(uri) + 1)) ) {
+	if (!(response->request_decoded_uri = (char *)malloc(strlen(response->request_uri) + 1))) {
 		log_error("Could not allocate enough memory to decode the input URI");
 		return;
 	}
-	
-	obix_fcgi_url_decode(decodedUri, uri);
-	
+
+	obix_fcgi_url_decode((char *)response->request_decoded_uri, response->request_uri);
+
 	if (!(requestType = FCGX_GetParam(FCGI_REQUEST_METHOD, request->envp))) {
 		log_error("Invalid %s in current request", FCGI_REQUEST_METHOD);
-		obix_server_handleError(response, decodedUri, "Missing HTTP verb");
-		goto failed;
+		obix_server_handleError(response, response->request_decoded_uri, "Missing HTTP verb");
+		return;
 	}
 
 	if (strcmp(requestType, FCGI_REQUEST_METHOD_GET) == 0) {
-		obix_server_handleGET(response, decodedUri);
+		obix_server_handleGET(response);
 	} else if (strcmp(requestType, FCGI_REQUEST_METHOD_PUT) == 0) {
 		inputDoc = obix_fcgi_read(request);
-		obix_server_handlePUT(response, decodedUri, inputDoc);
+		obix_server_handlePUT(response, inputDoc);
 		if (inputDoc != NULL) {
 			xmlFreeDoc(inputDoc);
 		}
 	} else if (strcmp(requestType, FCGI_REQUEST_METHOD_POST) == 0) {
 		inputDoc = obix_fcgi_read(request);
-		obix_server_handlePOST(response, decodedUri, inputDoc);
+		obix_server_handlePOST(response, inputDoc);
 		if (inputDoc != NULL) {
 			xmlFreeDoc(inputDoc);
 		}
 	} else {
-		obix_server_handleError(response, decodedUri, "Illegal HTTP verb");
+		obix_server_handleError(response, response->request_decoded_uri, "Illegal HTTP verb");
 	}
-	
-	/* Fall through */
-failed:
-	free(decodedUri);
-
-	return;
 }
 
 /*
@@ -493,3 +485,5 @@ config_failed:
 	xmlCleanupParser();
 	return -1;
 }
+
+

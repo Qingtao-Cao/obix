@@ -25,6 +25,6 @@
 #include <libxml/tree.h>
 #include "response.h"
 
-xmlNode *handlerBatch(response_t *response, const char *uri, xmlNode *input);
+xmlNode *handlerBatch(response_t *response, xmlNode *input);
 
 #endif

@@ -41,8 +41,21 @@ typedef struct response {
 	/*
 	 * For what the response is generated, used to setup
 	 * HTTP Content-Location header
+	 * 
+	 * Clients will be 'redirected' to the URI presented
+	 * in this strucuture if not NULL.
 	 */
-	char *uri;
+	char *response_uri;
+
+	/*
+	 * The FastCGI requested requested URI
+	 */
+	const char *request_uri;
+
+	/*
+	 * Contains a URL decoded request URI.
+	 */
+	const char *request_decoded_uri;
 
 	/*
 	 * Raised for long poll requests which will be handled in

@@ -1,4 +1,5 @@
 /* *****************************************************************************
+ * Copyright (C) 2014 Tyler Watson <tyler.watson@nextdc.com>
  * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
  *
@@ -176,8 +177,8 @@ void obix_response_destroy(response_t *resp)
 	 * strdup may have failed to duplicated the overriden URI
 	 * as response's uri
 	 */
-	if (resp->uri) {
-		free(resp->uri);
+	if (resp->response_uri) {
+		free(resp->response_uri);
 	}
 
 	free(resp);

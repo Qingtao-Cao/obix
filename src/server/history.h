@@ -27,9 +27,9 @@
 int obix_hist_init(const char *);
 void obix_hist_dispose(void);
 
-xmlNode *handlerHistoryGet(response_t *, const char *, xmlNode *);
-xmlNode *handlerHistoryAppend(response_t *, const char *, xmlNode *);
-xmlNode *handlerHistoryQuery(response_t *, const char *, xmlNode *);
+xmlNode *handlerHistoryGet(response_t *, xmlNode *);
+xmlNode *handlerHistoryAppend(response_t *, xmlNode *);
+xmlNode *handlerHistoryQuery(response_t *, xmlNode *);
 
 int is_history_requests(const char *uri);
 

@@ -184,16 +184,19 @@ xmlNode *obix_server_generate_error(const char *href, const char *contract,
 	return errorNode;
 }
 
-xmlNode *obix_server_read(const char *uri)
+xmlNode *obix_server_read(const response_t *response, const char *overrideUri)
 {
 	xmlNode *copy = NULL;
 	xmlAttr *hidden = NULL;
 	const xmlNode *storageNode = NULL;
 	int ret;
 	xmlChar *obixUri;
-
-	assert(uri);
-
+	const char *uri;
+	
+	assert(response);
+	
+	uri = (overrideUri == NULL) ? response->request_decoded_uri : overrideUri;
+	
 	if (!(storageNode = xmldb_get_node(BAD_CAST uri))) {
 		ret = ERR_NO_SUCH_URI;
 		goto failed;
@@ -250,31 +253,34 @@ void obix_server_handleError(response_t *response, const char *uri, const char *
 							 ((node != NULL) ? uri : NULL));
 }
 
-void obix_server_handleGET(response_t *response, const char *uri)
+void obix_server_handleGET(response_t *response)
 {
-	xmlNode *node;
+	xmlNode *node = NULL;
 
 #ifdef DEBUG
-	if (str_is_identical(uri, OBIX_SRV_DUMP_URI) == 0) {
+	if (str_is_identical(response->request_decoded_uri, OBIX_SRV_DUMP_URI) == 0) {
 		node = xmldb_dump(response);
 	} else {
-		node = obix_server_read(uri);
+		node = obix_server_read((const response_t *)response, NULL);
 	}
 #else
-	node = obix_server_read(uri);
+	node = obix_server_read((const response_t *)response, NULL);
 #endif
 
 	obix_server_reply_object(response,
 							 ((node != NULL) ? node : xmldb_fatal_error()),
-							 ((node != NULL) ? uri : NULL));
+							 ((node != NULL) ? response->request_decoded_uri : NULL));
 }
 
-xmlNode *obix_server_write(const char *uri, xmlNode *input)
+xmlNode *obix_server_write(const response_t *response, const char *overrideUri, xmlNode *input)
 {
 	xmlNode *updatedNode = NULL;
 	xmlNode *nodeCopy = NULL;
+	const char *uri;
 	int changed = 0;
 	int ret;
+
+	uri = (overrideUri == NULL) ? response->request_decoded_uri : overrideUri;
 
 	if (input == NULL) {
 		ret = ERR_NO_INPUT;
@@ -306,29 +312,33 @@ failed:
 				"obix:Write", server_err_msg[ret].msgs);
 }
 
-void obix_server_handlePUT(response_t *response, const char *uri, const xmlDoc *input)
+void obix_server_handlePUT(response_t *response, const xmlDoc *input)
 {
 	xmlNode *node = NULL;
 
 	if (input != NULL) {
-		node = obix_server_write(uri, xmlDocGetRootElement((xmlDoc *)input));
+		node = obix_server_write((const response_t *)response, NULL, xmlDocGetRootElement((xmlDoc *)input));
 	} else {
-		node = obix_server_generate_error(uri, NULL, "Unknown request format",
-			"The server could not understand the PUT request.");
+		node = obix_server_generate_error(response->request_decoded_uri, NULL,
+									"Unknown request format",
+									"The server could not understand the PUT request.");
 	}
 
 	obix_server_reply_object(response,
 							 ((node != NULL) ? node : xmldb_fatal_error()),
-							 ((node != NULL) ? uri : NULL));
+							 ((node != NULL) ? response->request_decoded_uri : NULL));
 
 }
 
-xmlNode *obix_server_invoke(response_t *response, const char *uri, xmlNode *input)
+xmlNode *obix_server_invoke(const response_t *response, const char *overrideUri, xmlNode *input)
 {
 	const xmlNode *node;
+	const char *uri;
 	xmlNode *meta;
 	long handlerId = 0;
 	int ret;
+
+	uri = (overrideUri == NULL) ? response->request_decoded_uri : overrideUri;
 
 	if (!(node = xmldb_get_node(BAD_CAST uri))) {
 		ret = ERR_NO_SUCH_URI;
@@ -351,7 +361,7 @@ xmlNode *obix_server_invoke(response_t *response, const char *uri, xmlNode *inpu
 		goto failed;
 	}
 
-	return (*obix_server_getPostHandler(handlerId))(response, uri, input);
+	return (*obix_server_getPostHandler(handlerId))((response_t *)response, input);
 
 failed:
 	log_error("%s", server_err_msg[ret].msgs);
@@ -360,11 +370,11 @@ failed:
 				"oBIX Server", server_err_msg[ret].msgs);
 }
 
-void obix_server_handlePOST(response_t *response, const char *uri, const xmlDoc *input)
+void obix_server_handlePOST(response_t *response, const xmlDoc *input)
 {
 	xmlNode *node;
 
-	node = obix_server_invoke(response, uri,
+	node = obix_server_invoke((const response_t *)response, NULL,
 				  ((input != NULL) ? xmlDocGetRootElement((xmlDoc *)input) : NULL));
 
 	/*
@@ -388,7 +398,7 @@ void obix_server_handlePOST(response_t *response, const char *uri, const xmlDoc 
 
 	obix_server_reply_object(response,
 							 ((node != NULL) ? node : xmldb_fatal_error()),
-							 ((node != NULL) ? uri : NULL));
+							 ((node != NULL) ? response->request_decoded_uri : NULL));
 }
 
 void obix_server_shutdown()
@@ -449,11 +459,11 @@ void obix_server_reply_object(response_t *response, xmlNode *obixObject,
 	 * neither of them are available.
 	 */
 	if (!overrideUri) {
-		if (!(response->uri = (char *)xmlGetProp(obixObject, BAD_CAST OBIX_ATTR_HREF))) {
+		if (!(response->response_uri = (char *)xmlGetProp(obixObject, BAD_CAST OBIX_ATTR_HREF))) {
 			log_warning("No href or URI provided to set HTTP Content-Location header");
 		}
 	} else {
-		response->uri = strdup(overrideUri);	/* Doesn't matter if failed */
+		response->response_uri = strdup(overrideUri);	/* Doesn't matter if failed */
 	}
 
 	if (!(doc = xmlNewDoc(BAD_CAST XML_VERSION))) {
@@ -518,11 +528,11 @@ failed:
  *
  * @see obix_server_postHandler
  */
-xmlNode *handlerError(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerError(response_t *response, xmlNode *input)
 {
-	log_debug("Requested operation \"%s\" exists but not implemented.", uri);
+	log_debug("Requested operation \"%s\" exists but not implemented.", response->request_decoded_uri);
 
-	return obix_server_generate_error(uri, OBIX_CONTRACT_ERR_UNSUPPORTED,
+	return obix_server_generate_error(response->request_decoded_uri, OBIX_CONTRACT_ERR_UNSUPPORTED,
 									  "Unsupported Request", "The requested operation is not yet implemented.");
 }
 
@@ -531,7 +541,7 @@ xmlNode *handlerError(response_t *response, const char *uri, xmlNode *input)
  *
  * @see obix_server_postHandler
  */
-xmlNode *handlerSignUp(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerSignUp(response_t *response, xmlNode *input)
 {
 	xmlNode *inputCopy, *ref, *node, *pos;
 	xmlChar *href;
@@ -621,7 +631,7 @@ failed:
 
 	href = xmlGetProp(input, BAD_CAST OBIX_ATTR_HREF);
 
-	node = obix_server_generate_error((href != NULL) ? (const char *)href : uri,
+	node = obix_server_generate_error((href != NULL) ? (const char *)href : response->request_decoded_uri,
 									  server_err_msg[ret].type,
 									  "SignUp", server_err_msg[ret].msgs);
 

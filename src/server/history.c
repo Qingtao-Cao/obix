@@ -1953,7 +1953,7 @@ static xmlNode *handlerHistoryHelper(response_t *resp, const char *uri,
 		goto failed;
 	}
 
-	resp->uri = strdup(uri);
+	resp->response_uri = strdup(uri);
 	resp->is_history = 1;
 	obix_response_send(resp);
 
@@ -2020,7 +2020,7 @@ xmlNode *handlerHistoryGet(response_t *resp, const char *uri, xmlNode *input)
 	free(href);
 	free(dev_id);
 
-	resp->uri = strdup(uri);
+	resp->response_uri = strdup(uri);
 	resp->is_history = 1;
 	obix_response_send(resp);
 

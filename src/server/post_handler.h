@@ -31,11 +31,10 @@
  *
  * @param response Response object, which should be used to send operation
  *					results.
- * @param URI Requested URI.
  * @param input Parsed request input.
  */
 typedef xmlNode *
-(*obix_server_postHandler)(response_t *, const char *, xmlNode *);
+(*obix_server_postHandler)(response_t *, xmlNode *);
 
 /**
  * Returns handler with specified id.

@@ -117,9 +117,9 @@ static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 	}
 
 	if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_READ) == 0) {
-		itemVal = obix_server_read((const char *)itemHref);
+		itemVal = obix_server_read(response, (const char *)itemHref);
 	} else if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
-		itemVal = obix_server_write((const char*)itemHref, batchItem->children);
+		itemVal = obix_server_write(response, (const char*)itemHref, batchItem->children);
 	} else if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
 		itemVal = obix_server_invoke(response, (const char *)itemHref, batchItem->children);
 	}
@@ -149,7 +149,7 @@ failed:
 	obix_batch_add_item(batch_out, itemVal);
 }
 
-static xmlNode *obix_batch_process(response_t *response, const char *uri, xmlNode *batchInInput)
+static xmlNode *obix_batch_process(response_t *response, xmlNode *batchInInput)
 {
 	xmlNode *batchOutContract = NULL;
 	int ret;
@@ -167,7 +167,7 @@ static xmlNode *obix_batch_process(response_t *response, const char *uri, xmlNod
 
 failed:
 	log_error("%s", batch_err_msg[ret].msgs);
-	return obix_server_generate_error(uri, batch_err_msg[ret].type,
+	return obix_server_generate_error(response->request_decoded_uri, batch_err_msg[ret].type,
 						"obix:Batch", batch_err_msg[ret].msgs);
 }
 
@@ -176,7 +176,7 @@ failed:
  *
  * @see obix_server_postHandler
  */
-xmlNode *handlerBatch(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerBatch(response_t *response, xmlNode *input)
 {
-	return obix_batch_process(response, uri, input);
+	return obix_batch_process(response, input);
 }
