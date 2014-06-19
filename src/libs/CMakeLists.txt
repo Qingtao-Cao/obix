@@ -6,10 +6,19 @@
 # requires cmake >= 2.8, therefore not in RHEL6
 #INCLUDE(GNUInstallDirs)
 
-# Location for lib files. For lib64 use -DLIB_SUFFIX=64
-IF(NOT LIB_SUFFIX)
-    SET(LIB_SUFFIX "" CACHE STRING "libsuffix empty or 64. Defaults to empty.")
-ENDIF(NOT LIB_SUFFIX)
+# Location for lib files. For lib64 use -DLIB_SUFFIX="/usr/lib64"
+IF(NOT LIB_DIR)
+    SET(LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib" CACHE PATH "Library path")
+ENDIF(NOT LIB_DIR)
+
+# Default doc directory
+IF(NOT PROJECT_DOC_DIR)
+    SET(PROJECT_DOC_DIR "/usr/share/doc" CACHE PATH "Install dir for docs")
+ENDIF(NOT PROJECT_DOC_DIR)
+    
+IF(NOT PROJECT_DOC_DIR_SUFFIX)
+    SET(PROJECT_DOC_DIR_SUFFIX "obix-libs" CACHE STRING "Dir suffix for doc install. Can be set to obix-$version via -D")
+ENDIF(NOT PROJECT_DOC_DIR_SUFFIX)
 
 FIND_PACKAGE(LibXml2 REQUIRED)
 IF(LIBXML2_FOUND)
@@ -34,8 +43,8 @@ ADD_LIBRARY(obix-static STATIC ${OBIX_LIB_FILES})
 SET_TARGET_PROPERTIES(obix-static PROPERTIES OUTPUT_NAME "obix")
 
 # Install .a and .so into /usr/lib. 
-INSTALL(TARGETS obix DESTINATION "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}")
-INSTALL(TARGETS obix-static DESTINATION "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}")
+INSTALL(TARGETS obix DESTINATION "${LIB_DIR}")
+INSTALL(TARGETS obix-static DESTINATION "${LIB_DIR}")
 
 # Install header files
 FILE(GLOB HEADER_FILES "*.h")
@@ -45,7 +54,7 @@ INSTALL(FILES ${HEADER_FILES}
 # Install the docs
 SET(INSTALL_DOCS README.md)
 INSTALL(FILES ${INSTALL_DOCS}
-   DESTINATION "${PROJECT_DOC_DIR}/obix-libs")
+   DESTINATION "${PROJECT_DOC_DIR}/${PROJECT_DOC_DIR_SUFFIX}")
  
 # Ensure the two libs don't clobber each other during the build.
 SET_TARGET_PROPERTIES(obix PROPERTIES CLEAN_DIRECT_OUTPUT 1)

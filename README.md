@@ -5,7 +5,7 @@ Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]
 Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]    
 Copyright (c) 2009 Andrey Litvinov [litvinov.andrey@gmail.com]
  
-oBIX Server is free software licensed under the GPLv2 License. The text for this license can be found in the COPYING file.
+oBIX Server is free software licensed under the GPLv3+ License. The text for this license can be found in the COPYING file.
 
 # 1. Project Overview
 
@@ -167,6 +167,25 @@ The default install path for the libraries is /usr/lib. To change this to /usr/l
     $ make
     $ sudo make install
 
+The default install path for documentation is /usr/share/doc/obix. To change this to /usr/share/doc/obix-$version, set the PROJECT_DOC_DIR_SUFFIX:
+
+    $ cmake -D-DPROJECT_DOC_DIR_SUFFIX
+    $ make
+    $ sudo make install
+    
+See redhat/obix.spec for further details.
+
+
+
+**RPM build**
+
+Fedora/RHEL systems can use the specfile redhat/obix.spec, and create a local tarball from git. In this example there is a local git tag named "1.0":
+
+    git archive --format=tar --prefix=obix-1.0/ 1.0 | gzip >obix-1.0.tar.gz
+
+    
+TODO: urrently the specfile is looking for a local tarball. Pre-release we need to remove this line and uncomment the link to a tarball on Github.
+
 # 5. Running oBIX Server
 
 oBIX Server is implemented as a FastCGI script which can be executed by any HTTP server with FCGI support.
@@ -196,15 +215,17 @@ This section describes how to use a standalone instance of lighttpd (http://ligh
  
 Pre-requisites:
 
-1. Install lighttpd and obix. On Fedora/RHEL:
+1. Install obix. On Fedora/RHEL:
 
-    $ sudo yum install obix lighttpd
+    $ sudo yum obix obix-server obix-libs
 
-To configure a standlone instance:
+This will bring in the dependencies of lighttpd and lighttpd-fastcgi.
+
+To configure a standalone instance:
 
 1. Edit /etc/obix/res/server/server_config.xml file with an XML editor. Update server-address and any other fields if required (default is localhost).
 
-2. The default /etc/obix/res/obix-fcgi.conf links /usr/sbin/obix-fcgi to /var/lib/obix/res/server. Update the paths if you wish to deploy to different locations.
+2. The default /etc/obix/res/obix-fcgi.conf links /usr/bin/obix-fcgi to /etc/obix/res/server. Update the paths if you wish to deploy to different locations.
 
 3. Edit /etc/lighttpd/modules.conf file and add a line to include /etc/lighttpd/conf.d/obix-fcgi.conf:
 

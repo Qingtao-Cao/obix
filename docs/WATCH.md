@@ -5,7 +5,7 @@ A super oBIX watch subsystem has been implemented to provide fantastic scalabili
 * No limitation on the number of watches.
 * No limitation on the number of objects monitored by one watch.
 * No limitation on the number of oBIX clients sharing one watch.
-* Multiple watches able to monitor one same object, particuarly nested watches installed at different levels in one subtree.
+* Multiple watches able to monitor one same object, particularly nested watches installed at different levels in one subtree.
 * Long poll mechanism.
 * Support parallelism and thread safe, specifically, multiple long poll threads handling poll tasks simultaneously to yield minimal latency.
 * Recyclable watch IDs, no worries about watch ID counter's overflow (by manipulating extensible bitmap nodes).
@@ -28,4 +28,4 @@ It's also worthwhile to note that if a watch object is currently waiting for a c
 
 Due to the usage of extensible bitmap, any IDs of deleted watch objects can be properly recycled, therefore eliminating the potential overflow of a plain watch ID counter.
 
-Lastly, the watchDeleteSingle script can delete the specified watch object, whereas the watchDeleteAll script will delete all watch objects created on the oBIX Server. They are especillay useful to test the recycling of watch IDs.
+Lastly, the watchDeleteSingle script can delete the specified watch object, whereas the watchDeleteAll script will delete all watch objects created on the oBIX Server. They are especially useful to test the recycling of watch IDs.
