@@ -41,7 +41,7 @@
 #include <errno.h>
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
-#include "response.h"
+#include "obix_request.h"
 #include "xml_storage.h"
 #include "ptask.h"
 #include "list.h"
@@ -242,7 +242,7 @@ typedef struct poll_task {
 	struct timespec expiry;
 
 	/* Relevant response object */
-	response_t *response;
+	obix_request_t *request;
 
 	/* The obix:watchOut contract returned to requester */
 	xmlNode *watch_out;
@@ -1212,7 +1212,7 @@ static poll_task_t *get_expired_task(poll_backlog_t *bl, struct timespec *ts)
  */
 static void do_and_free_task(poll_task_t *task, const char *uri)
 {
-	obix_server_reply_object(task->response, task->watch_out, uri);
+	obix_server_reply_object(task->request, task->watch_out, uri);
 	free(task);
 }
 
@@ -1450,7 +1450,7 @@ int obix_watch_init(xml_config_t *config)
 }
 
 
-xmlNode *handlerWatchServiceMake(response_t *response, xmlNode *input)
+xmlNode *handlerWatchServiceMake(obix_request_t *request, xmlNode *input)
 {
 	xmlNode *node;
 	watch_t *watch;
@@ -1478,7 +1478,7 @@ xmlNode *handlerWatchServiceMake(response_t *response, xmlNode *input)
 failed:
 	log_error("%s", watch_err_msg[ret].msgs);
 
-	return obix_server_generate_error(response->request_decoded_uri, watch_err_msg[ret].type,
+	return obix_server_generate_error(request->request_decoded_uri, watch_err_msg[ret].type,
 				"WatchService", watch_err_msg[ret].msgs);
 }
 
@@ -1489,11 +1489,11 @@ failed:
  * 1. Return a Nil object unconditionally, even if the watch
  * object may have been deleted by other deleting thread
  */
-xmlNode *handlerWatchDelete(response_t *response, xmlNode *input)
+xmlNode *handlerWatchDelete(obix_request_t *request, xmlNode *input)
 {
 	watch_t *watch;
 
-	if ((watch = dequeue_watch(response->request_decoded_uri)) != NULL) {
+	if ((watch = dequeue_watch(request->request_decoded_uri)) != NULL) {
 		/* Cancel relevant lease task */
 		if (watch->lease_tid) {
 			ptask_cancel(watchset->lease_thread, watch->lease_tid, TRUE);
@@ -1505,7 +1505,7 @@ xmlNode *handlerWatchDelete(response_t *response, xmlNode *input)
 	return obix_obj_null();
 }
 
-static xmlNode *watch_item_helper(response_t *response,
+static xmlNode *watch_item_helper(obix_request_t *request,
 								  const char *uri,
 								  xmlNode *input,
 								  int add)		/* 1 for Watch.add */
@@ -1514,7 +1514,7 @@ static xmlNode *watch_item_helper(response_t *response,
 	xmlNode *watch_out;
 	int ret;
 
-	assert(response && uri && input);
+	assert(request && uri && input);
 
 	if (!(watch = get_watch(uri))) {
 		ret = ERR_NO_WATCHOBJ;
@@ -1557,14 +1557,14 @@ out:
 				watch_err_msg[ret].msgs);
 }
 
-xmlNode *handlerWatchAdd(response_t *response, xmlNode *input)
+xmlNode *handlerWatchAdd(obix_request_t *request, xmlNode *input)
 {
-	return watch_item_helper(response, response->request_decoded_uri, input, 1);
+	return watch_item_helper(request, request->request_decoded_uri, input, 1);
 }
 
-xmlNode *handlerWatchRemove(response_t *response, xmlNode *input)
+xmlNode *handlerWatchRemove(obix_request_t *request, xmlNode *input)
 {
-	return watch_item_helper(response, response->request_decoded_uri, input, 0);
+	return watch_item_helper(request, request->request_decoded_uri, input, 0);
 }
 
 /**
@@ -1573,7 +1573,7 @@ xmlNode *handlerWatchRemove(response_t *response, xmlNode *input)
  * strict expiry ascending order
  */
 static int create_poll_task(watch_t *watch, long expiry,
-							response_t *response,	xmlNode *watch_out)
+							obix_request_t *request, xmlNode *watch_out)
 {
 	poll_task_t *task, *pos;
 
@@ -1591,13 +1591,13 @@ static int create_poll_task(watch_t *watch, long expiry,
 	 * requests from erroneous situations that failed to create a
 	 * reply object
 	 */
-	response->no_reply = 1;
+	request->no_reply = 1;
 
 	clock_gettime(CLOCK_REALTIME, &task->expiry); /* since now on */
 	task->expiry.tv_sec += expiry / 1000;		/* in miliseconds */
 	task->expiry.tv_nsec += (expiry % 1000) * 1000;
 
-	task->response = response;
+	task->request = request;
 	task->watch_out = watch_out;
 	INIT_LIST_HEAD(&task->list_all);
 	INIT_LIST_HEAD(&task->list_active);
@@ -1701,7 +1701,7 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 	}
 }
 
-static xmlNode *watch_poll_helper(response_t *response, const char *uri,
+static xmlNode *watch_poll_helper(obix_request_t *request, const char *uri,
 								  int include_all)	/* 1 for pollRefresh */
 {
 	watch_t *watch;
@@ -1709,7 +1709,7 @@ static xmlNode *watch_poll_helper(response_t *response, const char *uri,
 	long wait_min, wait_max, delay = 0;
 	int ret;
 
-	assert(response && uri);
+	assert(request && uri);
 
 	if (!(watch = get_watch(uri))) {
 		ret = ERR_NO_WATCHOBJ;
@@ -1742,7 +1742,7 @@ static xmlNode *watch_poll_helper(response_t *response, const char *uri,
 	}
 
 	if (delay > 0) {
-		if (create_poll_task(watch, delay, response, watch_out) < 0) {
+		if (create_poll_task(watch, delay, request, watch_out) < 0) {
 			xmlFreeNode(watch_out);
 			ret = ERR_NO_POLLTASK;
 			goto failed;
@@ -1775,18 +1775,18 @@ out:
 				watch_err_msg[ret].msgs);
 }
 
-xmlNode *handlerWatchPollChanges(response_t *response, xmlNode *input)
+xmlNode *handlerWatchPollChanges(obix_request_t *request, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(response, response->request_decoded_uri, 0);
+	return watch_poll_helper(request, request->request_decoded_uri, 0);
 }
 
-xmlNode *handlerWatchPollRefresh(response_t *response, xmlNode *input)
+xmlNode *handlerWatchPollRefresh(obix_request_t *request, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(response, response->request_decoded_uri, 1);
+	return watch_poll_helper(request, request->request_decoded_uri, 1);
 }
 
 /**

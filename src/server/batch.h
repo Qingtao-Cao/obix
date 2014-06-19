@@ -23,8 +23,8 @@
 #define _HAVE_BATCH_H
 
 #include <libxml/tree.h>
-#include "response.h"
+#include "obix_request.h"
 
-xmlNode *handlerBatch(response_t *response, xmlNode *input);
+xmlNode *handlerBatch(obix_request_t *request, xmlNode *input);
 
 #endif

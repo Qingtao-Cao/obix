@@ -24,7 +24,7 @@
 #define POST_HANDLER_H_
 
 #include <libxml/tree.h>
-#include "response.h"
+#include "obix_request.h"
 
 /**
  * Prototype of a POST Handler function.
@@ -34,7 +34,7 @@
  * @param input Parsed request input.
  */
 typedef xmlNode *
-(*obix_server_postHandler)(response_t *, xmlNode *);
+(*obix_server_postHandler)(obix_request_t *, xmlNode *);
 
 /**
  * Returns handler with specified id.

@@ -39,7 +39,7 @@
 #include "xml_utils.h"
 #include "hist_utils.h"    /* part of history facility needed by client side */
 #include "xml_storage.h"
-#include "response.h"
+#include "obix_request.h"
 #include "server.h"
 
 /*
@@ -115,7 +115,7 @@ typedef struct obix_hist_dev {
 	struct list_head list;
 } obix_hist_dev_t;
 
-typedef int (*obix_hist_func_t) (response_t *resp,
+typedef int (*obix_hist_func_t) (obix_request_t *request,
 								 obix_hist_dev_t *dev, xmlNode *input);
 
 typedef struct obix_hist_ops {
@@ -1093,7 +1093,7 @@ failed:
  *
  * Return 0 on success, > 0 on errors
  */
-static int hist_append_dev(response_t *resp,
+static int hist_append_dev(obix_request_t *request,
 						   obix_hist_dev_t *dev, xmlNode *input)
 {
 	xmlNode *aout;
@@ -1124,7 +1124,7 @@ static int hist_append_dev(response_t *resp,
 		goto out;
 	}
 
-	if (obix_response_create_append_item(resp, data, strlen(data), 0) < 0) {
+	if (obix_request_create_append_response_item(request, data, strlen(data), 0) < 0) {
 		free(data);
 		goto out;
 	}
@@ -1316,7 +1316,7 @@ failed:
  *
  * Return 0 on success, > 0 on errors
  */
-static int hist_query_dev_helper(response_t *resp,
+static int hist_query_dev_helper(obix_request_t *request,
 								 obix_hist_dev_t *dev, xmlNode *input)
 {
 	long limit;
@@ -1503,12 +1503,12 @@ static int hist_query_dev_helper(response_t *resp,
 				}
 			}
 
-			if (!(item = obix_response_create_item(data, len, 0))) {
+			if (!(item = obix_request_create_response_item(data, len, 0))) {
 				free(data);
 				goto flush_response;
 			}
 
-			obix_response_append_item(resp, item);
+			obix_request_append_response_item(request, item);
 
 			/* Count the number of records read, finish if reaching the limit */
 			r += count;
@@ -1540,21 +1540,21 @@ no_matching_data:
 					((start_ts != NULL) ? start_ts : start),
 					((end_ts != NULL) ? end_ts : end));
 
-	if (!(item = obix_response_create_item(data, len, 0))) {
+	if (!(item = obix_request_create_response_item(data, len, 0))) {
 		free(data);
 		goto flush_response;
 	}
 
-	obix_response_add_item(resp, item);
+	obix_request_add_response_item(request, item);
 
 	/* Tail HistoryQueryOut contract footer */
-	if (!(item = obix_response_create_item(QUERY_OUT_SUFFIX,
-										   strlen(QUERY_OUT_SUFFIX),
-										   1))) {
+	if (!(item = obix_request_create_response_item(QUERY_OUT_SUFFIX,
+													strlen(QUERY_OUT_SUFFIX),
+													1))) {
 		goto flush_response;
 	}
 
-	obix_response_append_item(resp, item);
+	obix_request_append_response_item(request, item);
 
 	ret = 0;
 
@@ -1568,7 +1568,7 @@ flush_response:
 	 * preserved until error contract is sent out
 	 */
 	if (ret > 0) {
-		obix_response_destroy_items(resp);
+		obix_request_destroy_response_items(request);
 	}
 
 failed:
@@ -1610,7 +1610,7 @@ failed:
 /*
  * Return 0 on success, > 0 on errors
  */
-static int hist_query_dev(response_t *resp,
+static int hist_query_dev(obix_request_t *request,
 						  obix_hist_dev_t *dev, xmlNode *input)
 {
 	int ret;
@@ -1623,7 +1623,7 @@ static int hist_query_dev(response_t *resp,
 	dev->readers++;	/* running readers count */
 	pthread_mutex_unlock(&dev->mutex);
 
-	ret = hist_query_dev_helper(resp, dev, input);
+	ret = hist_query_dev_helper(request, dev, input);
 
 	pthread_mutex_lock(&dev->mutex);
 	if ((--dev->readers == 0) && (dev->writers > 0)) {
@@ -1916,7 +1916,7 @@ static int get_dev_id(const char *uri, const char *op_name, char **dev_id)
 	return (ret < 0) ? ERR_NO_MEM : 0;
 }
 
-static xmlNode *handlerHistoryHelper(response_t *resp, const char *uri,
+static xmlNode *handlerHistoryHelper(obix_request_t *request, const char *uri,
 									 xmlNode *input, const char *op_name)
 {
 	obix_hist_dev_t *dev;
@@ -1937,9 +1937,9 @@ static xmlNode *handlerHistoryHelper(response_t *resp, const char *uri,
 
 	/* Invoke handler in response to request */
 	if (strcmp(op_name, HIST_OP_APPEND) == 0) {
-		ret = _history->op->append(resp, dev, input);
+		ret = _history->op->append(request, dev, input);
 	} else if (strcmp(op_name, HIST_OP_QUERY) == 0) {
-		ret = _history->op->query(resp, dev, input);
+		ret = _history->op->query(request, dev, input);
 	} else {
 		ret = ERR_ILLEGAL_OP;
 	}
@@ -1949,13 +1949,13 @@ static xmlNode *handlerHistoryHelper(response_t *resp, const char *uri,
 	}
 
 	/* Add XML Header */
-	if (obix_response_add_xml_header(resp) < 0) {
+	if (obix_request_add_response_xml_header(request) < 0) {
 		goto failed;
 	}
 
-	resp->response_uri = strdup(uri);
-	resp->is_history = 1;
-	obix_response_send(resp);
+	request->response_uri = strdup(uri);
+	request->is_history = 1;
+	obix_request_send_response(request);
 
 	return NULL;	/* Success */
 
@@ -1966,17 +1966,17 @@ failed:
 				op_name, hist_err_msg[ret].msgs);
 }
 
-xmlNode *handlerHistoryAppend(response_t *resp, const char *uri, xmlNode *input)
+xmlNode *handlerHistoryAppend(obix_request_t *request, const char *uri, xmlNode *input)
 {
-	return handlerHistoryHelper(resp, uri, input, HIST_OP_APPEND);
+	return handlerHistoryHelper(request, uri, input, HIST_OP_APPEND);
 }
 
-xmlNode *handlerHistoryQuery(response_t *resp, const char *uri, xmlNode *input)
+xmlNode *handlerHistoryQuery(obix_request_t *request, const char *uri, xmlNode *input)
 {
-	return handlerHistoryHelper(resp, uri, input, HIST_OP_QUERY);
+	return handlerHistoryHelper(request, uri, input, HIST_OP_QUERY);
 }
 
-xmlNode *handlerHistoryGet(response_t *resp, const char *uri, xmlNode *input)
+xmlNode *handlerHistoryGet(obix_request_t *request, const char *uri, xmlNode *input)
 {
 	obix_hist_dev_t *dev;
 	char *href, *dev_id, *data;
@@ -1993,7 +1993,7 @@ xmlNode *handlerHistoryGet(response_t *resp, const char *uri, xmlNode *input)
 	}
 
 	if (!(dev = find_device(dev_id))) {
-		if (is_privileged_mode(resp) == 0) {
+		if (is_privileged_mode(request) == 0) {
 			ret = ERR_NO_DEV;
 			goto failed;
 		}
@@ -2011,8 +2011,8 @@ xmlNode *handlerHistoryGet(response_t *resp, const char *uri, xmlNode *input)
 
 	len = sprintf(data, GET_OUT_SKELETON, dev_id, dev->devhref);
 
-	if (obix_response_add_xml_header(resp) < 0 ||
-		obix_response_create_append_item(resp, data, len, 0) < 0) {
+	if (obix_request_add_response_xml_header(request) < 0 ||
+		obix_request_create_append_response_item(request, data, len, 0) < 0) {
 		free(data);
 		goto failed;
 	}
@@ -2020,9 +2020,9 @@ xmlNode *handlerHistoryGet(response_t *resp, const char *uri, xmlNode *input)
 	free(href);
 	free(dev_id);
 
-	resp->response_uri = strdup(uri);
-	resp->is_history = 1;
-	obix_response_send(resp);
+	request->response_uri = strdup(uri);
+	request->is_history = 1;
+	obix_request_send_response(request);
 
 	return NULL;	/* Success */
 
@@ -2039,7 +2039,7 @@ failed:
 	 * On error, wipe out all potentially added response items
 	 * to make room for the error contract
 	 */
-	obix_response_destroy_items(resp);
+	obix_request_destroy_response_items(request);
 
 	log_error("%s", hist_err_msg[ret].msgs);
 
