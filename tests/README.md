@@ -1,9 +1,6 @@
 # oBIX tests
 
-
-## Pre-requisites
-
-You need obix-server and lighttpd installed and configured. Either via rpm installation or the make install target.
+There is basic automated test functionality available via make test.
 
 ## Automatically running the tests
 
@@ -23,34 +20,30 @@ $ make test
 
 Currently, this starts the server on localhost:4242.
 
-## Manually running the tests
-
-1. Run tests/scripts/setup.sh to update paths in config files
-2. Start the server: lighttpd -D -f tests/lighttpd/lighttpd.conf
-3. First run? Add example devices: tests/scripts/signUp
-4. Run any individual script you want.
-
 # Manual Test Cases
+
+The following is a basic set of manual tests with expected output.
 
 Notes:
 
 * Output shown for oBIX installed and running on localhost. Adjust for your system.
-* xmllint is not required, but does tidy up the output from curl
+* xmllint is not required, but does tidy up the output from curl.
+* Results for tests can be checked in both curl and a browser.
 * For the sake of brevity, not all output from commands are shown
 * Use two terminals to make things easier:
     * Root - monitor the logs / start stop services
     * Normal user - run the scripts from the tests/scripts directory.
 * Need to use the full path to a device's attribute. Path is constructed using "href" attribute values.
 
-```XML 
-<obj name="ExampleTimer" href="example" writable="true">
-    <obj href="parent" val="yes">
-    <reltime name="time" href="time" val="PT0S"/>
-    <bool name="reset" href="reset" val="false" writable="true"/>
+    ```XML 
+    <obj name="ExampleTimer" href="example" writable="true">
+        <obj href="parent" val="yes">
+            <reltime name="time" href="time" val="PT0S"/>
+            <bool name="reset" href="reset" val="false" writable="true"/>
+        </obj>
     </obj>
-</obj>
-```
-* Path to the reset attribute would be: $hostname/obix/deviceRoot/example/parent/reset
+    ```
+* For this example device, the path to the reset attribute would be: $hostname/obix/deviceRoot/example/parent/reset
 
 # Basic functionality
 
@@ -97,15 +90,17 @@ curl localhost/obix | xmllint --format -
     
 ## Add a device
 
+After starting the oBIX server, add a test device.
+
 1. Check the default device (TestDevice) has been loaded.
 
-```XML
-curl localhost/obix/devices | xmllint --format -
-<?xml version="1.0"?>
-<list href="/obix/devices" displayName="Device List" of="obix:ref">
-  <ref href="/obix/deviceRoot/TestDevice" name="TestDevice" displayName="Device for tests"/>
-</list>
-```
+    ```XML
+    curl localhost/obix/devices | xmllint --format -
+    <?xml version="1.0"?>
+    <list href="/obix/devices" displayName="Device List" of="obix:ref">
+        <ref href="/obix/deviceRoot/TestDevice" name="TestDevice" displayName="Device for tests"/>
+    </list>
+    ```
     Browser: hostname/obix/devices
 
 
@@ -115,10 +110,24 @@ curl localhost/obix/devices | xmllint --format -
     ./signUp | xmllint --format -
     <?xml version="1.0"?>
     <obj name="ExampleTimer" href="/obix/deviceRoot/example" writable="true">
-    <obj href="parent" val="yes">
-        <reltime name="time" href="time" val="PT0S"/>
-        <bool name="reset" href="reset" val="false" writable="true"/>
+        <obj href="parent" val="yes">
+            <reltime name="time" href="time" val="PT0S"/>
+            <bool name="reset" href="reset" val="false" writable="true"/>
+        </obj>
     </obj>
+    ```
+
+1. Check the device:
+
+    ```XML 
+    curl http://localhost/obix/deviceRoot/example | xmllint --format -
+
+    <?xml version="1.0"?>
+    <obj name="ExampleTimer" href="/obix/deviceRoot/example" writable="true">
+        <obj href="parent" val="yes">
+            <reltime name="time" href="time" val="PT0S"/>
+            <bool name="reset" href="reset" val="false" writable="true"/>
+        </obj>
     </obj>
     ```
 
@@ -127,12 +136,15 @@ curl localhost/obix/devices | xmllint --format -
 
 ## Update a device
 
-Set a bool value. 
+We can update the `val` attribute of a device (provided writable="true").
+
+For these tests, we will set the `reset` attribute (boolean). 
 
 1. Perform a GET to check current status. Looking for val="false":
 
     ```XML
     curl http://localhost/obix/deviceRoot/example/parent/reset | xmllint --format -
+    
     <bool name="reset" href="/obix/deviceRoot/example/parent/reset" val="false" writable="true"/>
     ```
 
@@ -140,6 +152,7 @@ Set a bool value.
 
     ```XML 
     curl -XPUT --data '<bool val="true"/>' http://localhost/obix/deviceRoot/example/parent/reset
+    
     <?xml version="1.0"?>
     <bool name="reset" href="reset" val="true" writable="true"/>
     ```
@@ -148,6 +161,7 @@ Set a bool value.
 
     ```XML 
     curl -XPUT --data '<bool val="true"/>' http://localhost/obix/deviceRoot/example/parent/reset
+    
     <?xml version="1.0"?>
     <bool name="reset" href="reset" val="true" writable="true"/>
     ```
@@ -158,6 +172,7 @@ Set a bool value.
 
     ```XML 
     curl -XPUT --data '<bool val="false"/>' http://localhost/obix/deviceRoot/example/parent/reset
+    
     <?xml version="1.0"?>
     <bool name="reset" href="reset" val="false" writable="true"/>
     ```
@@ -184,20 +199,20 @@ In ExampleTimer, we should not be able to write to the `time` attribute.
 
 1. Attempt to write the value 4 seconds to time (val="PT4S"):
 
-    ```
+    ```XML
     curl -XPUT --data '<reltime val="PT4S"/>' \
     http://localhost/obix/deviceRoot/example/parent/time | xmllint --format -
 
-    <err is="obix:PermissionErr" name="General error contract" \
-    href="/obix/deviceRoot/example/parent/time" displayName="obix:Write" \
+    <err is="obix:PermissionErr" name="General error contract"
+    href="/obix/deviceRoot/example/parent/time" displayName="obix:Write" 
     display="The destination object or its direct parent is not writable"/>
     ```
 
 2. Check for a log entry (/var/log/messages or journalctl):
 
     ```
-    /builddir/build/BUILD/obix-1.0/src/server/server.c(300): \
-    Failed to update the XML database: The destination object or \
+    /builddir/build/BUILD/obix-1.0/src/server/server.c(300): 
+    Failed to update the XML database: The destination object or 
     its direct parent is not writable     
     ```
 
@@ -218,29 +233,31 @@ In ExampleTimer, we should only be able to write lower case true||false into `re
 
 1. Attempt to write True (wrong case):
 
-    ```
+    ```XML 
     $ curl -XPUT --data '<bool val="True"/>' http://localhost/obix/deviceRoot/example2/parent/reset
 
     <?xml version="1.0"?>
-    <err is="obix:UnsupportedErr" name="General error contract" \
-    href="/obix/deviceRoot/example2/parent/reset" displayName="obix:Write" \
+    <err is="obix:UnsupportedErr" name="General error contract" 
+    href="/obix/deviceRoot/example2/parent/reset" displayName="obix:Write" 
     display="@val on the source input data not a valid boolean"/>
     ```
 
 1. Attempt to write NULL:
 
-    ```
+    ```XML 
     curl -XPUT --data '<bool val=""/>' http://localhost/obix/deviceRoot/example2/parent/reset
+    
     <?xml version="1.0"?>
-    <err is="obix:UnsupportedErr" name="General error contract" \
-    href="/obix/deviceRoot/example2/parent/reset" displayName="obix:Write" \
+    <err is="obix:UnsupportedErr" name="General error contract" 
+    href="/obix/deviceRoot/example2/parent/reset" displayName="obix:Write" 
     display="@val on the source input data not a valid boolean"/>
     ```
 
 1. Attempt to write valid boolean (true)
 
-    ```
+    ```XML 
     curl -XPUT --data '<bool val="true"/>' http://localhost/obix/deviceRoot/example/parent/reset
+    
     <bool name="reset" href="reset" val="true" writable="true"/>
     ```
 
@@ -265,6 +282,7 @@ Pre-requisites:
 
     ```XML 
     ./historyGet -d example -s $(date +%FT%T) -c "Test entry"
+    
     <?xml version="1.0" encoding="UTF-8"?>
     <str name="example" href="/obix/historyService/histories/example/"/>
     ```
@@ -275,12 +293,12 @@ Pre-requisites:
     curl http://localhost/obix/historyService/histories/ | xmllint --format -
 
     <?xml version="1.0"?>
-    <list name="histories" href="/obix/historyService/histories" of="obix:obj">
-    <obj is="obix:HistoryDevLobby" href="example">
-        <op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut"/>
-        <op name="append" href="append" in="obix:HistoryAppendIn" out="obix:HistoryAppendOut"/>
-        <list name="index" href="index" of="obix:HistoryFileAbstract"/>
-    </obj>
+        <list name="histories" href="/obix/historyService/histories" of="obix:obj">
+        <obj is="obix:HistoryDevLobby" href="example">
+            <op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut"/>
+            <op name="append" href="append" in="obix:HistoryAppendIn" out="obix:HistoryAppendOut"/>
+            <list name="index" href="index" of="obix:HistoryFileAbstract"/>
+        </obj>
     </list>
     ```
 
@@ -293,9 +311,9 @@ Pre-requisites:
 
     <?xml version="1.0"?>
     <obj is="obix:HistoryDevLobby" href="/obix/historyService/histories/example">
-    <op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut"/>
-    <op name="append" href="append" in="obix:HistoryAppendIn" out="obix:HistoryAppendOut"/>
-    <list name="index" href="index" of="obix:HistoryFileAbstract"/>
+        <op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut"/>
+        <op name="append" href="append" in="obix:HistoryAppendIn" out="obix:HistoryAppendOut"/>
+        <list name="index" href="index" of="obix:HistoryFileAbstract"/>
     </obj>
     ```
 
@@ -326,31 +344,31 @@ Pre-requisites:
 
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryAppendOut">
-    <int name="numAdded" val="1"/>
-    <int name="newCount" val="1"/>
-    <abstime name="newStart" val="2014-06-19T15:00:47"/>
-    <abstime name="newEnd" val="2014-06-19T15:00:47"/>
+        <int name="numAdded" val="1"/>
+        <int name="newCount" val="1"/>
+        <abstime name="newStart" val="2014-06-19T15:00:47"/>
+        <abstime name="newEnd" val="2014-06-19T15:00:47"/>
     </obj>
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryAppendOut">
-    <int name="numAdded" val="1"/>
-    <int name="newCount" val="2"/>
-    <abstime name="newStart" val="2014-06-19T15:00:47"/>
-    <abstime name="newEnd" val="2014-06-19T15:00:48"/>
+        <int name="numAdded" val="1"/>
+        <int name="newCount" val="2"/>
+        <abstime name="newStart" val="2014-06-19T15:00:47"/>
+        <abstime name="newEnd" val="2014-06-19T15:00:48"/>
     </obj>
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryAppendOut">
-    <int name="numAdded" val="1"/>
-    <int name="newCount" val="3"/>
-    <abstime name="newStart" val="2014-06-19T15:00:47"/>
-    <abstime name="newEnd" val="2014-06-19T15:00:48"/>
+        <int name="numAdded" val="1"/>
+        <int name="newCount" val="3"/>
+        <abstime name="newStart" val="2014-06-19T15:00:47"/>
+        <abstime name="newEnd" val="2014-06-19T15:00:48"/>
     </obj>
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryAppendOut">
-    <int name="numAdded" val="1"/>
-    <int name="newCount" val="4"/>
-    <abstime name="newStart" val="2014-06-19T15:00:47"/>
-    <abstime name="newEnd" val="2014-06-19T15:00:48"/>
+        <int name="numAdded" val="1"/>
+        <int name="newCount" val="4"/>
+        <abstime name="newStart" val="2014-06-19T15:00:47"/>
+        <abstime name="newEnd" val="2014-06-19T15:00:48"/>
     </obj>
     ```
 
@@ -375,27 +393,27 @@ Pre-requisites:
     ./historyQuery -d example
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryQueryOut">
-    <int name="count" val="4"/>
-    <abstime name="start" val="2014-06-19T15:00:47"/>
-    <abstime name="end" val="2014-06-19T15:00:48"/>
-    <list name="data" of="obix:HistoryRecord">
-    <obj is="obix:HistoryRecord">
-    <abstime name="timestamp" val="2014-06-19T15:00:47"/>
-    <obj data="70"/>
-    </obj>
-    <obj is="obix:HistoryRecord">
-    <abstime name="timestamp" val="2014-06-19T15:00:48"/>
-    <obj data="80"/>
-    </obj>
-    <obj is="obix:HistoryRecord">
-    <abstime name="timestamp" val="2014-06-19T15:00:48"/>
-    <obj data="90"/>
-    </obj>
-    <obj is="obix:HistoryRecord">
-    <abstime name="timestamp" val="2014-06-19T15:00:48"/>
-    <obj data="100"/>
-    </obj>
-    </list>
+        <int name="count" val="4"/>
+        <abstime name="start" val="2014-06-19T15:00:47"/>
+        <abstime name="end" val="2014-06-19T15:00:48"/>
+        <list name="data" of="obix:HistoryRecord">
+            <obj is="obix:HistoryRecord">
+                <abstime name="timestamp" val="2014-06-19T15:00:47"/>
+            <obj data="70"/>
+            </obj>
+            <obj is="obix:HistoryRecord">
+                <abstime name="timestamp" val="2014-06-19T15:00:48"/>
+            <obj data="80"/>
+            </obj>
+            <obj is="obix:HistoryRecord">
+                <abstime name="timestamp" val="2014-06-19T15:00:48"/>
+            <obj data="90"/>
+            </obj>
+            <obj is="obix:HistoryRecord">
+                <abstime name="timestamp" val="2014-06-19T15:00:48"/>
+            <obj data="100"/>
+            </obj>
+        </list>
     </obj>
     ```
 
@@ -464,9 +482,10 @@ In the normal terminal:
 
     ```XML 
     curl localhost/obix/devices | xmllint --format -
+    
     <?xml version="1.0"?>
     <list href="/obix/devices" displayName="Device List" of="obix:ref">
-    <ref href="/obix/deviceRoot/TestDevice" name="TestDevice" displayName="Device for tests"/>
+        <ref href="/obix/deviceRoot/TestDevice" name="TestDevice" displayName="Device for tests"/>
     </list>
     ```
     Browser: hostname/obix/devices
@@ -477,27 +496,27 @@ In the normal terminal:
     ./historyQuery -d example
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryQueryOut">
-    <int name="count" val="4"/>
-    <abstime name="start" val="2014-06-19T15:08:36"/>
-    <abstime name="end" val="2014-06-19T15:08:36"/>
-    <list name="data" of="obix:HistoryRecord">
-    <obj is="obix:HistoryRecord">
-    <abstime name="timestamp" val="2014-06-19T15:08:36"/>
-    <obj data="70"/>
-    </obj>
-    <obj is="obix:HistoryRecord">
-    <abstime name="timestamp" val="2014-06-19T15:08:36"/>
-    <obj data="80"/>
-    </obj>
-    <obj is="obix:HistoryRecord">
-    <abstime name="timestamp" val="2014-06-19T15:08:36"/>
-    <obj data="90"/>
-    </obj>
-    <obj is="obix:HistoryRecord">
-    <abstime name="timestamp" val="2014-06-19T15:08:36"/>
-    <obj data="100"/>
-    </obj>
-    </list>
+        <int name="count" val="4"/>
+        <abstime name="start" val="2014-06-19T15:08:36"/>
+        <abstime name="end" val="2014-06-19T15:08:36"/>
+        <list name="data" of="obix:HistoryRecord">
+            <obj is="obix:HistoryRecord">
+                <abstime name="timestamp" val="2014-06-19T15:08:36"/>
+                <obj data="70"/>
+            </obj>
+            <obj is="obix:HistoryRecord">
+                <abstime name="timestamp" val="2014-06-19T15:08:36"/>
+                <obj data="80"/>
+            </obj>
+            <obj is="obix:HistoryRecord">
+                <abstime name="timestamp" val="2014-06-19T15:08:36"/>
+                <obj data="90"/>
+            </obj>
+            <obj is="obix:HistoryRecord">
+                <abstime name="timestamp" val="2014-06-19T15:08:36"/>
+                <obj data="100"/>
+            </obj>
+        </list>
     </obj>
     ```
     
