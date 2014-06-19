@@ -181,6 +181,10 @@ void obix_response_destroy(response_t *resp)
 		free(resp->response_uri);
 	}
 
+	if (resp->request_decoded_uri) {
+		free((char *)resp->request_decoded_uri);
+	}
+
 	free(resp);
 }
 
