@@ -5,8 +5,7 @@ Summary:        ONEDC oBIX
 
 License:        GPLv3 or later
 URL:            https://github.com/ONEDC/obix
-Source:         obix-1.0.tar.gz
-#Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz
+Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-root
 
