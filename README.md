@@ -247,8 +247,17 @@ To configure a standalone instance:
     
         $ curl http://localhost/obix/
 
+## 5.3 Firewall
 
-## 5.3 Troubleshooting (Standalone Lighttpd Instance)
+Lighttpd will use port 80 by default. You need to open this port on your firewall.
+
+If you are using iptables, this command will temporarily allow port 80:
+
+```
+/sbin/iptables -A INPUT -m state --state NEW -p tcp --dport 80 -j ACCEPT
+```
+
+## 5.4 Troubleshooting (Standalone Lighttpd Instance)
 
 Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders differ in the case of Self-contained Lighttpd Instance, adjust accordingly.
 
