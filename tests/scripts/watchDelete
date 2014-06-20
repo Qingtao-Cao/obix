@@ -36,7 +36,10 @@ then
 	exit
 fi
 
+setsize=64
+folder=`expr $watch / $setsize`
+
 # No quotation marks around $verbose or otherwise curl
 # will complain about malformed URL if it is empty
 
-curl $verbose -XPOST --data '' http://localhost:4242/obix/watchService/watch$watch/delete
+curl $verbose -XPOST --data '' http://localhost:4242/obix/watchService/$folder/watch$watch/delete
