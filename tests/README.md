@@ -524,13 +524,202 @@ In the normal terminal:
     
 # Watch service
 
-
-WIP
-
 Refer to https://github.com/ONEDC/obix/blob/devel/docs/WATCH.md
 
+## Create a watch object
 
+1. Create a single watch object with watchMakeSingle:
 
+    ```XML 
+    ./watchMakeSingle | xmllint --format -
+
+    <?xml version="1.0"?>
+    <obj href="/obix/watchService/0/watch0/" is="obix:Watch /obix/def/LongPollWatch">
+    <reltime name="lease" href="lease" min="PT0S" max="PT24H" val="PT1H" writable="true"/>
+    <obj name="pollWaitInterval" href="pollWaitInterval">
+        <reltime name="min" href="min" min="PT0S" max="PT1M" val="PT10S" writable="true"/>
+        <reltime name="max" href="max" min="PT0S" max="PT1M" val="PT30S" writable="true"/>
+    </obj>
+    <op name="add" href="add" in="obix:WatchIn" out="obix:WatchOut"/>
+    <op name="remove" href="remove" in="obix:WatchIn"/>
+    <op name="pollChanges" href="pollChanges" out="obix:WatchOut"/>
+    <op name="pollRefresh" href="pollRefresh" out="obix:WatchOut"/>
+    <op name="delete" href="delete"/>
+    </obj>
+    ```
+
+    The /0 parent holds 64 watch objects. When we create watch 65, it goes under parent /1.
+
+## Create multiple watch objects.
+
+We want to create > 64 watch objects to check that the parent folders are created correctly.
+
+1. Create 65 watch objects with watchMake:
+
+    ```XML 
+    ./watchMake -n 65
+
+    [...]
+    <obj href="/obix/watchService/0/watch63/"
+    <obj href="/obix/watchService/1/watch64/"
+    <obj href="/obix/watchService/1/watch65/"
+
+    ```
+
+    Zero based indexing means the watch we created earlier was watch 0. We have now created up to watch65.
+
+2. Repeat and check that parent /2 has been created:
+    
+    ```XML 
+    ./watchMake -n 65
+    [...]
+    <obj href="/obix/watchService/1/watch127/"
+    <obj href="/obix/watchService/2/watch128/"
+    [...]
+    ```
+    
+
+## Delete a single watch object
+
+We should be able to delete any of the 128 watch objects we created.
+
+1. Delete watch object 126:
+
+    ```XML 
+    ./watchDelete -w 126
+    ```
+
+## Add another watch
+
+Checking watch ID reuse.
+
+1. Create a watch object with watchMakeSingle:
+
+    ```XML 
+    ./watchMakeSingle
+
+    <obj href="/obix/watchService/1/watch126/"
+    ```
+
+    Should be the watch we deleted (in this case 126).
+
+1. Create another watch object with watchMakeSingle. This time, the number sequence should continue from the highest number.
+
+    ```XML 
+    ./watchMakeSingle 
+
+    <obj href="/obix/watchService/2/watch131/"
+    ```
+1. Delete/Create cycle again.
+
+## Delete all
+
+Delete all watches and start testing again to ensure nothing breaks.
+
+1. Delete all with watchDeleteAll:
+
+    ```
+    ./watchDeleteAll
+    ```
+
+1. Also check in the browser: http://localhost/obix/watchService
+
+1. Create 130 watch objects with watchMake
+
+    ```XML 
+    ./watchMake -n 130
+    <obj href="/obix/watchService/0/watch0/
+    [...]
+    <obj href="/obix/watchService/0/watch63/"
+    <obj href="/obix/watchService/1/watch64/"
+    [...]
+    <obj href="/obix/watchService/1/watch127/"
+    <obj href="/obix/watchService/2/watch128/"
+    <obj href="/obix/watchService/2/watch129/"
+    ```
+    As before, check the parent folder rolls over after 63 entries (zero based indexing)
+    
+1. Create another 130 watch objects with watchMake
+
+    ```XML 
+    ./watchMake -n 130
+    [...]
+    <obj href="/obix/watchService/4/watch259/"
+    ```
+1. Delete selected watch objects with watchDelete
+
+    ```XML 
+    for watchID in 0 64 128 192; do ./watchDelete -w $watchID; done;
+    
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    ```
+
+1. Create 5 watch objects - expecting reuse of watch IDs from previous step plus one new watchID.
+
+    ```XML 
+    ./watchMake -n 5
+    <obj href="/obix/watchService/0/watch0/"
+    <obj href="/obix/watchService/1/watch64/"
+    <obj href="/obix/watchService/2/watch128/" 
+    <obj href="/obix/watchService/3/watch192/"
+    [...new...]
+    <obj href="/obix/watchService/4/watch260/"
+    ```
+
+## Delete a non-existent watch
+
+Delete should not work if the watch does not exist.
+
+1. Delete the 4 watches from the previous test:
+
+    ```XML 
+    $ for watchID in 0 64 128 192; do ./watchDelete -w $watchID; done;
+
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    ```
+1. Try again - should not succeed
+
+    ```XML 
+    for watchID in 0 64 128 192; do ./watchDelete -w $watchID; done;
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/0/watch0/delete"
+    displayName="oBIX Server" display="Requested URI could not be found on this server"/>
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/1/watch64/delete"
+    displayName="oBIX Server" display="Requested URI could not be found on this server"/>
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/2/watch128/delete"
+    displayName="oBIX Server" display="Requested URI could not be found on this server"/>
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/3/watch192/delete"
+    displayName="oBIX Server" display="Requested URI could not be found on this server"/>
+    ```
+1. Try a random watchID that is > any created so far:
+
+    ```XML 
+    ./watchDelete -w 4321
+
+    <err is="obix:BadUriErr" name="General error contract" href="/obix/watchService/67/watch4321/delete"
+    displayName="oBIX Server" display="Requested URI could not be found on this server"/>
+    ```
+
+    
 # Config notes
 
 Set the server address in /etc/obix/res/server/server_conf.xml
