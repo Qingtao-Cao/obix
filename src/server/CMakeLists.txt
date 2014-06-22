@@ -29,7 +29,7 @@ SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND -DDEB
 # Location to install header files
 SET(INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
 
-ADD_EXECUTABLE(obix-fcgi batch.c history.c libxml_config.c obix_fcgi.c post_handler.c response.c server.c watch.c xml_storage.c)
+ADD_EXECUTABLE(obix-fcgi batch.c history.c libxml_config.c obix_fcgi.c post_handler.c obix_request.c server.c watch.c xml_storage.c)
 
 TARGET_LINK_LIBRARIES(obix-fcgi fcgi rt pthread obix ${LIBS})
 

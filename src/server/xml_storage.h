@@ -25,7 +25,7 @@
 
 #include <libxml/tree.h>
 #include "libxml_config.h"
-#include "response.h"
+#include "obix_request.h"
 #include "xml_utils.h"
 
 extern xmlDoc* _storage;
@@ -102,7 +102,7 @@ xmlNode * const xmldb_fatal_error();
  * @remarks             This is an allocating function. It's up to the caller to
  *                      release the memory returned by this function with xmlFreeNode().
  */
-xmlNode *xmldb_dump(response_t *response);
+xmlNode *xmldb_dump(obix_request_t *request);
 
 /**
  * Dumps the full contents of an xmlNode to a string buffer.

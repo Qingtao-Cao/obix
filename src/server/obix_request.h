@@ -1,4 +1,5 @@
 /* *****************************************************************************
+ * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
  * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
  *
@@ -19,8 +20,8 @@
  *
  * *****************************************************************************/
 
-#ifndef _RESPONSE_H
-#define _RESPONSE_H
+#ifndef _OBIX_REQUEST_H
+#define _OBIX_REQUEST_H
 
 #include <fcgiapp.h>
 #include <pthread.h>
@@ -37,12 +38,25 @@ typedef struct response_item {
 	struct list_head list;
 } response_item_t;
 
-typedef struct response {
+typedef struct obix_request {
 	/*
 	 * For what the response is generated, used to setup
 	 * HTTP Content-Location header
+	 * 
+	 * Clients will be 'redirected' to the URI presented
+	 * in this strucuture if not NULL.
 	 */
-	char *uri;
+	char *response_uri;
+
+	/*
+	 * The FastCGI requested URI
+	 */
+	const char *request_uri;
+
+	/*
+	 * Contains a URL decoded request URI.
+	 */
+	const char *request_decoded_uri;
 
 	/*
 	 * Raised for long poll requests which will be handled in
@@ -63,7 +77,7 @@ typedef struct response {
 	 * 1. History.Query result could have more than 4GB bytes,
 	 * therefore long instead of int must be used.
 	 */
-	long len;
+	long response_len;
 
 	/*
 	 * Accompanied FCGI request, which should and would released
@@ -80,49 +94,49 @@ typedef struct response {
 	 * which will carry the content of one single raw history
 	 * data file
 	 */
-	struct list_head items;
+	struct list_head response_items;
 
 	/*
 	 * Counter of the number of items in the queue, for debug purpose
 	 */
-	int items_count;
+	int response_items_count;
 
 	/* Mutex to protect the whole data structure */
 	pthread_mutex_t mutex;
-} response_t;
+} obix_request_t;
 
-typedef void (*obix_response_listener)(response_t *);
+typedef void (*obix_request_listener)(obix_request_t *);
 
-response_t *obix_response_create(FCGX_Request *);
+obix_request_t *obix_request_create(FCGX_Request *);
 
-void obix_response_destroy(response_t *);
+void obix_request_destroy(obix_request_t *);
 
-void obix_response_destroy_item(response_item_t *);
+void obix_request_destroy_response_item(response_item_t *);
 
-void obix_response_destroy_items(response_t *);
+void obix_request_destroy_response_items(obix_request_t *);
 
-response_item_t *obix_response_create_item(char *text, int size, int copy);
+response_item_t *obix_request_create_response_item(char *text, int size, int copy);
 
-int obix_response_create_append_item(response_t *, char *, int, int);
+int obix_request_create_append_response_item(obix_request_t *, char *, int, int);
 
-void obix_response_add_item(response_t *, response_item_t *);
+void obix_request_add_response_item(obix_request_t *, response_item_t *);
 
-void obix_response_append_item(response_t *, response_item_t *);
+void obix_request_append_response_item(obix_request_t *, response_item_t *);
 
-int obix_response_add_xml_header(response_t *resp);
+int obix_request_add_response_xml_header(obix_request_t *resp);
 
-void obix_response_set_listener(obix_response_listener);
+void obix_request_set_listener(obix_request_listener);
 
-void obix_response_send(response_t *);
+void obix_request_send_response(obix_request_t *);
 
-long obix_response_get_len(response_t *);
+long obix_request_get_response_len(obix_request_t *);
 
-int obix_response_get_items(response_t *);
+int obix_request_get_response_items(obix_request_t *);
 
-void obix_request_destroy(FCGX_Request *);
+void obix_fcgi_request_destroy(FCGX_Request *);
 
-FCGX_Request *obix_request_create(void);
+FCGX_Request *obix_fcgi_request_create(void);
 
-int is_privileged_mode(response_t *response);
+int is_privileged_mode(obix_request_t *);
 
 #endif

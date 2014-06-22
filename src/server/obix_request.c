@@ -1,4 +1,5 @@
 /* *****************************************************************************
+ * Copyright (C) 2014 Tyler Watson <tyler.watson@nextdc.com>
  * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
  *
@@ -24,7 +25,7 @@
 #include <pthread.h>
 #include "log_utils.h"
 #include "obix_utils.h"
-#include "response.h"
+#include "obix_request.h"
 #include "xml_utils.h"
 
 /*
@@ -33,16 +34,16 @@
 #define LISTENSOCK_FILENO	0
 #define LISTENSOCK_FLAGS	0
 
-static obix_response_listener _response_listener = NULL;
+static obix_request_listener _request_listener = NULL;
 
-void obix_response_set_listener(obix_response_listener listener)
+void obix_request_set_listener(obix_request_listener listener)
 {
-	_response_listener = listener;
+	_request_listener = listener;
 }
 
-void obix_response_send(response_t *resp)
+void obix_request_send_response(obix_request_t *request)
 {
-	(*_response_listener)(resp);
+	(*_request_listener)(request);
 }
 
 /**
@@ -55,23 +56,23 @@ void obix_response_send(response_t *resp)
  * of [response, request] for EACH request received on ONE FCGI
  * channel, which supports multiplex communication.
  */
-response_t *obix_response_create(FCGX_Request *request)
+obix_request_t *obix_request_create(FCGX_Request *request)
 {
-	response_t *resp;
+	obix_request_t *obixRequest;
 
 	assert(request);
 
-	if (!(resp = (response_t *)malloc(sizeof(response_t)))) {
-		log_error("Failed to create response_t");
+	if (!(obixRequest = (obix_request_t *)malloc(sizeof(obix_request_t)))) {
+		log_error("Failed to create an oBIX request structure.");
 		return NULL;
 	}
-	memset(resp, 0, sizeof(response_t));
+	memset(obixRequest, 0, sizeof(obix_request_t));
 
-	resp->request = request;
-	INIT_LIST_HEAD(&resp->items);
-	pthread_mutex_init(&resp->mutex, NULL);
+	obixRequest->request = request;
+	INIT_LIST_HEAD(&obixRequest->response_items);
+	pthread_mutex_init(&obixRequest->mutex, NULL);
 
-	return resp;
+	return obixRequest;
 }
 
 /**
@@ -80,7 +81,7 @@ response_t *obix_response_create(FCGX_Request *request)
  * Note,
  * 1. Caller must have grabbed response->mutex
  */
-void obix_response_destroy_item(response_item_t *item)
+void obix_request_destroy_response_item(response_item_t *item)
 {
 	if (item->body) {
 		free(item->body);
@@ -92,7 +93,7 @@ void obix_response_destroy_item(response_item_t *item)
 /**
  * Finish, close and release the given request
  */
-void obix_request_destroy(FCGX_Request *request)
+void obix_fcgi_request_destroy(FCGX_Request *request)
 {
 	assert(request);
 
@@ -110,7 +111,7 @@ void obix_request_destroy(FCGX_Request *request)
  * Create a brand-new FCGI Request, initialize it and listen on
  * FCGI channel until a request has been successfully accepted
  */
-FCGX_Request *obix_request_create(void)
+FCGX_Request *obix_fcgi_request_create(void)
 {
 	FCGX_Request *request;
 	int error;
@@ -135,55 +136,59 @@ FCGX_Request *obix_request_create(void)
 	/* Fall through */
 
 failed:
-	obix_request_destroy(request);
+	obix_fcgi_request_destroy(request);
 	return NULL;
 }
 
-void obix_response_destroy_items(response_t *resp)
+void obix_request_destroy_response_items(obix_request_t *request)
 {
 	response_item_t *item, *n;
 
-	pthread_mutex_lock(&resp->mutex);
-	list_for_each_entry_safe(item, n, &resp->items, list) {
+	pthread_mutex_lock(&request->mutex);
+	list_for_each_entry_safe(item, n, &request->response_items, list) {
 		list_del(&item->list);
-		obix_response_destroy_item(item);
+		obix_request_destroy_response_item(item);
 	}
-	pthread_mutex_unlock(&resp->mutex);
+	pthread_mutex_unlock(&request->mutex);
 }
 
 /**
  * Destroy a response_t descriptor, including its queue
  * of response_item_t AND the accompanied FCGI Request
  */
-void obix_response_destroy(response_t *resp)
+void obix_request_destroy(obix_request_t *request)
 {
-	assert(resp);
+	assert(request);
 
-	obix_request_destroy(resp->request);
+	obix_fcgi_request_destroy(request->request);
 
 	/*
 	 * glibc free() won't nullify the freed memory region, therefore
 	 * explicitly nullify the pointer so as to prevent program from
 	 * going insane in error conditions
 	 */
-	resp->request = NULL;
+	request->request = NULL;
 
-	obix_response_destroy_items(resp);
+	obix_request_destroy_response_items(request);
 
-	pthread_mutex_destroy(&resp->mutex);
+	pthread_mutex_destroy(&request->mutex);
 
 	/*
 	 * strdup may have failed to duplicated the overriden URI
 	 * as response's uri
 	 */
-	if (resp->uri) {
-		free(resp->uri);
+	if (request->response_uri) {
+		free(request->response_uri);
 	}
 
-	free(resp);
+	if (request->request_decoded_uri) {
+		free((char *)request->request_decoded_uri);
+	}
+
+	free(request);
 }
 
-response_item_t *obix_response_create_item(char *text, int size, int copy)
+response_item_t *obix_request_create_response_item(char *text, int size, int copy)
 {
 	response_item_t *item;
 
@@ -192,6 +197,7 @@ response_item_t *obix_response_create_item(char *text, int size, int copy)
 	if (!(item = (response_item_t *)malloc(sizeof(response_item_t)))) {
 		return NULL;
 	}
+
 	memset(item, 0, sizeof(response_item_t));
 
 	INIT_LIST_HEAD(&item->list);
@@ -209,26 +215,26 @@ response_item_t *obix_response_create_item(char *text, int size, int copy)
 	return item;
 }
 
-void obix_response_add_item(response_t *resp, response_item_t *item)
+void obix_request_add_response_item(obix_request_t *request, response_item_t *item)
 {
-	assert(resp && item);
+	assert(request && item);
 
-	pthread_mutex_lock(&resp->mutex);
-	list_add(&item->list, &resp->items);
-	resp->len += item->len;
-	resp->items_count++;
-	pthread_mutex_unlock(&resp->mutex);
+	pthread_mutex_lock(&request->mutex);
+	list_add(&item->list, &request->response_items);
+	request->response_len += item->len;
+	request->response_items_count++;
+	pthread_mutex_unlock(&request->mutex);
 }
 
-void obix_response_append_item(response_t *resp, response_item_t *item)
+void obix_request_append_response_item(obix_request_t *request, response_item_t *item)
 {
-	assert(resp && item);
+	assert(request && item);
 
-	pthread_mutex_lock(&resp->mutex);
-	list_add_tail(&item->list, &resp->items);
-	resp->len += item->len;
-	resp->items_count++;
-	pthread_mutex_unlock(&resp->mutex);
+	pthread_mutex_lock(&request->mutex);
+	list_add_tail(&item->list, &request->response_items);
+	request->response_len += item->len;
+	request->response_items_count++;
+	pthread_mutex_unlock(&request->mutex);
 }
 
 /**
@@ -248,15 +254,15 @@ void obix_response_append_item(response_t *resp, response_item_t *item)
  * 2. On failure callers should pay attention to release
  * the text before exit.
  */
-int obix_response_create_append_item(response_t *resp, char *text, int size, int copy)
+int obix_request_create_append_response_item(obix_request_t *request, char *text, int size, int copy)
 {
 	response_item_t *item;
 
-	if (!(item = obix_response_create_item(text, size, copy))) {
+	if (!(item = obix_request_create_response_item(text, size, copy))) {
 		return -1;
 	}
 
-	obix_response_append_item(resp, item);
+	obix_request_append_response_item(request, item);
 
 	return 0;
 }
@@ -264,13 +270,13 @@ int obix_response_create_append_item(response_t *resp, char *text, int size, int
 /**
  * Get the length of response
  */
-long obix_response_get_len(response_t *resp)
+long obix_request_get_response_len(obix_request_t *request)
 {
 	long len;
 
-	pthread_mutex_lock(&resp->mutex);
-	len = resp->len;
-	pthread_mutex_unlock(&resp->mutex);
+	pthread_mutex_lock(&request->mutex);
+	len = request->response_len;
+	pthread_mutex_unlock(&request->mutex);
 
 	return len;
 }
@@ -278,13 +284,13 @@ long obix_response_get_len(response_t *resp)
 /**
  * Get the number of response items
  */
-int obix_response_get_items(response_t *resp)
+int obix_request_get_response_items(obix_request_t *request)
 {
 	int items;
 
-	pthread_mutex_lock(&resp->mutex);
-	items = resp->items_count;
-	pthread_mutex_unlock(&resp->mutex);
+	pthread_mutex_lock(&request->mutex);
+	items = request->response_items_count;
+	pthread_mutex_unlock(&request->mutex);
 
 	return items;
 }
@@ -292,16 +298,16 @@ int obix_response_get_items(response_t *resp)
 /**
  * Add XML document header as the very first response item
  */
-int obix_response_add_xml_header(response_t *resp)
+int obix_request_add_response_xml_header(obix_request_t *request)
 {
 	response_item_t *item;
 	int len = strlen(XML_HEADER);
 
-	if (!(item = obix_response_create_item((char *)XML_HEADER, len, 1))) {
+	if (!(item = obix_request_create_response_item((char *)XML_HEADER, len, 1))) {
 		return -1;
 	}
 
-	obix_response_add_item(resp, item);
+	obix_request_add_response_item(request, item);
 
 	return 0;
 }
@@ -315,7 +321,7 @@ int obix_response_add_xml_header(response_t *resp)
  * for this purpose. And the web server responsible for authentication
  * should set/reset such variable according to the client's IP address.
  */
-int is_privileged_mode(response_t *response)
+int is_privileged_mode(obix_request_t *request)
 {
 	return 1;
 }

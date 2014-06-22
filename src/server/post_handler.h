@@ -24,18 +24,17 @@
 #define POST_HANDLER_H_
 
 #include <libxml/tree.h>
-#include "response.h"
+#include "obix_request.h"
 
 /**
  * Prototype of a POST Handler function.
  *
  * @param response Response object, which should be used to send operation
  *					results.
- * @param URI Requested URI.
  * @param input Parsed request input.
  */
 typedef xmlNode *
-(*obix_server_postHandler)(response_t *, const char *, xmlNode *);
+(*obix_server_postHandler)(obix_request_t *, xmlNode *);
 
 /**
  * Returns handler with specified id.

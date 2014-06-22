@@ -786,21 +786,21 @@ out:
  * all the request environment variables as child nodes to the environment root node
  * pointed to by @a environmentRoot.
  *
- * @param response          A pointer to the @a Response object that holds request
- *                          information
+ * @param request	    A pointer to the @a oBIX Request object that holds request
+ *                          information.
  * @returns                 A pointer to the newly created obix:List XML subtree
  *                          with all the FastCGI variables listed as <str>'s in it,
  *                          or NULL if an error occured.
  * @remark                  This is an allocating function.  It's up to the caller
  *                          to free the memory returned from this function with xmlFree().
  */
-static xmlNode *xmldb_fcgi_var_list(response_t *response)
+static xmlNode *xmldb_fcgi_var_list(obix_request_t *request)
 {
 	char **envp;
 	xmlNode *envList = NULL;
 	xmlNode *curEnvNode = NULL;
 
-	assert(response && response->request);
+	assert(request && request->request);
 
 	if (!(envList = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_LIST, NULL))) {
 		log_error("Failed to allocate the oBIX:List contract");
@@ -815,7 +815,7 @@ static xmlNode *xmldb_fcgi_var_list(response_t *response)
 		goto failed;
 	}
 
-	for (envp = response->request->envp; *envp != NULL; ++envp) {
+	for (envp = request->request->envp; *envp != NULL; ++envp) {
 		if (!(curEnvNode = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_STR, NULL))) {
 			log_error("Failed to allocate the oBIX:str value for FCGI varabile");
 			break;
@@ -847,13 +847,13 @@ failed:
 }
 
 #ifdef DEBUG
-xmlNode *xmldb_dump(response_t *response)
+xmlNode *xmldb_dump(obix_request_t *request)
 {
 	xmlNode *obixDump = NULL;
 	xmlNode *fcgiVarList = NULL;
 	xmlNode *storageCopy = NULL;
 
-	assert(response);
+	assert(request);
 
 	if (!(obixDump = xmlNewNode(NULL, BAD_CAST OBIX_OBJ))) {
 		log_error("Failed to allocate an XML node for the response");
@@ -866,7 +866,7 @@ xmlNode *xmldb_dump(response_t *response)
 		goto failed;
 	}
 
-	if (!(fcgiVarList = xmldb_fcgi_var_list(response))) {
+	if (!(fcgiVarList = xmldb_fcgi_var_list(request))) {
 		log_error("Failed to return the FASTCGI environment contract");
 		goto failed;
 	}

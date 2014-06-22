@@ -22,14 +22,14 @@
 #define _WATCH_HEADER_
 
 #include <libxml/tree.h>
-#include "response.h"
+#include "obix_request.h"
 
-xmlNode *handlerWatchServiceMake(response_t *, const char *, xmlNode *);
-xmlNode *handlerWatchDelete(response_t *, const char *, xmlNode *);
-xmlNode *handlerWatchAdd(response_t *, const char *, xmlNode *);
-xmlNode *handlerWatchRemove(response_t *, const char *, xmlNode *);
-xmlNode *handlerWatchPollChanges(response_t *, const char *, xmlNode *);
-xmlNode *handlerWatchPollRefresh(response_t *, const char *, xmlNode *);
+xmlNode *handlerWatchServiceMake(obix_request_t *, xmlNode *);
+xmlNode *handlerWatchDelete(obix_request_t *, xmlNode *);
+xmlNode *handlerWatchAdd(obix_request_t *, xmlNode *);
+xmlNode *handlerWatchRemove(obix_request_t *, xmlNode *);
+xmlNode *handlerWatchPollChanges(obix_request_t *, xmlNode *);
+xmlNode *handlerWatchPollRefresh(obix_request_t *, xmlNode *);
 
 int obix_watch_init(xml_config_t *);
 void obix_watch_dispose(void);
