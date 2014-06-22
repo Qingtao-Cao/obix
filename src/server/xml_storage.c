@@ -786,8 +786,8 @@ out:
  * all the request environment variables as child nodes to the environment root node
  * pointed to by @a environmentRoot.
  *
- * @param request           A pointer to the @a Response object that holds request
- *                          information
+ * @param response	    A pointer to the @a oBIX Request object that holds request
+ *                          information.
  * @returns                 A pointer to the newly created obix:List XML subtree
  *                          with all the FastCGI variables listed as <str>'s in it,
  *                          or NULL if an error occured.
