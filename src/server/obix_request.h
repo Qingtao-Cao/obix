@@ -49,7 +49,7 @@ typedef struct obix_request {
 	char *response_uri;
 
 	/*
-	 * The FastCGI requested requested URI
+	 * The FastCGI requested URI
 	 */
 	const char *request_uri;
 
