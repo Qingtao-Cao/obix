@@ -184,7 +184,7 @@ To start a local lighttpd instance of oBIX:
     $ make
     $ make test
 
-This will start a local instance of lighttpd. You can access the server via: localhost:4242/obix
+This will start a local instance of lighttpd. You can access the server via: localhost:4242/obix (there is a redirect in place from localhost:4242 to /obix).
 
 You can run any of the scripts in the directory **tests/scripts**.
 
