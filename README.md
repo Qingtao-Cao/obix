@@ -184,7 +184,7 @@ Fedora/RHEL systems can use the specfile redhat/obix.spec, and create a local ta
     git archive --format=tar --prefix=obix-1.0/ 1.0 | gzip >obix-1.0.tar.gz
 
     
-TODO: urrently the specfile is looking for a local tarball. Pre-release we need to remove this line and uncomment the link to a tarball on Github.
+TODO: currently the specfile is looking for a local tarball. Pre-release we need to remove this line and uncomment the link to a tarball on Github.
 
 # 5. Running oBIX Server
 
