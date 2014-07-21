@@ -17,7 +17,7 @@
 	* You should have received a copy of the GNU General Public License
 	* along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
 	*
-<!--
+
 	Device lobby that contains the list of all registered devices.
 
 	The href attribute of every reference node must contain the ABSOLUTE URI

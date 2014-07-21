@@ -22,4 +22,4 @@ else
 fi
 
 # Create dir structure for lighttpd
-mkdir -p tests/lighttpd/log tests/lighttpd/run tests/lighttpd/lib tests/lighttpd/lib
+mkdir -p tests/lighttpd/log tests/lighttpd/run tests/lighttpd/lib
