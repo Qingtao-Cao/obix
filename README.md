@@ -271,7 +271,7 @@ Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders
 
 * Normally multiple oBIX Server threads would be displayed. However, if no oBIX Server threads are running, it can be helpful to get to know relevant lighttpd error messages:
 
-		$ tail /var/log/lighttpd/error.log
+		$ sudo tail /var/log/lighttpd/error.log
 
 * Strace is very handy to nail down the reason why lighttpd failed to start oBIX Server:
 
@@ -291,3 +291,6 @@ Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders
 
 * If history index files are touched or new log files installed (e.g. for test purposes), be sure to verify the log file abstracts in the index file are consistent with the real log files.
 
+* If obix-fcgi binary failed to find libobix.so, its path can be specified in the "bin-environment" setting of the obix-fcgi.conf file.
+
+* If the oBIX server oops on the fly, gdb can be used to attach to a running instance of the obix-fcgi binary and capture the calltrace on the spot.
