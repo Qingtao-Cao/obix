@@ -51,6 +51,7 @@
 #include "server.h"
 #include "xml_utils.h"
 #include "bitmap.h"
+#include "watch.h"
 
 /*
  * Descriptor of all watch objects on the oBIX server
@@ -346,8 +347,15 @@ static const char *XP_WATCH_METAS = "./meta[@watch_id]";
  * Any ancestor node including itself that have at least one
  * watch meta installed
  */
-static const char *XP_WATCH_ANCESTOR =
+static const char *XP_WATCH_ANCESTOR_OR_SELF =
 "./ancestor-or-self::*[child::meta[@watch_id]]";
+
+/*
+ * Any descendant node including itself that have at least one
+ * watch meta installed
+ */
+static const char *XP_WATCH_DESCENDANT_OR_SELF =
+"./descendant-or-self::*[child::meta[@watch_id]]";
 
 /*
  * Any children contained in this hierarchy:
@@ -511,7 +519,7 @@ static void __notify_watch_tasks(watch_t *watch)
 /**
  * Notify a watch object of the change event on the given node
  */
-static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent)
+static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent, WATCH_EVT event)
 {
 	xmlChar *uri;
 	watch_t *watch;
@@ -549,6 +557,10 @@ static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent)
 	if (!(item = __get_watch_item(watch, (const char *)uri))) {
 		log_warning("%s has not watched upon %s", watch->uri, uri);
 	} else {
+		if (event == WATCH_EVT_NODE_DELETED) {
+			item->node = item->meta = NULL;
+		}
+
 		item->count++;
 		watch->changed = 1;
 		__notify_watch_tasks(watch);
@@ -566,9 +578,10 @@ static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent)
 
 static void xmldb_notify_watch_wrapper(xmlNode *meta, void *arg1, void *arg2)
 {
-	xmlNode *parent = (xmlNode *)arg1;	/* arg2 is ignored */
+	xmlNode *parent = (xmlNode *)arg1;
+	WATCH_EVT event = *(WATCH_EVT *)arg2;
 
-	xmldb_notify_watch(meta, parent);
+	xmldb_notify_watch(meta, parent, event);
 }
 
 /**
@@ -577,20 +590,35 @@ static void xmldb_notify_watch_wrapper(xmlNode *meta, void *arg1, void *arg2)
  */
 static void xmldb_notify_watches_helper(xmlNode *targeted, void *arg1, void *arg2)
 {
-	/* Both arg1 and arg2 are ignored */
+	/* arg1 is ignored */
 
 	xml_xpath_for_each_item(targeted, XP_WATCH_METAS,
-							xmldb_notify_watch_wrapper, targeted, NULL);
+							xmldb_notify_watch_wrapper, targeted, arg2);
 }
 
 /**
- * Notify any possible watches installed on any ancestors
- * of the leaf node of the change event
+ * Notify relevant watches of what had happened
  */
-void xmldb_notify_watches(xmlNode *node)
+void xmldb_notify_watches(xmlNode *node, WATCH_EVT event)
 {
-	xml_xpath_for_each_item(node, XP_WATCH_ANCESTOR,
-							xmldb_notify_watches_helper, NULL, NULL);
+	const char *xp = NULL;
+
+	switch (event) {
+	case WATCH_EVT_NODE_CHANGED:
+		xp = XP_WATCH_ANCESTOR_OR_SELF;
+		break;
+	case WATCH_EVT_NODE_DELETED:
+		xp = XP_WATCH_DESCENDANT_OR_SELF;
+		break;
+	default:
+		log_error("Failed to notify watches due to bad event");
+		break;
+	}
+
+	if (xp) {
+		xml_xpath_for_each_item(node, xp, xmldb_notify_watches_helper,
+								NULL, (void *)&event);
+	}
 }
 
 xmlNode *xmldb_put_watch_meta(xmlNode *node, int watch_id)
@@ -620,22 +648,29 @@ xmlNode *xmldb_put_watch_meta(xmlNode *node, int watch_id)
 	return meta;
 }
 
-/**
- * Delete the specified watch item from the watch object, including
- * dequeuing the watch item descriptor from the queue of the watch object
- * and removal of relevant meta node from the monitored object.
+/*
+ * Delete a watch meta node and release the watch item descriptor
  *
  * Note,
  * 1. Callers should have held watch->mutex.
  */
 static void __delete_watch_item(watch_item_t *item)
 {
-	xmldb_delete_node(item->meta, 0);
+	/*
+	 * The watch meta node may have been deleted along with
+	 * the monitored object
+	 */
+	if (item->meta) {
+		xmldb_delete_node(item->meta, 0);
+	}
 
 	free(item->uri);
 	free(item);
 }
 
+/**
+ * Delete the specified watch item from the watch object
+ */
 static void delete_watch_item(xmlNode *node, void *arg1, void *arg2)
 {
 	watch_t *watch = (watch_t *)arg1;	/* arg2 is ignored */

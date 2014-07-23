@@ -272,12 +272,24 @@ void obix_server_handleGET(obix_request_t *request)
 							 ((node != NULL) ? request->request_decoded_uri : NULL));
 }
 
-xmlNode *obix_server_write(const obix_request_t *request, const char *overrideUri, xmlNode *input)
+/**
+ * Update the destination node if it is writable in the following
+ * aspects:
+ *  . Delete it if null="true" is set in the request;
+ *  . Update its val attribute if provided;
+ *  . Install new nodes as its direct children if provided;
+ *  . Remove its direct children if null="true" is set in the request
+ *    for such nodes.
+ *
+ * However, a write request won't be able to remove a device
+ * contract and the signOff request should be used instead.
+ */
+xmlNode *obix_server_write(const obix_request_t *request,
+						   const char *overrideUri, xmlNode *input)
 {
 	xmlNode *updatedNode = NULL;
 	xmlNode *nodeCopy = NULL;
 	const char *uri;
-	int changed = 0;
 	int ret;
 
 	uri = (overrideUri == NULL) ? request->request_decoded_uri : overrideUri;
@@ -287,17 +299,13 @@ xmlNode *obix_server_write(const obix_request_t *request, const char *overrideUr
 		goto failed;
 	}
 
-	if ((ret = xmldb_update_node(input, uri, &updatedNode, &changed)) > 0) {
+	if ((ret = xmldb_update_node(input, uri, &updatedNode)) > 0) {
 		ret += ERR_XMLDB_ERR_OFFSET;
 		goto failed;
 	}
 
-	if (changed == 1) {
-		xmldb_notify_watches(updatedNode);
-	}
-
 	if (!(nodeCopy = xmldb_copy_node(updatedNode,
-							 XML_COPY_EXCLUDE_META | XML_COPY_EXCLUDE_HIDDEN))) {
+							XML_COPY_EXCLUDE_META | XML_COPY_EXCLUDE_HIDDEN))) {
 		ret = ERR_NO_MEM;
 		goto failed;
 	}
@@ -553,16 +561,20 @@ xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 		goto failed;
 	}
 
-	if (!(ref = xmldb_put_ref(OBIX_DEVICE_LOBBY_URI, input, &existed))) {
+	if (!(ref = xmldb_create_ref(OBIX_DEVICE_LOBBY_URI, input, &existed))) {
 		ret = ERR_NO_REF;
 		goto failed;
 	}
 
 	if (existed == 1) {
 		/*
-		 * Return gracefully as if succeeded when devices already
-		 * registered so as to support client side who may be
-		 * restarting whereas the oBIX server is kepting running
+		 * Return success when the device already registered to
+		 * enable a re-started client handle the signUp gracefully.
+		 *
+		 * TODO:
+		 * However, such practice will have a side-effect that
+		 * the existing device may be altered and thus different
+		 * than what has been provided.
 		 */
 		goto out;
 	}
@@ -571,6 +583,13 @@ xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 		ret = ERR_NO_MEM;
 		goto copy_failed;
 	}
+
+	/*
+	 * Remove the "writable" attribute so that a device contract
+	 * cannot be deleted through a normal write request, but via
+	 * the signOff request
+	 */
+	xmlUnsetProp(inputCopy, BAD_CAST OBIX_ATTR_WRITABLE);
 
 	/*
 	 * Always enforce sanity checks for all contracts registered regardless
@@ -616,6 +635,8 @@ out:
 
 			xmldb_set_relative_href(pos);
 		}
+
+		xmlUnsetProp(node, BAD_CAST OBIX_ATTR_WRITABLE);
 	}
 
 	return node;
