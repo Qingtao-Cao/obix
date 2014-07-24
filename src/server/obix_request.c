@@ -173,16 +173,13 @@ void obix_request_destroy(obix_request_t *request)
 
 	pthread_mutex_destroy(&request->mutex);
 
-	/*
-	 * strdup may have failed to duplicated the overriden URI
-	 * as response's uri
-	 */
+	/* response_uri may have not been used at all */
 	if (request->response_uri) {
 		free(request->response_uri);
 	}
 
 	if (request->request_decoded_uri) {
-		free((char *)request->request_decoded_uri);
+		free(request->request_decoded_uri);
 	}
 
 	free(request);

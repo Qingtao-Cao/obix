@@ -87,32 +87,31 @@ static void printUsageNotice(char *programName)
 			  programName);
 }
 
-
 /**
  * Decodes a URL-Encoded string.
  *
  * See http://www.w3schools.com/tags/ref_urlencode.asp
  *
  * @param	dst		A pointer to the destination buffer which holds
- * 					enough bytes to decode the result, which should
- * 					always be strlen(source) + 1 for null terminator
+ *					enough bytes to decode the result, which should
+ *					always be strlen(source) + 1 for null terminator
  *					or less.
  * @param	src		A pointer to the string that is to be decoded.
  *
  * @remarks @see http://stackoverflow.com/a/14530993
  */
-void obix_fcgi_url_decode(char *dst, const char *src)
+static void obix_fcgi_url_decode(char *dst, const char *src)
 {
 	char a, b;
 
 	while (*src) {
-		if ((*src == '%') && ((a = src[1])
-							  && (b = src[2])) && (isxdigit(a)
-									  && isxdigit(b))) {
-
+		if ((*src == '%') &&
+			((a = src[1]) && (b = src[2])) &&
+			(isxdigit(a)  && isxdigit(b))) {
 			if (a >= 'a') {
 				a -= 'a' - 'A';
 			}
+
 			if (a >= 'A') {
 				a -= ('A' - 10);
 			} else {
@@ -202,6 +201,7 @@ void obix_fcgi_sendResponse(obix_request_t *request)
 	long len = obix_request_get_response_len(request);
 	int items = obix_request_get_response_items(request);
 	int i = 0;
+	const char *response_uri;
 
 	/* Header section: HTTP/1.1 200 OK */
 	if (FCGX_FPrintF(fcgiRequest->out, "%s", HTTP_STATUS_OK) == EOF) {
@@ -209,12 +209,19 @@ void obix_fcgi_sendResponse(obix_request_t *request)
 		goto failed;
 	}
 
-	/* Header section: content-location: uri */
-	if (request->response_uri != NULL) {
-		if (FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION, request->response_uri) == EOF) {
-			log_error("Failed to write HTTP \"Content-Location\" header");
-			goto failed;
-		}
+	/*
+	 * Header section: content-location
+	 *
+	 * If response_uri is not set, then fall back on the decoded request_uri.
+	 * This way, handlers can have a chance to specify another URI as the
+	 * Content-Location, for example, for newly generated history facilities
+	 * or watch objects
+	 */
+	response_uri = (request->response_uri != NULL) ?
+					request->response_uri : request->request_decoded_uri;
+	if (FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION, response_uri) == EOF) {
+		log_error("Failed to write HTTP \"Content-Location\" header");
+		goto failed;
 	}
 
 	if (len > 0) {
@@ -345,22 +352,23 @@ static void obix_handle_request(obix_request_t *request)
 	const char *requestType;
 
 	if (!(request->request_uri = FCGX_GetParam(FCGI_REQUEST_URI, fcgiRequest->envp)) ||
-			(*request->request_uri != '/')) {
+		(*request->request_uri != '/')) {
 		log_error("Invalid %s in current request", FCGI_REQUEST_URI);
-		obix_server_handleError(request, request->request_uri, "Invalid URI");
+		obix_server_handleError(request, "Invalid URI");
 		return;
 	}
 
 	if (!(request->request_decoded_uri = (char *)malloc(strlen(request->request_uri) + 1))) {
 		log_error("Could not allocate enough memory to decode the input URI");
+		obix_server_handleError(request, "Failed to decode input URI");
 		return;
 	}
 
-	obix_fcgi_url_decode((char *)request->request_decoded_uri, request->request_uri);
+	obix_fcgi_url_decode(request->request_decoded_uri, request->request_uri);
 
 	if (!(requestType = FCGX_GetParam(FCGI_REQUEST_METHOD, fcgiRequest->envp))) {
 		log_error("Invalid %s in current request", FCGI_REQUEST_METHOD);
-		obix_server_handleError(request, request->request_decoded_uri, "Missing HTTP verb");
+		obix_server_handleError(request, "Missing HTTP verb");
 		return;
 	}
 
@@ -379,7 +387,7 @@ static void obix_handle_request(obix_request_t *request)
 			xmlFreeDoc(inputDoc);
 		}
 	} else {
-		obix_server_handleError(request, request->request_decoded_uri, "Illegal HTTP verb");
+		obix_server_handleError(request, "Illegal HTTP verb");
 	}
 }
 

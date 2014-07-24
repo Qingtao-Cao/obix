@@ -470,7 +470,7 @@ static xmlNode *create_aout(obix_hist_dev_t *dev, int added)
  */
 static int write_logfile(obix_hist_file_t *file, xmlNode *record)
 {
-	int fd, ret;
+	int fd, ret = -1;
 	char *data;
 	struct iovec iov[2];
 
@@ -1916,15 +1916,15 @@ static int get_dev_id(const char *uri, const char *op_name, char **dev_id)
 	return (ret < 0) ? ERR_NO_MEM : 0;
 }
 
-static xmlNode *handlerHistoryHelper(obix_request_t *request, const char *uri,
-									 xmlNode *input, const char *op_name)
+static xmlNode *handlerHistoryHelper(obix_request_t *request, xmlNode *input,
+									 const char *op_name)
 {
 	obix_hist_dev_t *dev;
 	char *dev_id;
 	int ret = ERR_NO_MEM;
 
 	/* Find the device to operate on */
-	if ((ret = get_dev_id(uri, op_name, &dev_id)) > 0) {
+	if ((ret = get_dev_id(request->request_decoded_uri, op_name, &dev_id)) > 0) {
 		goto failed;
 	}
 
@@ -1953,7 +1953,6 @@ static xmlNode *handlerHistoryHelper(obix_request_t *request, const char *uri,
 		goto failed;
 	}
 
-	request->response_uri = strdup(uri);
 	request->is_history = 1;
 	obix_request_send_response(request);
 
@@ -1962,21 +1961,22 @@ static xmlNode *handlerHistoryHelper(obix_request_t *request, const char *uri,
 failed:
 	log_error("%s", hist_err_msg[ret].msgs);
 
-	return obix_server_generate_error(uri, hist_err_msg[ret].type,
-				op_name, hist_err_msg[ret].msgs);
+	return obix_server_generate_error(request->request_decoded_uri,
+									  hist_err_msg[ret].type,
+									  op_name, hist_err_msg[ret].msgs);
 }
 
-xmlNode *handlerHistoryAppend(obix_request_t *request, const char *uri, xmlNode *input)
+xmlNode *handlerHistoryAppend(obix_request_t *request, xmlNode *input)
 {
-	return handlerHistoryHelper(request, uri, input, HIST_OP_APPEND);
+	return handlerHistoryHelper(request, input, HIST_OP_APPEND);
 }
 
-xmlNode *handlerHistoryQuery(obix_request_t *request, const char *uri, xmlNode *input)
+xmlNode *handlerHistoryQuery(obix_request_t *request, xmlNode *input)
 {
-	return handlerHistoryHelper(request, uri, input, HIST_OP_QUERY);
+	return handlerHistoryHelper(request, input, HIST_OP_QUERY);
 }
 
-xmlNode *handlerHistoryGet(obix_request_t *request, const char *uri, xmlNode *input)
+xmlNode *handlerHistoryGet(obix_request_t *request, xmlNode *input)
 {
 	obix_hist_dev_t *dev;
 	char *href, *dev_id, *data;
@@ -2020,7 +2020,12 @@ xmlNode *handlerHistoryGet(obix_request_t *request, const char *uri, xmlNode *in
 	free(href);
 	free(dev_id);
 
-	request->response_uri = strdup(uri);
+	/*
+	 * Fill in the HTTP Content-Location header with the href
+	 * of the relevant history facility
+	 */
+	request->response_uri = strdup(dev->devhref);
+
 	request->is_history = 1;
 	obix_request_send_response(request);
 
@@ -2043,6 +2048,7 @@ failed:
 
 	log_error("%s", hist_err_msg[ret].msgs);
 
-	return obix_server_generate_error(uri, hist_err_msg[ret].type,
-				"History.Get", hist_err_msg[ret].msgs);
+	return obix_server_generate_error(request->request_decoded_uri,
+									  hist_err_msg[ret].type,
+									  "History.Get", hist_err_msg[ret].msgs);
 }

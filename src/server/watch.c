@@ -1245,9 +1245,9 @@ static poll_task_t *get_expired_task(poll_backlog_t *bl, struct timespec *ts)
  * 1. This is a time-consuming function callers should not
  * hold any mutex during invocation.
  */
-static void do_and_free_task(poll_task_t *task, const char *uri)
+static void do_and_free_task(poll_task_t *task)
 {
-	obix_server_reply_object(task->request, task->watch_out, uri);
+	obix_server_reply_object(task->request, task->watch_out);
 	free(task);
 }
 
@@ -1299,7 +1299,7 @@ static void poll_backlog_dispose(poll_backlog_t *bl)
 		log_warning("Dangling poll tasks found (Shouldn't happend!)");
 		list_for_each_entry_safe(task, n, &bl->list_all, list_all) {
 			list_del(&task->list_all);
-			do_and_free_task(task, NULL);
+			do_and_free_task(task);
 		}
 	}
 
@@ -1484,7 +1484,6 @@ int obix_watch_init(xml_config_t *config)
 	return 0;
 }
 
-
 xmlNode *handlerWatchServiceMake(obix_request_t *request, xmlNode *input)
 {
 	xmlNode *node;
@@ -1507,6 +1506,12 @@ xmlNode *handlerWatchServiceMake(obix_request_t *request, xmlNode *input)
 			node = NULL;
 		}
 	}
+
+	/*
+	 * Fill in the HTTP Content-Location header with the href
+	 * of the newly created watch object
+	 */
+	request->response_uri = strdup(watch->uri);
 
 	return node;
 
@@ -1834,16 +1839,13 @@ xmlNode *handlerWatchPollRefresh(obix_request_t *request, xmlNode *input)
 static void poll_thread_task_helper(poll_task_t *task)
 {
 	watch_t *watch = task->watch;
-	char *uri = NULL;
 
 	if (!(watch = task->watch)) {
 		log_warning("Relevant watch of current poll task was deleted! "
 					"(Shouldn't happen!)");
-		do_and_free_task(task, NULL);
+		do_and_free_task(task);
 		return;
 	}
-
-	uri = strdup(watch->uri);	/* Doesn't matter if failed */
 
 	pthread_mutex_lock(&watch->mutex);
 	if (watch->changed == 1) {
@@ -1866,18 +1868,8 @@ static void poll_thread_task_helper(poll_task_t *task)
 
 	/*
 	 * Finally, send out the task's watch_out as response.
-	 *
-	 * Note,
-	 * 1. Since the href attribute of watchOut contract has been
-	 * removed, fall back on a copy of watch's URI as HTTP's
-	 * Content-Location header - Note: MUST use a copy since the
-	 * watch may have been removed!
 	 */
-	do_and_free_task(task, uri);
-
-	if (uri) {
-		free(uri);
-	}
+	do_and_free_task(task);
 }
 
 /**
