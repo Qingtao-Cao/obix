@@ -40,23 +40,24 @@ typedef struct response_item {
 
 typedef struct obix_request {
 	/*
-	 * For what the response is generated, used to setup
-	 * HTTP Content-Location header
-	 * 
-	 * Clients will be 'redirected' to the URI presented
-	 * in this strucuture if not NULL.
+	 * Which href on the oBIX server has generated this response,
+	 * used to setup the HTTP Content-Location header
+	 *
+	 * In most cases handlers won't bother to set it up and the
+	 * decoded request_uri will be used.
 	 */
 	char *response_uri;
 
 	/*
-	 * The FastCGI requested URI
+	 * The FastCGI requested URI, that is, the href on the oBIX
+	 * server that has been requested.
 	 */
 	const char *request_uri;
 
 	/*
-	 * Contains a URL decoded request URI.
+	 * The decoded version of the requested URI.
 	 */
-	const char *request_decoded_uri;
+	char *request_decoded_uri;
 
 	/*
 	 * Raised for long poll requests which will be handled in

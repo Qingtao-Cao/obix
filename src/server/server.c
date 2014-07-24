@@ -35,11 +35,13 @@
 #include "obix_request.h"
 #include "history.h"
 
+#ifdef DEBUG
 /*
  * The special URI to expose all visible(not hidden) objects
  * in oBIX server XML database. For debug purpose only
  */
 static const char *OBIX_SRV_DUMP_URI = "/obix-dump/";
+#endif
 
 enum {
 	ERR_NO_INPUT = 1,	/* Leave 0 as success */
@@ -170,8 +172,9 @@ xmlNode *obix_server_generate_error(const char *href, const char *contract,
 	if ((contract != NULL &&
 		 xmlSetProp(errorNode, BAD_CAST OBIX_ATTR_IS,
 					BAD_CAST contract) == NULL) ||
-		xmlSetProp(errorNode, BAD_CAST OBIX_ATTR_HREF,
-					BAD_CAST href) == NULL ||
+		(href != NULL &&
+		 xmlSetProp(errorNode, BAD_CAST OBIX_ATTR_HREF,
+					BAD_CAST href) == NULL) ||
 		xmlSetProp(errorNode, BAD_CAST OBIX_ATTR_DISPLAY_NAME,
 					BAD_CAST name) == NULL ||
 		xmlSetProp(errorNode, BAD_CAST OBIX_ATTR_DISPLAY,
@@ -184,7 +187,7 @@ xmlNode *obix_server_generate_error(const char *href, const char *contract,
 	return errorNode;
 }
 
-xmlNode *obix_server_read(const obix_request_t *request, const char *overrideUri)
+xmlNode *obix_server_read(obix_request_t *request, const char *overrideUri)
 {
 	xmlNode *copy = NULL;
 	xmlAttr *hidden = NULL;
@@ -192,11 +195,11 @@ xmlNode *obix_server_read(const obix_request_t *request, const char *overrideUri
 	int ret;
 	xmlChar *obixUri;
 	const char *uri;
-	
+
 	assert(request);
-	
-	uri = (overrideUri == NULL) ? request->request_decoded_uri : overrideUri;
-	
+
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
+
 	if (!(storageNode = xmldb_get_node(BAD_CAST uri))) {
 		ret = ERR_NO_SUCH_URI;
 		goto failed;
@@ -241,16 +244,15 @@ failed:
 				"oBIX Server", server_err_msg[ret].msgs);
 }
 
-void obix_server_handleError(obix_request_t *request, const char *uri, const char *msg)
+void obix_server_handleError(obix_request_t *request, const char *msg)
 {
 	xmlNode *node;
 
-	node = obix_server_generate_error(uri, OBIX_CONTRACT_ERR_UNSUPPORTED,
-										"oBIX Server", msg);
+	node = obix_server_generate_error(request->request_decoded_uri,
+									  OBIX_CONTRACT_ERR_UNSUPPORTED,
+									  "oBIX Server", msg);
 
-	obix_server_reply_object(request,
-							 ((node != NULL) ? node : xmldb_fatal_error()),
-							 ((node != NULL) ? uri : NULL));
+	obix_server_reply_object(request, ((node != NULL) ? node : xmldb_fatal_error()));
 }
 
 void obix_server_handleGET(obix_request_t *request)
@@ -261,15 +263,13 @@ void obix_server_handleGET(obix_request_t *request)
 	if (str_is_identical(request->request_decoded_uri, OBIX_SRV_DUMP_URI) == 0) {
 		node = xmldb_dump(request);
 	} else {
-		node = obix_server_read((const obix_request_t *)request, NULL);
+		node = obix_server_read(request, NULL);
 	}
 #else
-	node = obix_server_read((const obix_request_t *)request, NULL);
+	node = obix_server_read(request, NULL);
 #endif
 
-	obix_server_reply_object(request,
-							 ((node != NULL) ? node : xmldb_fatal_error()),
-							 ((node != NULL) ? request->request_decoded_uri : NULL));
+	obix_server_reply_object(request, ((node != NULL) ? node : xmldb_fatal_error()));
 }
 
 /**
@@ -284,17 +284,17 @@ void obix_server_handleGET(obix_request_t *request)
  * However, a write request won't be able to remove a device
  * contract and the signOff request should be used instead.
  */
-xmlNode *obix_server_write(const obix_request_t *request,
-						   const char *overrideUri, xmlNode *input)
+xmlNode *obix_server_write(obix_request_t *request, const char *overrideUri,
+						   xmlNode *input)
 {
 	xmlNode *updatedNode = NULL;
 	xmlNode *nodeCopy = NULL;
 	const char *uri;
-	int ret;
+	int ret = 0;
 
-	uri = (overrideUri == NULL) ? request->request_decoded_uri : overrideUri;
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
-	if (input == NULL) {
+	if (!input) {
 		ret = ERR_NO_INPUT;
 		goto failed;
 	}
@@ -325,20 +325,20 @@ void obix_server_handlePUT(obix_request_t *request, const xmlDoc *input)
 	xmlNode *node = NULL;
 
 	if (input != NULL) {
-		node = obix_server_write((const obix_request_t *)request, NULL, xmlDocGetRootElement((xmlDoc *)input));
+		node = obix_server_write(request, NULL,
+								 xmlDocGetRootElement((xmlDoc *)input));
 	} else {
 		node = obix_server_generate_error(request->request_decoded_uri, NULL,
-									"Unknown request format",
-									"The server could not understand the PUT request.");
+										  "Unknown request format",
+										  "The server could not understand the PUT request.");
 	}
 
-	obix_server_reply_object(request,
-							 ((node != NULL) ? node : xmldb_fatal_error()),
-							 ((node != NULL) ? request->request_decoded_uri : NULL));
+	obix_server_reply_object(request, ((node != NULL) ? node : xmldb_fatal_error()));
 
 }
 
-xmlNode *obix_server_invoke(const obix_request_t *request, const char *overrideUri, xmlNode *input)
+xmlNode *obix_server_invoke(obix_request_t *request, const char *overrideUri,
+							xmlNode *input)
 {
 	const xmlNode *node;
 	const char *uri;
@@ -346,7 +346,7 @@ xmlNode *obix_server_invoke(const obix_request_t *request, const char *overrideU
 	long handlerId = 0;
 	int ret;
 
-	uri = (overrideUri == NULL) ? request->request_decoded_uri : overrideUri;
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
 	if (!(node = xmldb_get_node(BAD_CAST uri))) {
 		ret = ERR_NO_SUCH_URI;
@@ -369,7 +369,7 @@ xmlNode *obix_server_invoke(const obix_request_t *request, const char *overrideU
 		goto failed;
 	}
 
-	return (*obix_server_getPostHandler(handlerId))((obix_request_t *)request, input);
+	return (*obix_server_getPostHandler(handlerId))(request, input);
 
 failed:
 	log_error("%s", server_err_msg[ret].msgs);
@@ -382,7 +382,7 @@ void obix_server_handlePOST(obix_request_t *request, const xmlDoc *input)
 {
 	xmlNode *node;
 
-	node = obix_server_invoke((const obix_request_t *)request, NULL,
+	node = obix_server_invoke(request, NULL,
 				  ((input != NULL) ? xmlDocGetRootElement((xmlDoc *)input) : NULL));
 
 	/*
@@ -404,9 +404,7 @@ void obix_server_handlePOST(obix_request_t *request, const xmlDoc *input)
 		return;
 	}
 
-	obix_server_reply_object(request,
-							 ((node != NULL) ? node : xmldb_fatal_error()),
-							 ((node != NULL) ? request->request_decoded_uri : NULL));
+	obix_server_reply_object(request, ((node != NULL) ? node : xmldb_fatal_error()));
 }
 
 void obix_server_shutdown()
@@ -429,8 +427,7 @@ void obix_server_shutdown()
  * pair and the oBIX object will ALL be released, regardless of
  * whether the response has been sent out or not.
  */
-void obix_server_reply_object(obix_request_t *request, xmlNode *obixObject,
-							  const char *overrideUri)
+void obix_server_reply_object(obix_request_t *request, xmlNode *obixObject)
 {
 	xmlDoc *doc = NULL;
 	xmlChar *mem;
@@ -459,19 +456,6 @@ void obix_server_reply_object(obix_request_t *request, xmlNode *obixObject,
 					"Too little memory for oBIX server to continue");
 		obix_request_destroy(request);
 		return;
-	}
-
-	/*
-	 * Either the href or the provided overriden URI would be the value
-	 * of the HTTP Content-Location header, which would be missed out if
-	 * neither of them are available.
-	 */
-	if (!overrideUri) {
-		if (!(request->response_uri = (char *)xmlGetProp(obixObject, BAD_CAST OBIX_ATTR_HREF))) {
-			log_warning("No href or URI provided to set HTTP Content-Location header");
-		}
-	} else {
-		request->response_uri = strdup(overrideUri);	/* Doesn't matter if failed */
 	}
 
 	if (!(doc = xmlNewDoc(BAD_CAST XML_VERSION))) {
@@ -540,8 +524,10 @@ xmlNode *handlerError(obix_request_t *request, xmlNode *input)
 {
 	log_debug("Requested operation \"%s\" exists but not implemented.", request->request_decoded_uri);
 
-	return obix_server_generate_error(request->request_decoded_uri, OBIX_CONTRACT_ERR_UNSUPPORTED,
-									  "Unsupported Request", "The requested operation is not yet implemented.");
+	return obix_server_generate_error(request->request_decoded_uri,
+									  OBIX_CONTRACT_ERR_UNSUPPORTED,
+									  "Unsupported Request",
+									  "The requested operation is not yet implemented.");
 }
 
 /**

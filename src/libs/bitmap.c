@@ -54,7 +54,7 @@
 static int bitmap_get_unused(bitmap_t *b)
 {
 	bitmap_node_t *node;
-	int ret, count;
+	int ret = -1, count;
 	unsigned long map;
 
 	pthread_mutex_lock(&b->mutex);

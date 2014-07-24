@@ -789,6 +789,7 @@ out:
 	return head.href;
 }
 
+#ifdef DEBUG
 /**
  * Iterates through the request environment pointed to by @a response and inserts
  * all the request environment variables as child nodes to the environment root node
@@ -854,7 +855,6 @@ failed:
 	return NULL;
 }
 
-#ifdef DEBUG
 xmlNode *xmldb_dump(obix_request_t *request)
 {
 	xmlNode *obixDump = NULL;
