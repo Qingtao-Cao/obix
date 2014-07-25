@@ -1,4 +1,5 @@
-# oBIX Server Version 1.0
+# oBIX Server
+
 Providing oBIX Server implementation for C language
  
 Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]    
