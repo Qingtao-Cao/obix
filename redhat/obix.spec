@@ -1,5 +1,5 @@
 Name:           obix
-Version:        1.0.1
+Version:        1.0.2
 Release:        0%{?dist}
 Summary:        ONEDC toolkit
 
@@ -138,9 +138,11 @@ exit 0
 
 
 %changelog
-* Fri Jul 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.1-0
-- Fixed broken make test script
+* Fri Jul 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.2-0
 - Updated for Fedora package review
+
+* Mon Jul 21 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.1-0
+- Fixed broken make test script
 
 * Tue Jun 17 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0-3
 - Adding missing Requires for lighttpd-fastcgi
