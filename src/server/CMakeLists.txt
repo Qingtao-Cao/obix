@@ -31,7 +31,7 @@ SET(INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
 
 ADD_EXECUTABLE(obix-fcgi batch.c history.c libxml_config.c obix_fcgi.c post_handler.c obix_request.c server.c watch.c xml_storage.c)
 
-TARGET_LINK_LIBRARIES(obix-fcgi fcgi rt pthread obix ${LIBS})
+TARGET_LINK_LIBRARIES(obix-fcgi fcgi rt pthread libobix ${LIBS})
 
 # Install binary 
 INSTALL(TARGETS obix-fcgi DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
@@ -42,6 +42,6 @@ INSTALL(FILES ${HEADER_FILES}
     DESTINATION "${INCLUDE_DIR}/obix")
     
 # Install the docs
-SET(INSTALL_DOCS README.md)
-INSTALL(FILES ${INSTALL_DOCS}
- DESTINATION "${PROJECT_DOC_DIR}/${PROJECT_DOC_DIR_SUFFIX}")
+# SET(INSTALL_DOCS README.md)
+# INSTALL(FILES ${INSTALL_DOCS}
+#  DESTINATION "${PROJECT_DOC_DIR}/${PROJECT_DOC_DIR_SUFFIX}")

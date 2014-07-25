@@ -1,37 +1,33 @@
 Name:           obix
-Version:        1.0
-Release:        3%{?dist}
-Summary:        ONEDC oBIX
+Version:        1.0.2
+Release:        0%{?dist}
+Summary:        ONEDC toolkit
 
-License:        GPLv3 or later
+License:        GPLv3+
 URL:            https://github.com/ONEDC/obix
-Source:         obix-1.0.tar.gz
-#Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz
-
-BuildRoot:      %{_tmppath}/%{name}-%{version}-root
+Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz
 
 BuildRequires:  fcgi-devel
 BuildRequires:  libxml2-devel
 BuildRequires:  glibc-devel
-BuildRequires:  gcc
 BuildRequires:  cmake >= 2.6
-Requires:       libxml2
-Requires:       lighttpd
-Requires:       lighttpd-fastcgi
+
 
 %description
-oBIX Server is an open source project derived from the C oBIX Tools (CoT)
+An open source project derived from the C oBIX Tools (CoT)
 project, an open source project dedicated to the development of embedded 
 Building Automation solutions based on oBIX standard (http://www.obix.org).
 
 
 %package        server
-Summary:        ONEDC oBIX Server
+Summary:        Server for %{name}
+
 Requires:       %{name}%{?_isa} = %{version}-%{release}
-Requires:       %{name}-libs
+Requires:       lighttpd
+Requires:       lighttpd-fastcgi
 
 %description    server
-oBIX Server is implemented as a FastCGI script which can be executed 
+Implemented as a FastCGI script which can be executed 
 by any HTTP server with FCGI support.
 
 
@@ -52,6 +48,14 @@ Requires:       %{name}%{?_isa} = %{version}-%{release}
 The %{name}-libs package contains libraries for
 %{name}.
 
+%package        doc
+Summary:        Documentation files for %{name}
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+
+%description    doc
+The %{name}-doc package contains documentation for
+%{name}.
+
 
 %prep
 %setup -q
@@ -60,7 +64,7 @@ The %{name}-libs package contains libraries for
 %build
 # Install docs into name-version on RHEL, name on Fedora
 %if 0%{?rhel}
-cmake -DLIB_DIR="%{_libdir}" -DPROJECT_DOC_DIR_SUFFIX="%{name}-%{version}" .
+cmake -DLIB_DIR="%{_libdir}" -DPROJECT_DOC_DIR_SUFFIX="%{name}-doc-%{version}" .
 %else
 cmake -DLIB_DIR="%{_libdir}" .
 %endif
@@ -68,46 +72,78 @@ make %{?_smp_mflags} VERBOSE=1
 
 
 %install
+%if 0%{?rhel}
 rm -rf %{buildroot}
+%endif
 make DESTDIR=%{buildroot} install
 find %{buildroot} -name '*.la' -exec rm -f {} ';'
 
 ln -sf %{_sharedstatedir}/obix/histories %{buildroot}/%{_sysconfdir}/obix/res/server/
 
-%post
+%pre
+getent group obix >/dev/null || groupadd -r obix
+getent passwd obix >/dev/null || useradd -r -g obix -s /sbin/nologin obix
+exit 0
 
-%postun
+%post libs
+-p /sbin/ldconfig
 
-%clean
-rm -rf %{buildroot}
+%postun libs
+-p /sbin/ldconfig
 
 %files
+%if 0%{?rhel}
 %defattr(-, root, root)
-%doc README.md COPYING CODING_GUIDELINES.md
+%endif
+%{_bindir}/obix-echo
+
 
 %files server
+%if 0%{?rhel}
 %defattr(-, root, root)
-%doc README.md
-%{_sysconfdir}/obix/*
-%{_sharedstatedir}/obix
+%endif
 %{_bindir}/obix-fcgi
-%config %{_sysconfdir}/lighttpd/conf.d/obix-fcgi.conf
+%config(noreplace) %{_sysconfdir}/lighttpd/conf.d/obix-fcgi.conf
+%config(noreplace) %{_sysconfdir}/obix/res/OpenWrt-SDK
+%config(noreplace) %{_sysconfdir}/obix/res/obix-fcgi.conf
+%config(noreplace) %{_sysconfdir}/obix/res/server/core
+%config(noreplace) %{_sysconfdir}/obix/res/server/devices
+%config(noreplace) %{_sysconfdir}/obix/res/server/histories
+%config(noreplace) %{_sysconfdir}/obix/res/server/server_config.xml
+%config(noreplace) %{_sysconfdir}/obix/res/server/sys
 
-%defattr(-, lighttpd, lighttpd)
-%{_sharedstatedir}/obix/histories
+%attr(0755,root,root) %dir %{_sysconfdir}/obix
+%attr(0755,lighttpd,lighttpd) %dir %{_sharedstatedir}/obix/histories
+
 
 %files devel
+%if 0%{?rhel}
 %defattr(-, root, root)
-%{_includedir}/*
+%endif
+%{_includedir}/obix
+%{_libdir}/libobix.so
+
 
 %files libs
+%if 0%{?rhel}
 %defattr(-, root, root)
-%doc README.md
-%{_libdir}/*.so
-%{_libdir}/*.a
+%endif
+%{_libdir}/libobix.so.*
+
+%files doc 
+%if 0%{?rhel}
+%defattr(-, root, root)
+%endif
+%doc README.md COPYING CODING_GUIDELINES.md
 
 
 %changelog
+* Fri Jul 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.2-0
+- Updated for Fedora package review
+
+* Mon Jul 21 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.1-0
+- Fixed broken make test script
+
 * Tue Jun 17 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0-3
 - Adding missing Requires for lighttpd-fastcgi
 
