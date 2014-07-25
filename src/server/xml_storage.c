@@ -106,7 +106,7 @@ static xmlNode *__xmldb_fatal_error;
  * attribute to one node which will result in any of its descendants
  * writable
  */
-/* static int SEARCH_WRITABLE_SELF = 1;	*/		/* not used yet */
+static int SEARCH_WRITABLE_SELF = 1;
 static int SEARCH_WRITABLE_PARENT = 2;
 static int SEARCH_WRITABLE_INDEFINITE = -1;		/* use with care! */
 
@@ -1124,6 +1124,74 @@ failed:
 	return ret;
 }
 
+static int xmldb_node_writable_helper(xmlNode **current, void *arg1, void *arg2)
+{
+	xmlNode *node = *current;
+	xmlChar *writable;
+	int *depth = (int *)arg2;
+
+	if (node->type != XML_ELEMENT_NODE) {
+		return 0;
+	}
+
+	if (*depth != SEARCH_WRITABLE_INDEFINITE) {
+		*depth -= 1;
+
+		/*
+		 * Bail out if the maximal search threshold
+		 * has been consumed
+		 */
+		if (*depth < 0) {
+			return -1;
+		}
+	}
+
+	/*
+	 * Keep on iterating all ancestors if the current node has no
+	 * writable attribute
+	 */
+	if (!(writable = xmlGetProp(node, BAD_CAST OBIX_ATTR_WRITABLE))) {
+		return 0;
+	}
+
+	if (xmlStrcmp(writable, BAD_CAST XML_TRUE) == 0) {
+		*(int *)arg1 = 1;
+	} else {
+		*(int *)arg1 = 0;
+	}
+
+	xmlFree(writable);
+
+	/* Return < 0 so as to stop the caller's loop */
+	return -1;
+}
+
+/*
+ * Check if the given node is writable, which not necessarily
+ * means the node must have a 'writable="true"' attribute since
+ * one of its ancestors may have such attribute established.
+ *
+ * The maximal search depth from the given node all the way to
+ * the topest level of global DOM tree is decided by the second
+ * parameter.
+ *
+ * Return 1 if the given node is writable, 0 non-writable.
+ */
+static int xmldb_node_writable(xmlNode *node, int max_depth)
+{
+	int writable = 0;
+
+	/*
+	 * Skip checking return value since the helper function will
+	 * bail out if the writable attribute has been found on the
+	 * nearest ancestor
+	 */
+	xml_for_each_ancestor_or_self(node, xmldb_node_writable_helper,
+								  &writable, &max_depth);
+
+	return (writable == 1) ? 1 : 0;
+}
+
 /**
  * Reparent children of the "from" node to the "to" node.
  * However, if a child node in the "from" subtree is a null
@@ -1180,8 +1248,12 @@ static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
 			xmlFree(href);
 		}
 
-		/* Delete a matching peer if the child node is a null object */
-		if (peer && xml_is_null(child) == 1) {
+		/*
+		 * Delete a matching peer if the child node is a null object,
+		 * and the peer or its parent is writable
+		 */
+		if (peer && xml_is_null(child) == 1 &&
+			xmldb_node_writable(peer, SEARCH_WRITABLE_PARENT) == 1) {
 			xmldb_notify_watches(peer, WATCH_EVT_NODE_DELETED);
 			xmldb_delete_node(peer, 0);
 			count++;
@@ -1190,6 +1262,16 @@ static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
 		/*
 		 * Reparent the child node if it is not a null object and
 		 * its peer does not exist
+		 *
+		 * NOTE:
+		 * Skip checking if the target node is writable or not provided
+		 * that more nodes are added, which is very helpful to recover
+		 * from an inadvertent deletion of a sub node of a non-writable
+		 * device contract
+		 *
+		 * TODO:
+		 * Once the signOff handler has been implemented, no need to
+		 * make such exception.
 		 */
 		if (!peer && xml_is_null(child) == 0) {
 			/*
@@ -1436,74 +1518,6 @@ void xmldb_dispose()
 	log_debug("XML Database is disposed");
 }
 
-static int xmldb_node_writable_helper(xmlNode **current, void *arg1, void *arg2)
-{
-	xmlNode *node = *current;
-	xmlChar *writable;
-	int *depth = (int *)arg2;
-
-	if (node->type != XML_ELEMENT_NODE) {
-		return 0;
-	}
-
-	if (*depth != SEARCH_WRITABLE_INDEFINITE) {
-		*depth -= 1;
-
-		/*
-		 * Bail out if the maximal search threshold
-		 * has been consumed
-		 */
-		if (*depth < 0) {
-			return -1;
-		}
-	}
-
-	/*
-	 * Keep on iterating all ancestors if the current node has no
-	 * writable attribute
-	 */
-	if (!(writable = xmlGetProp(node, BAD_CAST OBIX_ATTR_WRITABLE))) {
-		return 0;
-	}
-
-	if (xmlStrcmp(writable, BAD_CAST XML_TRUE) == 0) {
-		*(int *)arg1 = 1;
-	} else {
-		*(int *)arg1 = 0;
-	}
-
-	xmlFree(writable);
-
-	/* Return < 0 so as to stop the caller's loop */
-	return -1;
-}
-
-/*
- * Check if the given node is writable, which not necessarily
- * means the node must have a 'writable="true"' attribute since
- * one of its ancestors may have such attribute established.
- *
- * The maximal search depth from the given node all the way to
- * the topest level of global DOM tree is decided by the second
- * parameter.
- *
- * Return 1 if the given node is writable, 0 non-writable.
- */
-static int xmldb_node_writable(xmlNode *node, int max_depth)
-{
-	int writable = 0;
-
-	/*
-	 * Skip checking return value since the helper function will
-	 * bail out if the writable attribute has been found on the
-	 * nearest ancestor
-	 */
-	xml_for_each_ancestor_or_self(node, xmldb_node_writable_helper,
-								  &writable, &max_depth);
-
-	return (writable == 1) ? 1 : 0;
-}
-
 /*
  * Update the target node according to the input subtree.
  *
@@ -1531,10 +1545,6 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 		return ERR_UPDATE_NODE_NO_SUCH_URI;
 	}
 
-	if (xmldb_node_writable(node, SEARCH_WRITABLE_PARENT) != 1) {
-		return ERR_UPDATE_NODE_NOT_WRITABLE;
-	}
-
 	*updatedNode = node;
 
 	/*
@@ -1550,6 +1560,14 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 	 * to-be-deleted device contract is checked
 	 */
 	if (xml_is_null(input) == 1) {
+		/*
+		 * If the target node is to-be-deleted, then either it or its
+		 * parent must be writable
+		 */
+		if (xmldb_node_writable(node, SEARCH_WRITABLE_PARENT) != 1) {
+			return ERR_UPDATE_NODE_NOT_WRITABLE;
+		}
+
 		parent = node->parent;
 		/*
 		 * Of course, invalidating all existing watch meta and relevant
@@ -1578,10 +1596,23 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 	 * node updated.
 	 */
 	if ((newValue = xmlGetProp(input, BAD_CAST OBIX_ATTR_VAL)) != NULL) {
+		/*
+		 * TODO:
+		 * The sanity check on data types should be enforced here
+		 */
 		if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_BOOL) == 0 &&
 			xmlStrcmp(newValue, BAD_CAST XML_TRUE) != 0 &&
 			xmlStrcmp(newValue, BAD_CAST XML_FALSE) != 0) {
 			result = ERR_UPDATE_NODE_BAD_BOOL;
+			goto failed;
+		}
+
+		/*
+		 * If the val attribute of the target node is to-be-updated,
+		 * then itself must be writable
+		 */
+		if (xmldb_node_writable(node, SEARCH_WRITABLE_SELF) != 1) {
+			result = ERR_UPDATE_NODE_NOT_WRITABLE;
 			goto failed;
 		}
 
