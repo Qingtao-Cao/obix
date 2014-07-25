@@ -1,5 +1,5 @@
 Name:           obix
-Version:        1.0.1
+Version:        1.0.3
 Release:        0%{?dist}
 Summary:        ONEDC toolkit
 
@@ -138,6 +138,9 @@ exit 0
 
 
 %changelog
+* Fri Jul 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.3-0
+- Retagged to generate new tarball on github
+
 * Fri Jul 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.2-0
 - Updated for Fedora package review
 
