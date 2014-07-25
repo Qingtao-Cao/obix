@@ -100,13 +100,13 @@ static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 	xmlNode *batch_out = (xmlNode *)arg1;
 	obix_request_t *request = (obix_request_t *)arg2;
 	xmlNode *itemVal = NULL;
-	xmlChar *itemHref = NULL;
 	xmlChar *itemContract = NULL;
+	char *itemHref = NULL;
 	int ret;
 
 	assert(batchItem);
 
-	if (!(itemHref = xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
+	if (!(itemHref = (char *)xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
 		ret = ERR_NO_VAL;
 		goto failed;
 	}
@@ -117,11 +117,11 @@ static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 	}
 
 	if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_READ) == 0) {
-		itemVal = obix_server_read(request, (const char *)itemHref);
+		itemVal = obix_server_read(request, itemHref);
 	} else if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
-		itemVal = obix_server_write(request, (const char*)itemHref, batchItem->children);
+		itemVal = obix_server_write(request, itemHref, batchItem->children);
 	} else if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
-		itemVal = obix_server_invoke(request, (const char *)itemHref, batchItem->children);
+		itemVal = obix_server_invoke(request, itemHref, batchItem->children);
 	}
 
 	ret = ((itemVal == NULL) ? ERR_NO_RESP : 0);
@@ -131,11 +131,8 @@ static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 failed:
 	if (ret) {
 		log_error("%s", batch_err_msg[ret].msgs);
-		itemVal = obix_server_generate_error(
-						(const char *)itemHref,		/* could be NULL */
-						batch_err_msg[ret].type,
-						"obix:Batch",
-						batch_err_msg[ret].msgs);
+		itemVal = obix_server_generate_error(itemHref, batch_err_msg[ret].type,
+											 "obix:Batch", batch_err_msg[ret].msgs);
 	}
 
 	if (itemContract) {
@@ -143,7 +140,7 @@ failed:
 	}
 
 	if (itemHref) {
-		xmlFree(itemHref);
+		free(itemHref);
 	}
 
 	obix_batch_add_item(batch_out, itemVal);

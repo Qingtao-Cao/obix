@@ -61,11 +61,10 @@ xmlNode *obix_server_generate_error(const char *href, const char *contract, cons
  * Handles an unknown or unsupported HTTP request.
  * @param response      A pointer to the response object that contains the response stream
  *                      for the client that requested it
- * @param uri           A pointer to the requested URI by the client.
  * @param msg			A pointer to static error message.
  * @remark              This function simply sends an error contract.
  */
-void obix_server_handleError(obix_request_t *request, const char *uri, const char *msg);
+void obix_server_handleError(obix_request_t *request, const char *msg);
 
 /**
  * Handles GET request and sends response back to the client.
@@ -77,10 +76,10 @@ void obix_server_handleGET(obix_request_t *request);
 /**
  * Reads an XML structure from the XML database and returns it to the caller.
  *
- * @remark 	This is an allocating function.  It's up to the caller to free the
- * 			memory allocated.
+ * @remark	This is an allocating function.  It's up to the caller to free the
+ *			memory allocated.
  */
-xmlNode *obix_server_read(const obix_request_t *request, const char *overrideUri);
+xmlNode *obix_server_read(obix_request_t *request, const char *overrideUri);
 
 /**
  * Handles PUT request and sends response back to the client.
@@ -98,7 +97,7 @@ void obix_server_handlePUT(obix_request_t *request, const xmlDoc *input);
  * @remark this is an allocating function.  It's up to the caller to free the XML
  * node allocated by this function.
  */
-xmlNode *obix_server_write(const obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *obix_server_write(obix_request_t *request, const char *overrideUri, xmlNode *input);
 
 /**
  * Handles POST request and sends response back to the client.
@@ -113,7 +112,7 @@ void obix_server_handlePOST(obix_request_t *request, const xmlDoc *input);
  * pointed to by @a input
  * @param request		A pointer to the request object containing the client request.
  * @param overrideUri   The href of the oBIX operation invoked by the client if different
- * 						from request_uri inside the response_t object.
+ *						from request_uri inside the response_t object.
  * @param input         A pointer to the parsed XML document that should be regarded
  *                      by the target oBIX operation as oBIX parameters
  * @return              A pointer to the XML response returned by the oBIX operation,
@@ -125,7 +124,7 @@ void obix_server_handlePOST(obix_request_t *request, const xmlDoc *input);
  * @remark              This is an allocating function.  It's up to the caller to free
  *                      the memory allocated by this function with @a xmlFree.
  */
-xmlNode *obix_server_invoke(const obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *obix_server_invoke(obix_request_t *request, const char *overrideUri, xmlNode *input);
 
 /**
  * Removes all sub-nodes in the XML tree pointed to by @a obixObject that has a
@@ -138,12 +137,11 @@ void obix_server_remove_meta(xmlNode *obixObject);
  * Instructs the oBIX Server to reply an oBIX Object pointed to by @a obixObject to the requester
  * pointed to by @a responseStream.  Overrides the responded URI if the string pointed to by @a overrideUri
  * is not NULL.
+ *
  * @param responseStream    A pointer to the response object of the client associated with this request
  * @param obixObject        A pointer to the oBIX Object that will be replied
- * @param overrideUri       A pointer to a string with the URI to be pushed to the client, if different from
- *                          the request.
  */
-void obix_server_reply_object(obix_request_t *request, xmlNode *obixObject, const char *overrideUri);
+void obix_server_reply_object(obix_request_t *request, xmlNode *obixObject);
 
 xmlNode *handlerError(obix_request_t *request, xmlNode *input);
 xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input);

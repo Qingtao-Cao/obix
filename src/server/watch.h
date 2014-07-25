@@ -24,6 +24,29 @@
 #include <libxml/tree.h>
 #include "obix_request.h"
 
+/*
+ * Event why relevant watches are notified of
+ */
+typedef enum {
+	/*
+	 * The monitored node has been changed, regardless of
+	 * whether its val attribute is updated, has more or less
+	 * children
+	 *
+	 * In this case any watches on the monitored node or any
+	 * of its ancestors should be notified.
+	 */
+	WATCH_EVT_NODE_CHANGED = 1,
+
+	/*
+	 * The monitored node is deleted
+	 *
+	 * In this case, any watches in the deleted subtree must
+	 * have relevant watch_item_t invalidated.
+	 */
+	WATCH_EVT_NODE_DELETED = 2
+} WATCH_EVT;
+
 xmlNode *handlerWatchServiceMake(obix_request_t *, xmlNode *);
 xmlNode *handlerWatchDelete(obix_request_t *, xmlNode *);
 xmlNode *handlerWatchAdd(obix_request_t *, xmlNode *);
@@ -34,7 +57,7 @@ xmlNode *handlerWatchPollRefresh(obix_request_t *, xmlNode *);
 int obix_watch_init(xml_config_t *);
 void obix_watch_dispose(void);
 
-void xmldb_notify_watches(xmlNode *node);
+void xmldb_notify_watches(xmlNode *node, WATCH_EVT evt);
 
 #endif /* _WATCH_HEADER_ */
 
