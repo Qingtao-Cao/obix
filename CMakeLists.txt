@@ -17,10 +17,8 @@ IF(NOT PROJECT_DOC_DIR)
 ENDIF(NOT PROJECT_DOC_DIR)
     
 IF(NOT PROJECT_DOC_DIR_SUFFIX)
-    SET(PROJECT_DOC_DIR_SUFFIX "obix" CACHE STRING "Dir suffix for doc install. Can be set to obix-$version via -D")
+    SET(PROJECT_DOC_DIR_SUFFIX "obix-doc" CACHE STRING "Dir suffix for doc install. Can be set to obix-doc-$version via -D")
 ENDIF(NOT PROJECT_DOC_DIR_SUFFIX)
-
-    message("PROJECT_DOC_DIR_SUFFIX is ${PROJECT_DOC_DIR_SUFFIX}")
 
 # Location of history files.
 IF(NOT OBIX_VAR_LIB_DIR)
@@ -60,16 +58,13 @@ SET(CMAKE_C_COMPILER "gcc")
 ######################################
 # Project details
 #
-PROJECT(obix C)
-SET(PRJ_SUMMARY "ONEDC oBIX library")
+PROJECT(oBIX)
+SET(PRJ_SUMMARY "ONEDC oBIX")
 
 SET(PRJ_DESCRIPTION
-        "oBIX Server is an open source project derived from the C oBIX Tools (CoT) project, an open source project dedicated to the development of embedded Building Automation solutions based on oBIX standard (http://www.obix.org). "
+        "An open source project derived from the C oBIX Tools (CoT) project, an open source project dedicated to the development of embedded Building Automation solutions based on oBIX standard (http://www.obix.org). "
    )
-SET(AUTHORS "Harry Cao <harry.cao@nextdc.com>, Tyler Watson <tyler.watson@nextdc.com>")
-SET(MAINTAINER "Andrew Ross <andrew.ross@nextdc.com>")
-SET(VENDOR "NEXTDC")
-SET(LICENSE "GPLv2+")
+SET(LICENSE "GPLv3+")
 
 
 ######################################
