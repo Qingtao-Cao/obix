@@ -6,11 +6,6 @@ Summary:        ONEDC toolkit
 License:        GPLv3+
 URL:            https://github.com/ONEDC/obix
 Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz
-<<<<<<< HEAD
-
-BuildRoot:      %{_tmppath}/%{name}-%{version}-root
-=======
->>>>>>> 15c09f2... Updates ready for Fedora packaging request
 
 BuildRequires:  fcgi-devel
 BuildRequires:  libxml2-devel
