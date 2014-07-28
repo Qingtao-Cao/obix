@@ -6,19 +6,10 @@
 # requires cmake >= 2.8, therefore not in RHEL6
 #INCLUDE(GNUInstallDirs)
 
-# Location for lib files. For lib64 use -DLIB_SUFFIX="/usr/lib64"
-IF(NOT LIB_DIR)
-    SET(LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib" CACHE PATH "Library path")
-ENDIF(NOT LIB_DIR)
-
-# Default doc directory
-IF(NOT PROJECT_DOC_DIR)
-    SET(PROJECT_DOC_DIR "/usr/share/doc" CACHE PATH "Install dir for docs")
-ENDIF(NOT PROJECT_DOC_DIR)
-    
-IF(NOT PROJECT_DOC_DIR_SUFFIX)
-    SET(PROJECT_DOC_DIR_SUFFIX "obix-libs" CACHE STRING "Dir suffix for doc install. Can be set to obix-$version via -D")
-ENDIF(NOT PROJECT_DOC_DIR_SUFFIX)
+IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
+  SET (LIB_SUFFIX "64")
+ENDIF (CMAKE_SIZEOF_VOID_P MATCHES "8")
+SET (LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}")
 
 FIND_PACKAGE(LibXml2 REQUIRED)
 IF(LIBXML2_FOUND)
@@ -36,31 +27,16 @@ SET(INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
 
 FILE(GLOB OBIX_LIB_FILES *.c)
 ADD_LIBRARY(libobix SHARED ${OBIX_LIB_FILES})
-#ADD_LIBRARY(obix-static STATIC ${OBIX_LIB_FILES})
 TARGET_LINK_LIBRARIES(libobix ${LIBS})
 SET_TARGET_PROPERTIES(libobix PROPERTIES OUTPUT_NAME "obix")
 SET_TARGET_PROPERTIES(libobix PROPERTIES SOVERSION 0)
 
-# The library target "obix-static" has a default OUTPUT_NAME of "obix-static".
-# Changing it to "obix". This will give us libobix.a
-#SET_TARGET_PROPERTIES(obix-static PROPERTIES OUTPUT_NAME "obix")
-
-# Install .a and .so into /usr/lib. 
-INSTALL(TARGETS libobix LIBRARY DESTINATION "${LIB_DIR}")
-#INSTALL(TARGETS obix-static DESTINATION "${LIB_DIR}")
-
+# Install .so into /usr/lib$suffix. 
+INSTALL(TARGETS libobix LIBRARY DESTINATION "${LIB_INSTALL_DIR}")
 
 # Install header files
 FILE(GLOB HEADER_FILES "*.h")
 INSTALL(FILES ${HEADER_FILES}
     DESTINATION "${INCLUDE_DIR}/obix")
 
-# Install the docs
-SET(INSTALL_DOCS README.md)
-INSTALL(FILES ${INSTALL_DOCS}
-   DESTINATION "${PROJECT_DOC_DIR}/${PROJECT_DOC_DIR_SUFFIX}")
- 
-# Ensure the two libs don't clobber each other during the build.
-#SET_TARGET_PROPERTIES(obix PROPERTIES CLEAN_DIRECT_OUTPUT 1)
-#SET_TARGET_PROPERTIES(obix-static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
