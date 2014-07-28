@@ -5,8 +5,7 @@ Summary:        ONEDC toolkit
 
 License:        GPLv3+
 URL:            https://github.com/ONEDC/obix
-#Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz#/obix-%{version}.tar.gz
-Source0: obix-%{version}.tar.gz
+Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz#/obix-%{version}.tar.gz
 
 BuildRequires:  fcgi-devel
 BuildRequires:  libxml2-devel

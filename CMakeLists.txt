@@ -104,10 +104,7 @@ INSTALL(FILES "res/obix-fcgi.conf"
 SET(INSTALL_DOCS README.md COPYING)
 INSTALL(FILES ${INSTALL_DOCS}
  DESTINATION "${PROJECT_DOC_DIR}")
-# INSTALL(DIRECTORY "docs/"
-#     DESTINATION "${PROJECT_DOC_DIR}/obix-doc"
-#     FILES_MATCHING PATTERN "docs/*.md")
-    
+
     
 ######################################
 # Create /var/lib/obix/histories
