@@ -16,10 +16,6 @@ IF(NOT PROJECT_DOC_DIR)
     SET(PROJECT_DOC_DIR "/usr/share/doc" CACHE PATH "Install dir for docs")
 ENDIF(NOT PROJECT_DOC_DIR)
     
-IF(NOT PROJECT_DOC_DIR_SUFFIX)
-    SET(PROJECT_DOC_DIR_SUFFIX "obix-doc" CACHE STRING "Dir suffix for doc install. Can be set to obix-doc-$version via -D")
-ENDIF(NOT PROJECT_DOC_DIR_SUFFIX)
-
 # Location of history files.
 IF(NOT OBIX_VAR_LIB_DIR)
     SET(OBIX_VAR_LIB_DIR "/var/lib/obix" CACHE PATH "Var lib directory path")
@@ -73,16 +69,16 @@ SET(LICENSE "GPLv3+")
 #
 SET (CMAKE_BUILD_DIR "build")
 ADD_SUBDIRECTORY(src ${CMAKE_BUILD_DIR})
-
+ADD_SUBDIRECTORY(docs ${CMAKE_BUILD_DIR}/docs)
 
 ######################################
 # Compiler flags 
 #
-SET (CMAKE_C_FLAGS "-Wall -O4 -std=c99")
-SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND -DDEBUG_CACHE")
-SET (CMAKE_C_FLAGS_MINSIZEREL  "-Os -DNDEBUG")
-SET (CMAKE_C_FLAGS_RELEASE  "-O4 -DNDEBUG")
-SET (CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
+SET (CMAKE_C_FLAGS "-Wall -Werror -O4 -std=c99")
+SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND -DDEBUG_CACHE")
+SET (CMAKE_C_FLAGS_MINSIZEREL  "-Os -DNDEBUG -Werror")
+SET (CMAKE_C_FLAGS_RELEASE  "-O4 -Werror -DNDEBUG")
+SET (CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g -Werror")
 SET (CMAKE_LINKER "/usr/bin/ld")
 
 
@@ -105,14 +101,10 @@ INSTALL(FILES "res/obix-fcgi.conf"
 ######################################
 # Install docs
 #
-#SET(INSTALL_DOCS README.md COPYING CODING_GUIDELINES.md ${DOCS_DIR_FILES})
-SET(INSTALL_DOCS README.md COPYING CODING_GUIDELINES.md)
+SET(INSTALL_DOCS README.md COPYING)
 INSTALL(FILES ${INSTALL_DOCS}
- DESTINATION "${PROJECT_DOC_DIR}/${PROJECT_DOC_DIR_SUFFIX}")
-INSTALL(DIRECTORY "docs/"
-    DESTINATION "${PROJECT_DOC_DIR}/${PROJECT_DOC_DIR_SUFFIX}"
-    FILES_MATCHING PATTERN "*.md")
-    
+ DESTINATION "${PROJECT_DOC_DIR}")
+
     
 ######################################
 # Create /var/lib/obix/histories
