@@ -1,15 +1,14 @@
 Name:           obix
-Version:        1.0.2
+Version:        1.0.4
 Release:        0%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
 URL:            https://github.com/ONEDC/obix
-Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz
+Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz#/obix-%{version}.tar.gz
 
 BuildRequires:  fcgi-devel
 BuildRequires:  libxml2-devel
-BuildRequires:  glibc-devel
 BuildRequires:  cmake >= 2.6
 
 
@@ -23,8 +22,7 @@ Building Automation solutions based on oBIX standard (http://www.obix.org).
 Summary:        Server for %{name}
 
 Requires:       %{name}%{?_isa} = %{version}-%{release}
-Requires:       lighttpd
-Requires:       lighttpd-fastcgi
+Requires:       lighttpd-fastcgi%{?_isa}
 
 %description    server
 Implemented as a FastCGI script which can be executed 
@@ -56,25 +54,16 @@ Requires:       %{name}%{?_isa} = %{version}-%{release}
 The %{name}-doc package contains documentation for
 %{name}.
 
-
 %prep
 %setup -q
 
 
 %build
-# Install docs into name-version on RHEL, name on Fedora
-%if 0%{?rhel}
-cmake -DLIB_DIR="%{_libdir}" -DPROJECT_DOC_DIR_SUFFIX="%{name}-doc-%{version}" .
-%else
-cmake -DLIB_DIR="%{_libdir}" .
-%endif
+cmake -DPROJECT_DOC_DIR="%{_pkgdocdir}" .
 make %{?_smp_mflags} VERBOSE=1
 
 
 %install
-%if 0%{?rhel}
-rm -rf %{buildroot}
-%endif
 make DESTDIR=%{buildroot} install
 find %{buildroot} -name '*.la' -exec rm -f {} ';'
 
@@ -86,22 +75,18 @@ getent passwd obix >/dev/null || useradd -r -g obix -s /sbin/nologin obix
 exit 0
 
 %post libs
--p /sbin/ldconfig
+/sbin/ldconfig
 
 %postun libs
--p /sbin/ldconfig
+/sbin/ldconfig
+
 
 %files
-%if 0%{?rhel}
-%defattr(-, root, root)
-%endif
 %{_bindir}/obix-echo
+%doc README.md COPYING
 
 
 %files server
-%if 0%{?rhel}
-%defattr(-, root, root)
-%endif
 %{_bindir}/obix-fcgi
 %config(noreplace) %{_sysconfdir}/lighttpd/conf.d/obix-fcgi.conf
 %config(noreplace) %{_sysconfdir}/obix/res/OpenWrt-SDK
@@ -112,32 +97,33 @@ exit 0
 %config(noreplace) %{_sysconfdir}/obix/res/server/server_config.xml
 %config(noreplace) %{_sysconfdir}/obix/res/server/sys
 
-%attr(0755,root,root) %dir %{_sysconfdir}/obix
-%attr(0755,lighttpd,lighttpd) %dir %{_sharedstatedir}/obix/histories
+%dir %{_sysconfdir}/obix
+%dir %{_sharedstatedir}/obix/histories
 
 
 %files devel
-%if 0%{?rhel}
-%defattr(-, root, root)
-%endif
 %{_includedir}/obix
 %{_libdir}/libobix.so
 
 
 %files libs
-%if 0%{?rhel}
-%defattr(-, root, root)
-%endif
 %{_libdir}/libobix.so.*
 
+
 %files doc 
-%if 0%{?rhel}
-%defattr(-, root, root)
-%endif
-%doc README.md COPYING CODING_GUIDELINES.md
+%doc docs/CODING_GUIDELINES.md 
+%doc docs/HISTORY.md 
+%doc docs/WATCH.md  
+%doc docs/XML_DB_MANAGEMENT.md
 
 
 %changelog
+* Mon Jul 28 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.4-0
+- Updated following Fedora packaging review
+
+* Fri Jul 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.3-0
+- Retagged to generate new tarball on github
+
 * Fri Jul 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.2-0
 - Updated for Fedora package review
 
