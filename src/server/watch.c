@@ -41,7 +41,7 @@
 #include <errno.h>
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
-#include "response.h"
+#include "obix_request.h"
 #include "xml_storage.h"
 #include "ptask.h"
 #include "list.h"
@@ -51,6 +51,7 @@
 #include "server.h"
 #include "xml_utils.h"
 #include "bitmap.h"
+#include "watch.h"
 
 /*
  * Descriptor of all watch objects on the oBIX server
@@ -242,7 +243,7 @@ typedef struct poll_task {
 	struct timespec expiry;
 
 	/* Relevant response object */
-	response_t *response;
+	obix_request_t *request;
 
 	/* The obix:watchOut contract returned to requester */
 	xmlNode *watch_out;
@@ -346,8 +347,15 @@ static const char *XP_WATCH_METAS = "./meta[@watch_id]";
  * Any ancestor node including itself that have at least one
  * watch meta installed
  */
-static const char *XP_WATCH_ANCESTOR =
+static const char *XP_WATCH_ANCESTOR_OR_SELF =
 "./ancestor-or-self::*[child::meta[@watch_id]]";
+
+/*
+ * Any descendant node including itself that have at least one
+ * watch meta installed
+ */
+static const char *XP_WATCH_DESCENDANT_OR_SELF =
+"./descendant-or-self::*[child::meta[@watch_id]]";
 
 /*
  * Any children contained in this hierarchy:
@@ -511,7 +519,7 @@ static void __notify_watch_tasks(watch_t *watch)
 /**
  * Notify a watch object of the change event on the given node
  */
-static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent)
+static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent, WATCH_EVT event)
 {
 	xmlChar *uri;
 	watch_t *watch;
@@ -549,6 +557,10 @@ static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent)
 	if (!(item = __get_watch_item(watch, (const char *)uri))) {
 		log_warning("%s has not watched upon %s", watch->uri, uri);
 	} else {
+		if (event == WATCH_EVT_NODE_DELETED) {
+			item->node = item->meta = NULL;
+		}
+
 		item->count++;
 		watch->changed = 1;
 		__notify_watch_tasks(watch);
@@ -566,9 +578,10 @@ static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent)
 
 static void xmldb_notify_watch_wrapper(xmlNode *meta, void *arg1, void *arg2)
 {
-	xmlNode *parent = (xmlNode *)arg1;	/* arg2 is ignored */
+	xmlNode *parent = (xmlNode *)arg1;
+	WATCH_EVT event = *(WATCH_EVT *)arg2;
 
-	xmldb_notify_watch(meta, parent);
+	xmldb_notify_watch(meta, parent, event);
 }
 
 /**
@@ -577,20 +590,35 @@ static void xmldb_notify_watch_wrapper(xmlNode *meta, void *arg1, void *arg2)
  */
 static void xmldb_notify_watches_helper(xmlNode *targeted, void *arg1, void *arg2)
 {
-	/* Both arg1 and arg2 are ignored */
+	/* arg1 is ignored */
 
 	xml_xpath_for_each_item(targeted, XP_WATCH_METAS,
-							xmldb_notify_watch_wrapper, targeted, NULL);
+							xmldb_notify_watch_wrapper, targeted, arg2);
 }
 
 /**
- * Notify any possible watches installed on any ancestors
- * of the leaf node of the change event
+ * Notify relevant watches of what had happened
  */
-void xmldb_notify_watches(xmlNode *node)
+void xmldb_notify_watches(xmlNode *node, WATCH_EVT event)
 {
-	xml_xpath_for_each_item(node, XP_WATCH_ANCESTOR,
-							xmldb_notify_watches_helper, NULL, NULL);
+	const char *xp = NULL;
+
+	switch (event) {
+	case WATCH_EVT_NODE_CHANGED:
+		xp = XP_WATCH_ANCESTOR_OR_SELF;
+		break;
+	case WATCH_EVT_NODE_DELETED:
+		xp = XP_WATCH_DESCENDANT_OR_SELF;
+		break;
+	default:
+		log_error("Failed to notify watches due to bad event");
+		break;
+	}
+
+	if (xp) {
+		xml_xpath_for_each_item(node, xp, xmldb_notify_watches_helper,
+								NULL, (void *)&event);
+	}
 }
 
 xmlNode *xmldb_put_watch_meta(xmlNode *node, int watch_id)
@@ -620,22 +648,29 @@ xmlNode *xmldb_put_watch_meta(xmlNode *node, int watch_id)
 	return meta;
 }
 
-/**
- * Delete the specified watch item from the watch object, including
- * dequeuing the watch item descriptor from the queue of the watch object
- * and removal of relevant meta node from the monitored object.
+/*
+ * Delete a watch meta node and release the watch item descriptor
  *
  * Note,
  * 1. Callers should have held watch->mutex.
  */
 static void __delete_watch_item(watch_item_t *item)
 {
-	xmldb_delete_node(item->meta, 0);
+	/*
+	 * The watch meta node may have been deleted along with
+	 * the monitored object
+	 */
+	if (item->meta) {
+		xmldb_delete_node(item->meta, 0);
+	}
 
 	free(item->uri);
 	free(item);
 }
 
+/**
+ * Delete the specified watch item from the watch object
+ */
 static void delete_watch_item(xmlNode *node, void *arg1, void *arg2)
 {
 	watch_t *watch = (watch_t *)arg1;	/* arg2 is ignored */
@@ -1210,9 +1245,9 @@ static poll_task_t *get_expired_task(poll_backlog_t *bl, struct timespec *ts)
  * 1. This is a time-consuming function callers should not
  * hold any mutex during invocation.
  */
-static void do_and_free_task(poll_task_t *task, const char *uri)
+static void do_and_free_task(poll_task_t *task)
 {
-	obix_server_reply_object(task->response, task->watch_out, uri);
+	obix_server_reply_object(task->request, task->watch_out);
 	free(task);
 }
 
@@ -1264,7 +1299,7 @@ static void poll_backlog_dispose(poll_backlog_t *bl)
 		log_warning("Dangling poll tasks found (Shouldn't happend!)");
 		list_for_each_entry_safe(task, n, &bl->list_all, list_all) {
 			list_del(&task->list_all);
-			do_and_free_task(task, NULL);
+			do_and_free_task(task);
 		}
 	}
 
@@ -1449,8 +1484,7 @@ int obix_watch_init(xml_config_t *config)
 	return 0;
 }
 
-
-xmlNode *handlerWatchServiceMake(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchServiceMake(obix_request_t *request, xmlNode *input)
 {
 	xmlNode *node;
 	watch_t *watch;
@@ -1473,12 +1507,18 @@ xmlNode *handlerWatchServiceMake(response_t *response, const char *uri, xmlNode 
 		}
 	}
 
+	/*
+	 * Fill in the HTTP Content-Location header with the href
+	 * of the newly created watch object
+	 */
+	request->response_uri = strdup(watch->uri);
+
 	return node;
 
 failed:
 	log_error("%s", watch_err_msg[ret].msgs);
 
-	return obix_server_generate_error(uri, watch_err_msg[ret].type,
+	return obix_server_generate_error(request->request_decoded_uri, watch_err_msg[ret].type,
 				"WatchService", watch_err_msg[ret].msgs);
 }
 
@@ -1489,11 +1529,11 @@ failed:
  * 1. Return a Nil object unconditionally, even if the watch
  * object may have been deleted by other deleting thread
  */
-xmlNode *handlerWatchDelete(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchDelete(obix_request_t *request, xmlNode *input)
 {
 	watch_t *watch;
 
-	if ((watch = dequeue_watch(uri)) != NULL) {
+	if ((watch = dequeue_watch(request->request_decoded_uri)) != NULL) {
 		/* Cancel relevant lease task */
 		if (watch->lease_tid) {
 			ptask_cancel(watchset->lease_thread, watch->lease_tid, TRUE);
@@ -1505,7 +1545,7 @@ xmlNode *handlerWatchDelete(response_t *response, const char *uri, xmlNode *inpu
 	return obix_obj_null();
 }
 
-static xmlNode *watch_item_helper(response_t *response,
+static xmlNode *watch_item_helper(obix_request_t *request,
 								  const char *uri,
 								  xmlNode *input,
 								  int add)		/* 1 for Watch.add */
@@ -1514,7 +1554,7 @@ static xmlNode *watch_item_helper(response_t *response,
 	xmlNode *watch_out;
 	int ret;
 
-	assert(response && uri && input);
+	assert(request && uri && input);
 
 	if (!(watch = get_watch(uri))) {
 		ret = ERR_NO_WATCHOBJ;
@@ -1557,14 +1597,14 @@ out:
 				watch_err_msg[ret].msgs);
 }
 
-xmlNode *handlerWatchAdd(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchAdd(obix_request_t *request, xmlNode *input)
 {
-	return watch_item_helper(response, uri, input, 1);
+	return watch_item_helper(request, request->request_decoded_uri, input, 1);
 }
 
-xmlNode *handlerWatchRemove(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchRemove(obix_request_t *request, xmlNode *input)
 {
-	return watch_item_helper(response, uri, input, 0);
+	return watch_item_helper(request, request->request_decoded_uri, input, 0);
 }
 
 /**
@@ -1573,7 +1613,7 @@ xmlNode *handlerWatchRemove(response_t *response, const char *uri, xmlNode *inpu
  * strict expiry ascending order
  */
 static int create_poll_task(watch_t *watch, long expiry,
-							response_t *response,	xmlNode *watch_out)
+							obix_request_t *request, xmlNode *watch_out)
 {
 	poll_task_t *task, *pos;
 
@@ -1591,13 +1631,13 @@ static int create_poll_task(watch_t *watch, long expiry,
 	 * requests from erroneous situations that failed to create a
 	 * reply object
 	 */
-	response->no_reply = 1;
+	request->no_reply = 1;
 
 	clock_gettime(CLOCK_REALTIME, &task->expiry); /* since now on */
 	task->expiry.tv_sec += expiry / 1000;		/* in miliseconds */
 	task->expiry.tv_nsec += (expiry % 1000) * 1000;
 
-	task->response = response;
+	task->request = request;
 	task->watch_out = watch_out;
 	INIT_LIST_HEAD(&task->list_all);
 	INIT_LIST_HEAD(&task->list_active);
@@ -1701,7 +1741,7 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 	}
 }
 
-static xmlNode *watch_poll_helper(response_t *response, const char *uri,
+static xmlNode *watch_poll_helper(obix_request_t *request, const char *uri,
 								  int include_all)	/* 1 for pollRefresh */
 {
 	watch_t *watch;
@@ -1709,7 +1749,7 @@ static xmlNode *watch_poll_helper(response_t *response, const char *uri,
 	long wait_min, wait_max, delay = 0;
 	int ret;
 
-	assert(response && uri);
+	assert(request && uri);
 
 	if (!(watch = get_watch(uri))) {
 		ret = ERR_NO_WATCHOBJ;
@@ -1742,7 +1782,7 @@ static xmlNode *watch_poll_helper(response_t *response, const char *uri,
 	}
 
 	if (delay > 0) {
-		if (create_poll_task(watch, delay, response, watch_out) < 0) {
+		if (create_poll_task(watch, delay, request, watch_out) < 0) {
 			xmlFreeNode(watch_out);
 			ret = ERR_NO_POLLTASK;
 			goto failed;
@@ -1775,18 +1815,18 @@ out:
 				watch_err_msg[ret].msgs);
 }
 
-xmlNode *handlerWatchPollChanges(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchPollChanges(obix_request_t *request, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(response, uri, 0);
+	return watch_poll_helper(request, request->request_decoded_uri, 0);
 }
 
-xmlNode *handlerWatchPollRefresh(response_t *response, const char *uri, xmlNode *input)
+xmlNode *handlerWatchPollRefresh(obix_request_t *request, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(response, uri, 1);
+	return watch_poll_helper(request, request->request_decoded_uri, 1);
 }
 
 /**
@@ -1799,16 +1839,13 @@ xmlNode *handlerWatchPollRefresh(response_t *response, const char *uri, xmlNode 
 static void poll_thread_task_helper(poll_task_t *task)
 {
 	watch_t *watch = task->watch;
-	char *uri = NULL;
 
 	if (!(watch = task->watch)) {
 		log_warning("Relevant watch of current poll task was deleted! "
 					"(Shouldn't happen!)");
-		do_and_free_task(task, NULL);
+		do_and_free_task(task);
 		return;
 	}
-
-	uri = strdup(watch->uri);	/* Doesn't matter if failed */
 
 	pthread_mutex_lock(&watch->mutex);
 	if (watch->changed == 1) {
@@ -1831,18 +1868,8 @@ static void poll_thread_task_helper(poll_task_t *task)
 
 	/*
 	 * Finally, send out the task's watch_out as response.
-	 *
-	 * Note,
-	 * 1. Since the href attribute of watchOut contract has been
-	 * removed, fall back on a copy of watch's URI as HTTP's
-	 * Content-Location header - Note: MUST use a copy since the
-	 * watch may have been removed!
 	 */
-	do_and_free_task(task, uri);
-
-	if (uri) {
-		free(uri);
-	}
+	do_and_free_task(task);
 }
 
 /**

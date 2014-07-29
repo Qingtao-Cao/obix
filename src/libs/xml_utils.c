@@ -117,14 +117,18 @@ int xml_for_each_comment(xmlNode *rootNode, xml_item_cb_t callback,
 }
 
 /**
- * Check if the given node has a postive hidden attribute
+ * Check if the given node has the specified attribute
+ * and set as true
+ *
+ * Return 1 if this is the case, 0 otherwise (No such attribute
+ * or its value is false)
  */
-int xml_is_hidden(const xmlNode *node)
+static int xml_attr_true(const xmlNode *node, const char *attr)
 {
 	xmlChar *prop;
 	int ret;
 
-	if (!(prop = xmlGetProp((xmlNode *)node, BAD_CAST OBIX_ATTR_HIDDEN))) {
+	if (!(prop = xmlGetProp((xmlNode *)node, BAD_CAST attr))) {
 		return 0;
 	}
 
@@ -132,6 +136,16 @@ int xml_is_hidden(const xmlNode *node)
 	xmlFree(prop);
 
 	return (ret == 0) ? 1 : 0;
+}
+
+int xml_is_hidden(const xmlNode *node)
+{
+	return xml_attr_true(node, OBIX_ATTR_HIDDEN);
+}
+
+int xml_is_null(const xmlNode *node)
+{
+	return xml_attr_true(node, OBIX_ATTR_NULL);
 }
 
 /**

@@ -75,7 +75,7 @@ In the normal terminal change directory into $obix_source/tests/scripts:
 
 1. Check oBIX is running.
 
-``` XML 
+```XML 
 curl localhost/obix | xmllint --format -
 <?xml version="1.0"?>
 <obj href="/obix" is="obix:Lobby /obix/def/SignUpLobby /obix/def/DevicesLobby">
@@ -83,7 +83,8 @@ curl localhost/obix | xmllint --format -
   <op name="batch" href="batch" in="obix:BatchIn" out="obix:BatchOut"/>
   <ref name="historyService" href="/obix/historyService" is="obix:HistoryService"/>
   <ref name="watchService" href="/obix/watchService" is="obix:WatchService"/>
-  <ref name="devices" href="/obix/devices" display="Device References" is="obix:list"/>
+  <ref name="devices" href="/obix/devices" display="Device References" 
+      is="obix:list"/>
   <op name="signUp" href="signUp" in="obix:obj" out="obix:obj"/>
 </obj>
 ```
@@ -96,9 +97,11 @@ After starting the oBIX server, add a test device.
 
     ```XML
     curl localhost/obix/devices | xmllint --format -
+    
     <?xml version="1.0"?>
     <list href="/obix/devices" displayName="Device List" of="obix:ref">
-        <ref href="/obix/deviceRoot/TestDevice" name="TestDevice" displayName="Device for tests"/>
+        <ref href="/obix/deviceRoot/TestDevice" name="TestDevice" 
+        displayName="Device for tests"/>
     </list>
     ```
     Browser: hostname/obix/devices
@@ -108,6 +111,7 @@ After starting the oBIX server, add a test device.
 
     ```XML
     ./signUp | xmllint --format -
+    
     <?xml version="1.0"?>
     <obj name="ExampleTimer" href="/obix/deviceRoot/example" writable="true">
         <obj href="parent" val="yes">
@@ -123,7 +127,8 @@ After starting the oBIX server, add a test device.
     curl http://localhost/obix/deviceRoot/example | xmllint --format -
 
     <?xml version="1.0"?>
-    <obj name="ExampleTimer" href="/obix/deviceRoot/example" writable="true">
+    <obj name="ExampleTimer" href="/obix/deviceRoot/example" 
+        writable="true">
         <obj href="parent" val="yes">
             <reltime name="time" href="time" val="PT0S"/>
             <bool name="reset" href="reset" val="false" writable="true"/>
@@ -145,13 +150,15 @@ For these tests, we will set the `reset` attribute (boolean).
     ```XML
     curl http://localhost/obix/deviceRoot/example/parent/reset | xmllint --format -
     
-    <bool name="reset" href="/obix/deviceRoot/example/parent/reset" val="false" writable="true"/>
+    <bool name="reset" href="/obix/deviceRoot/example/parent/reset" val="false" 
+        writable="true"/>
     ```
 
 2. Set the value to true (note oBIX is case sensitive):
 
     ```XML 
-    curl -XPUT --data '<bool val="true"/>' http://localhost/obix/deviceRoot/example/parent/reset
+    curl -XPUT --data '<bool val="true"/>' \
+    http://localhost/obix/deviceRoot/example/parent/reset
     
     <?xml version="1.0"?>
     <bool name="reset" href="reset" val="true" writable="true"/>
@@ -160,7 +167,8 @@ For these tests, we will set the `reset` attribute (boolean).
 3. Set it to true again to make sure nothing breaks. 
 
     ```XML 
-    curl -XPUT --data '<bool val="true"/>' http://localhost/obix/deviceRoot/example/parent/reset
+    curl -XPUT --data '<bool val="true"/>' \
+    http://localhost/obix/deviceRoot/example/parent/reset
     
     <?xml version="1.0"?>
     <bool name="reset" href="reset" val="true" writable="true"/>
@@ -171,7 +179,8 @@ For these tests, we will set the `reset` attribute (boolean).
 4. Set back to original value (false).
 
     ```XML 
-    curl -XPUT --data '<bool val="false"/>' http://localhost/obix/deviceRoot/example/parent/reset
+    curl -XPUT --data '<bool val="false"/>' \
+    http://localhost/obix/deviceRoot/example/parent/reset
     
     <?xml version="1.0"?>
     <bool name="reset" href="reset" val="false" writable="true"/>
@@ -188,14 +197,14 @@ Write to an attribute that is not writable (writable="false"). We should get an 
 
 In ExampleTimer, we should not be able to write to the `time` attribute.
 
-```XML
-<obj name="ExampleTimer" href="example" writable="true">
-    <obj href="parent" val="yes">
-        <reltime name="time" href="time" val="PT0S"/>
-        <bool name="reset" href="reset" val="false" writable="true"/>
-    </obj>
-</obj>
-```
+   ```XML
+   <obj name="ExampleTimer" href="example" writable="true">
+       <obj href="parent" val="yes">
+           <reltime name="time" href="time" val="PT0S"/>
+           <bool name="reset" href="reset" val="false" writable="true"/>
+       </obj>
+   </obj>
+   ```
 
 1. Attempt to write the value 4 seconds to time (val="PT4S"):
 
@@ -222,19 +231,20 @@ Post a value to a bool other than true/false (case sensitive)
 
 In ExampleTimer, we should only be able to write lower case true||false into `reset`.
 
-```XML
-<obj name="ExampleTimer" href="example" writable="true">
-    <obj href="parent" val="yes">
-        <reltime name="time" href="time" val="PT0S"/>
-        <bool name="reset" href="reset" val="false" writable="true"/>
-    </obj>
-</obj>
-```
+   ```XML
+   <obj name="ExampleTimer" href="example" writable="true">
+       <obj href="parent" val="yes">
+           <reltime name="time" href="time" val="PT0S"/>
+           <bool name="reset" href="reset" val="false" writable="true"/>
+       </obj>
+   </obj>
+   ```
 
 1. Attempt to write True (wrong case):
 
     ```XML 
-    $ curl -XPUT --data '<bool val="True"/>' http://localhost/obix/deviceRoot/example2/parent/reset
+    $ curl -XPUT --data '<bool val="True"/>' \
+    http://localhost/obix/deviceRoot/example2/parent/reset
 
     <?xml version="1.0"?>
     <err is="obix:UnsupportedErr" name="General error contract" 
@@ -245,7 +255,8 @@ In ExampleTimer, we should only be able to write lower case true||false into `re
 1. Attempt to write NULL:
 
     ```XML 
-    curl -XPUT --data '<bool val=""/>' http://localhost/obix/deviceRoot/example2/parent/reset
+    curl -XPUT --data '<bool val=""/>' \
+    http://localhost/obix/deviceRoot/example2/parent/reset
     
     <?xml version="1.0"?>
     <err is="obix:UnsupportedErr" name="General error contract" 
@@ -256,7 +267,8 @@ In ExampleTimer, we should only be able to write lower case true||false into `re
 1. Attempt to write valid boolean (true)
 
     ```XML 
-    curl -XPUT --data '<bool val="true"/>' http://localhost/obix/deviceRoot/example/parent/reset
+    curl -XPUT --data '<bool val="true"/>' \
+    http://localhost/obix/deviceRoot/example/parent/reset
     
     <bool name="reset" href="reset" val="true" writable="true"/>
     ```
@@ -295,8 +307,10 @@ Pre-requisites:
     <?xml version="1.0"?>
         <list name="histories" href="/obix/historyService/histories" of="obix:obj">
         <obj is="obix:HistoryDevLobby" href="example">
-            <op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut"/>
-            <op name="append" href="append" in="obix:HistoryAppendIn" out="obix:HistoryAppendOut"/>
+            <op name="query" href="query" in="obix:HistoryFilter" 
+                out="obix:HistoryQueryOut"/>
+            <op name="append" href="append" in="obix:HistoryAppendIn" 
+                out="obix:HistoryAppendOut"/>
             <list name="index" href="index" of="obix:HistoryFileAbstract"/>
         </obj>
     </list>
@@ -311,8 +325,10 @@ Pre-requisites:
 
     <?xml version="1.0"?>
     <obj is="obix:HistoryDevLobby" href="/obix/historyService/histories/example">
-        <op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut"/>
-        <op name="append" href="append" in="obix:HistoryAppendIn" out="obix:HistoryAppendOut"/>
+        <op name="query" href="query" in="obix:HistoryFilter" 
+            out="obix:HistoryQueryOut"/>
+        <op name="append" href="append" in="obix:HistoryAppendIn" 
+            out="obix:HistoryAppendOut"/>
         <list name="index" href="index" of="obix:HistoryFileAbstract"/>
     </obj>
     ```
@@ -340,7 +356,9 @@ Pre-requisites:
 1. Add 4 records to example device history
 
     ```XML 
-    for value in 70 80 90 100; do ./historyAppendSingle -d example -s $(date +%FT%T) -c "$value"; done;
+    for value in 70 80 90 100; \
+        do ./historyAppendSingle -d example -s $(date +%FT%T) -c "$value"; \
+    done;
 
     <?xml version="1.0" encoding="UTF-8"?>
     <obj is="obix:HistoryAppendOut">
@@ -485,7 +503,8 @@ In the normal terminal:
     
     <?xml version="1.0"?>
     <list href="/obix/devices" displayName="Device List" of="obix:ref">
-        <ref href="/obix/deviceRoot/TestDevice" name="TestDevice" displayName="Device for tests"/>
+        <ref href="/obix/deviceRoot/TestDevice" name="TestDevice" 
+            displayName="Device for tests"/>
     </list>
     ```
     Browser: hostname/obix/devices
@@ -524,12 +543,313 @@ In the normal terminal:
     
 # Watch service
 
-
-WIP
-
 Refer to https://github.com/ONEDC/obix/blob/devel/docs/WATCH.md
 
+## Create a watch object
 
+1. Create a single watch object with watchMakeSingle:
+
+    ```XML 
+    ./watchMakeSingle | xmllint --format -
+
+    <?xml version="1.0"?>
+    <obj href="/obix/watchService/0/watch0/" is="obix:Watch /obix/def/LongPollWatch">
+    <reltime name="lease" href="lease" min="PT0S" max="PT24H" val="PT1H"
+        writable="true"/>
+    <obj name="pollWaitInterval" href="pollWaitInterval">
+        <reltime name="min" href="min" min="PT0S" max="PT1M" val="PT10S" 
+            writable="true"/>
+        <reltime name="max" href="max" min="PT0S" max="PT1M" val="PT30S" 
+            writable="true"/>
+    </obj>
+    <op name="add" href="add" in="obix:WatchIn" out="obix:WatchOut"/>
+    <op name="remove" href="remove" in="obix:WatchIn"/>
+    <op name="pollChanges" href="pollChanges" out="obix:WatchOut"/>
+    <op name="pollRefresh" href="pollRefresh" out="obix:WatchOut"/>
+    <op name="delete" href="delete"/>
+    </obj>
+    ```
+
+    The /0 parent holds 64 watch objects. When we create watch 65, it goes under parent /1.
+
+## Create multiple watch objects.
+
+We want to create > 64 watch objects to check that the parent folders are created correctly.
+
+1. Create 65 watch objects with watchMake:
+
+    ```XML 
+    ./watchMake -n 65
+
+    ...
+    <obj href="/obix/watchService/0/watch63/"
+    <obj href="/obix/watchService/1/watch64/"
+    <obj href="/obix/watchService/1/watch65/"
+
+    ```
+
+    Zero based indexing means the watch we created earlier was watch 0. We have now created up to watch65.
+
+2. Repeat and check that parent /2 has been created:
+    
+    ```XML 
+    ./watchMake -n 65
+    ...
+    <obj href="/obix/watchService/1/watch127/"
+    <obj href="/obix/watchService/2/watch128/"
+    ...
+    ```
+    
+
+## Delete a single watch object
+
+We should be able to delete any of the 128 watch objects we created.
+
+1. Delete watch object 126:
+
+    ```XML 
+    ./watchDelete -w 126
+    ```
+
+## Add another watch
+
+Checking watch ID reuse.
+
+1. Create a watch object with watchMakeSingle:
+
+    ```XML 
+    ./watchMakeSingle
+
+    <obj href="/obix/watchService/1/watch126/"
+    ```
+
+    Should be the watch we deleted (in this case 126).
+
+1. Create another watch object with watchMakeSingle. This time, the number sequence should continue from the highest number.
+
+    ```XML 
+    ./watchMakeSingle 
+
+    <obj href="/obix/watchService/2/watch131/"
+    ```
+1. Delete/Create cycle again.
+
+## Delete all
+
+Delete all watches and start testing again to ensure nothing breaks.
+
+1. Delete all with watchDeleteAll:
+
+    ```
+    ./watchDeleteAll
+    ```
+
+1. Also check in the browser: http://localhost/obix/watchService
+
+1. Create 130 watch objects with watchMake
+
+    ```XML 
+    ./watchMake -n 130
+    <obj href="/obix/watchService/0/watch0/
+    ...
+    <obj href="/obix/watchService/0/watch63/"
+    <obj href="/obix/watchService/1/watch64/"
+    ...
+    <obj href="/obix/watchService/1/watch127/"
+    <obj href="/obix/watchService/2/watch128/"
+    <obj href="/obix/watchService/2/watch129/"
+    ```
+    As before, check the parent folder rolls over after 63 entries (zero based indexing)
+    
+1. Create another 130 watch objects with watchMake
+
+    ```XML 
+    ./watchMake -n 130
+    ...
+    <obj href="/obix/watchService/4/watch259/"
+    ```
+1. Delete selected watch objects with watchDelete
+
+    ```XML 
+    for watchID in 0 64 128 192; do ./watchDelete -w $watchID; done;
+    
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    ```
+
+1. Create 5 watch objects - expecting reuse of watch IDs from previous step plus one new watchID.
+
+    ```XML 
+    ./watchMake -n 5
+    <obj href="/obix/watchService/0/watch0/"
+    <obj href="/obix/watchService/1/watch64/"
+    <obj href="/obix/watchService/2/watch128/" 
+    <obj href="/obix/watchService/3/watch192/"
+    ...
+    <obj href="/obix/watchService/4/watch260/"
+    ```
+
+## Delete a non-existent watch
+
+Delete should not work if the watch does not exist.
+
+1. Delete the 4 watches from the previous test:
+
+    ```XML 
+    $ for watchID in 0 64 128 192; do ./watchDelete -w $watchID; done;
+
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    <?xml version="1.0"?>
+    <obj null="true"/>
+    ```
+1. Try again - should not succeed
+
+    ```XML 
+    for watchID in 0 64 128 192; do ./watchDelete -w $watchID; done;
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/0/watch0/delete"
+    displayName="oBIX Server" 
+    display="Requested URI could not be found on this server"/>
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/1/watch64/delete"
+    displayName="oBIX Server" 
+    display="Requested URI could not be found on this server"/>
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/2/watch128/delete"
+    displayName="oBIX Server" 
+    display="Requested URI could not be found on this server"/>
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/3/watch192/delete"
+    displayName="oBIX Server" 
+    display="Requested URI could not be found on this server"/>
+    ```
+    
+1. Try a random watchID that is > any created so far:
+
+    ```XML 
+    ./watchDelete -w 4321
+
+    <err is="obix:BadUriErr" name="General error contract" 
+    href="/obix/watchService/67/watch4321/delete"
+    displayName="oBIX Server" 
+    display="Requested URI could not be found on this server"/>
+    ```
+
+## Assign a watch to a device
+
+Testing the functionality of the watch object. Begin with a clean instance that contains no watch objects or devices. We will need two terminals - one for the watchPollChange and one in which to change the object we are watching.
+
+1. Restart the server.
+
+1. Add the example device using signUp:
+
+    ```XML
+    ./signUp | xmllint --format -
+    <?xml version="1.0"?>
+    <obj name="ExampleTimer" href="/obix/deviceRoot/example" writable="true">
+        <obj href="parent" val="yes">
+            <reltime name="time" href="time" val="PT0S"/>
+            <bool name="reset" href="reset" val="false" writable="true"/>
+        </obj>
+    </obj>
+    ```
+
+1. Check the device:
+
+    ```XML 
+    curl http://localhost/obix/deviceRoot/example | xmllint --format -
+
+    <?xml version="1.0"?>
+    <obj name="ExampleTimer" href="/obix/deviceRoot/example" writable="true">
+        <obj href="parent" val="yes">
+            <reltime name="time" href="time" val="PT0S"/>
+            <bool name="reset" href="reset" val="false" writable="true"/>
+        </obj>
+    </obj>
+    ```
+
+    Browser: http://localhost/obix/deviceRoot/example
+
+
+1. Create a watch object using watchMakeSingle:
+
+    ```XML 
+    ./watchMakeSingle | xmllint --format -
+
+    <obj href="/obix/watchService/0/watch0/" is="obix:Watch /obix/def/LongPollWatch">
+    <reltime name="lease" href="lease" min="PT0S" max="PT24H" val="PT1H" 
+        writable="true"/>
+    <obj name="pollWaitInterval" href="pollWaitInterval">
+        <reltime name="min" href="min" min="PT0S" max="PT1M" val="PT10S" 
+            writable="true"/>
+        <reltime name="max" href="max" min="PT0S" max="PT1M" val="PT30S" 
+            writable="true"/>
+    </obj>
+    <op name="add" href="add" in="obix:WatchIn" out="obix:WatchOut"/>
+    <op name="remove" href="remove" in="obix:WatchIn"/>
+    <op name="pollChanges" href="pollChanges" out="obix:WatchOut"/>
+    <op name="pollRefresh" href="pollRefresh" out="obix:WatchOut"/>
+    <op name="delete" href="delete"/>
+    </obj>
+    ```
+
+    
+1. Add a device to the watch object
+
+    ```XML 
+    $ ./watchAddSingle -w 0 -u /obix/deviceRoot/example/parent/reset | xmllint --format -
+
+    <obj is="obix:WatchOut">
+    <list name="values" of="obix:obj">
+        <bool name="reset" href="/obix/deviceRoot/example/parent/reset" val="false" 
+            writable="true"/>
+    </list>
+    </obj>
+    ```
+
+    
+    
+1. In a separate terminal, create a watch poll change. This waits for notifications from the watch object.
+
+    ```XML 
+    ./watchPollChange -w 0
+    ```
+    
+    There will be no output until the watched object changes or reaches the timeout value ("max" pollInterval attribute of the watch object).
+    
+1. Before the watch object times out (default 30sec), change a value or insert a new child node into the object that is being monitored.
+
+    ```XML
+    curl -XPUT --data '<bool val="true"/>' \
+    http://localhost/obix/deviceRoot/example/parent/reset | xmllint --format -
+    ````
+
+1. In the watchPollChange window, there should be a notification of the change in value:
+
+    ```XML
+    
+    <obj is="obix:WatchOut">
+    <list name="values" of="obix:obj">
+        <bool name="reset" href="/obix/deviceRoot/example/parent/reset" val="true" 
+            writable="true"/>
+    </list>
+    </obj>
+```
+    If the watchPollChange window does not change. Check that you are watching the value you changed.
+    
 
 # Config notes
 

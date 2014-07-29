@@ -106,7 +106,7 @@ static xmlNode *__xmldb_fatal_error;
  * attribute to one node which will result in any of its descendants
  * writable
  */
-/* static int SEARCH_WRITABLE_SELF = 1;	*/		/* not used yet */
+static int SEARCH_WRITABLE_SELF = 1;
 static int SEARCH_WRITABLE_PARENT = 2;
 static int SEARCH_WRITABLE_INDEFINITE = -1;		/* use with care! */
 
@@ -437,13 +437,22 @@ xmlNode *xmldb_add_child(xmlNode *parent, xmlNode *node,
 }
 
 /**
- * Copy a node, unlink the copy from the original document and return it.
+ * Copy a node, unlink the copy from the original document.
+ *
+ * In case the orig points to NULL, then duplicate a "null" object.
+ * This happens when the monitored object of a watch_item_t has
+ * been deleted.
+ *
+ * Anyway, a "null" object will help notify clients that relevant
+ * object does not exist anymore.
  */
 xmlNode *xmldb_copy_node(const xmlNode *orig, xml_copy_exclude_flags_t flag)
 {
 	xmlNode *node;
 
-	if (!(node = xml_copy(orig, flag))) {
+	node = (orig == NULL) ? obix_obj_null() : xml_copy(orig, flag);
+
+	if (!node) {
 		log_error("Failed to copy a node");
 		return NULL;
 	}
@@ -593,13 +602,11 @@ void xmldb_delete_hidden(xmlNode *node)
 }
 
 /**
- * Creates a reference to the new object in the specified lobby.
+ * Create a reference to the new object in the specified lobby.
  */
-xmlNode *xmldb_put_ref(const char *lobby, xmlNode *newDevice, int *existed)
+xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed)
 {
-	xmlNode *deviceTable = NULL;
-	xmlNode *node = NULL;
-	xmlNode *deviceRefNode = NULL;
+	xmlNode *table, *ref;
 	xmlChar *deviceHref = NULL;
 	xmlChar *deviceName = NULL;
 	xmlChar *deviceDisplayName = NULL;
@@ -610,26 +617,27 @@ xmlNode *xmldb_put_ref(const char *lobby, xmlNode *newDevice, int *existed)
 
 	*existed = 0;
 
-	if (!(deviceTable = xmldb_get_node(BAD_CAST lobby))) {
-		log_error("Failed to locate the device table");
+	if (!(table = xmldb_get_node(BAD_CAST lobby))) {
+		log_error("Failed to get the xmlNode for %s", lobby);
 		return NULL;
 	}
 
 	if (!(deviceHref = xmlGetProp(newDevice, BAD_CAST OBIX_ATTR_HREF))) {
-		log_error("No href attribute in the device node");
+		log_error("No %s attribute in the device node", OBIX_ATTR_HREF);
 		return NULL;
 	}
 
-	if ((node = xml_find_child(deviceTable, OBIX_OBJ_REF,
-							   OBIX_ATTR_HREF, (const char *)deviceHref)) != NULL) {
+	if ((ref = xml_find_child(table, OBIX_OBJ_REF,
+							  OBIX_ATTR_HREF, (const char *)deviceHref)) != NULL) {
 		log_debug("Ref with href %s already exist", deviceHref);
 		xmlFree(deviceHref);
 		*existed = 1;
-		return node;
+		return ref;
 	}
 
 	if (!(deviceName = xmlGetProp(newDevice, BAD_CAST OBIX_ATTR_NAME))) {
-		log_error("No name attribute in the device node");
+		log_error("No %s attribute in the device node", OBIX_ATTR_NAME);
+		ref = NULL;
 		goto failed;
 	}
 
@@ -637,32 +645,32 @@ xmlNode *xmldb_put_ref(const char *lobby, xmlNode *newDevice, int *existed)
 	deviceDisplay = xmlGetProp(newDevice, BAD_CAST OBIX_ATTR_DISPLAY);
 	deviceIs = xmlGetProp(newDevice, BAD_CAST OBIX_ATTR_IS);
 
-	if (!(deviceRefNode = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_REF, NULL))) {
+	if (!(ref = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_REF, NULL))) {
 		log_error("Failed to allocate a device ref node.");
 		goto new_node_failed;
 	}
 
-	if (xmlSetProp(deviceRefNode, BAD_CAST OBIX_ATTR_HREF, deviceHref) == NULL ||
-		xmlSetProp(deviceRefNode, BAD_CAST OBIX_ATTR_NAME, deviceName) == NULL ||
+	if (xmlSetProp(ref, BAD_CAST OBIX_ATTR_HREF, deviceHref) == NULL ||
+		xmlSetProp(ref, BAD_CAST OBIX_ATTR_NAME, deviceName) == NULL ||
 		(deviceDisplayName != NULL &&
-		 xmlSetProp(deviceRefNode, BAD_CAST OBIX_ATTR_DISPLAY_NAME,
+		 xmlSetProp(ref, BAD_CAST OBIX_ATTR_DISPLAY_NAME,
 					deviceDisplayName) == NULL) ||
 		(deviceDisplay != NULL &&
-		 xmlSetProp(deviceRefNode, BAD_CAST OBIX_ATTR_DISPLAY,
+		 xmlSetProp(ref, BAD_CAST OBIX_ATTR_DISPLAY,
 					deviceDisplay) == NULL) ||
 		(deviceIs != NULL &&
-		 xmlSetProp(deviceRefNode, BAD_CAST OBIX_ATTR_IS,
+		 xmlSetProp(ref, BAD_CAST OBIX_ATTR_IS,
 					deviceIs) == NULL)) {
 		log_error("Failed to set attributes on the device reference node");
-		xmlFreeNode(deviceRefNode);
-		deviceRefNode = NULL;
+		xmlFreeNode(ref);
+		ref = NULL;
 		goto new_node_failed;
 	}
 
-	if (xmldb_add_child(deviceTable, deviceRefNode, 0, 0) == NULL) {
+	if (xmldb_add_child(table, ref, 0, 0) == NULL) {
 		log_error("Failed to add the device reference to the XML database");
-		xmlFreeNode(deviceRefNode);
-		deviceRefNode = NULL;
+		xmlFreeNode(ref);
+		ref = NULL;
 	}
 
 	/*
@@ -691,7 +699,7 @@ new_node_failed:
 failed:
 	xmlFree(deviceHref);
 
-	return deviceRefNode;
+	return ref;
 }
 
 static void list_href_dispose(list_href_t *item)
@@ -781,26 +789,27 @@ out:
 	return head.href;
 }
 
+#ifdef DEBUG
 /**
  * Iterates through the request environment pointed to by @a response and inserts
  * all the request environment variables as child nodes to the environment root node
  * pointed to by @a environmentRoot.
  *
- * @param response          A pointer to the @a Response object that holds request
- *                          information
+ * @param request	    A pointer to the @a oBIX Request object that holds request
+ *                          information.
  * @returns                 A pointer to the newly created obix:List XML subtree
  *                          with all the FastCGI variables listed as <str>'s in it,
  *                          or NULL if an error occured.
  * @remark                  This is an allocating function.  It's up to the caller
  *                          to free the memory returned from this function with xmlFree().
  */
-static xmlNode *xmldb_fcgi_var_list(response_t *response)
+static xmlNode *xmldb_fcgi_var_list(obix_request_t *request)
 {
 	char **envp;
 	xmlNode *envList = NULL;
 	xmlNode *curEnvNode = NULL;
 
-	assert(response && response->request);
+	assert(request && request->request);
 
 	if (!(envList = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_LIST, NULL))) {
 		log_error("Failed to allocate the oBIX:List contract");
@@ -815,7 +824,7 @@ static xmlNode *xmldb_fcgi_var_list(response_t *response)
 		goto failed;
 	}
 
-	for (envp = response->request->envp; *envp != NULL; ++envp) {
+	for (envp = request->request->envp; *envp != NULL; ++envp) {
 		if (!(curEnvNode = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_STR, NULL))) {
 			log_error("Failed to allocate the oBIX:str value for FCGI varabile");
 			break;
@@ -846,14 +855,13 @@ failed:
 	return NULL;
 }
 
-#ifdef DEBUG
-xmlNode *xmldb_dump(response_t *response)
+xmlNode *xmldb_dump(obix_request_t *request)
 {
 	xmlNode *obixDump = NULL;
 	xmlNode *fcgiVarList = NULL;
 	xmlNode *storageCopy = NULL;
 
-	assert(response);
+	assert(request);
 
 	if (!(obixDump = xmlNewNode(NULL, BAD_CAST OBIX_OBJ))) {
 		log_error("Failed to allocate an XML node for the response");
@@ -866,7 +874,7 @@ xmlNode *xmldb_dump(response_t *response)
 		goto failed;
 	}
 
-	if (!(fcgiVarList = xmldb_fcgi_var_list(response))) {
+	if (!(fcgiVarList = xmldb_fcgi_var_list(request))) {
 		log_error("Failed to return the FASTCGI environment contract");
 		goto failed;
 	}
@@ -1100,7 +1108,7 @@ xmldb_errcode_t xmldb_put_node(xmlNode *node, xmldb_dom_action_t action)
 	}
 
 	if ((action & DOM_NOTIFY_WATCHES) > 0) {
-		xmldb_notify_watches(parentNode);
+		xmldb_notify_watches(parentNode, WATCH_EVT_NODE_CHANGED);
 	}
 
 	ret = 0;
@@ -1116,30 +1124,89 @@ failed:
 	return ret;
 }
 
+static int xmldb_node_writable_helper(xmlNode **current, void *arg1, void *arg2)
+{
+	xmlNode *node = *current;
+	xmlChar *writable;
+	int *depth = (int *)arg2;
+
+	if (node->type != XML_ELEMENT_NODE) {
+		return 0;
+	}
+
+	if (*depth != SEARCH_WRITABLE_INDEFINITE) {
+		*depth -= 1;
+
+		/*
+		 * Bail out if the maximal search threshold
+		 * has been consumed
+		 */
+		if (*depth < 0) {
+			return -1;
+		}
+	}
+
+	/*
+	 * Keep on iterating all ancestors if the current node has no
+	 * writable attribute
+	 */
+	if (!(writable = xmlGetProp(node, BAD_CAST OBIX_ATTR_WRITABLE))) {
+		return 0;
+	}
+
+	if (xmlStrcmp(writable, BAD_CAST XML_TRUE) == 0) {
+		*(int *)arg1 = 1;
+	} else {
+		*(int *)arg1 = 0;
+	}
+
+	xmlFree(writable);
+
+	/* Return < 0 so as to stop the caller's loop */
+	return -1;
+}
+
+/*
+ * Check if the given node is writable, which not necessarily
+ * means the node must have a 'writable="true"' attribute since
+ * one of its ancestors may have such attribute established.
+ *
+ * The maximal search depth from the given node all the way to
+ * the topest level of global DOM tree is decided by the second
+ * parameter.
+ *
+ * Return 1 if the given node is writable, 0 non-writable.
+ */
+static int xmldb_node_writable(xmlNode *node, int max_depth)
+{
+	int writable = 0;
+
+	/*
+	 * Skip checking return value since the helper function will
+	 * bail out if the writable attribute has been found on the
+	 * nearest ancestor
+	 */
+	xml_for_each_ancestor_or_self(node, xmldb_node_writable_helper,
+								  &writable, &max_depth);
+
+	return (writable == 1) ? 1 : 0;
+}
+
 /**
  * Reparent children of the "from" node to the "to" node.
- * However, if the "null" attribute is set then relevant
- * node is deleted.
+ * However, if a child node in the "from" subtree is a null
+ * object, have its peer in the "to" subtree deleted.
  *
- * Return >= 0 on success, < 0 otherwise
- *
- * TODO:
- * 1. By far only implement the deletion of reference nodes
- * so that their href values could be changed on the fly.
- *
- * However, deletion on normal nodes definitely requires more
- * work, for example, maintain consistency in the watch subsystem
- * since there could be watch metas installed in the deleted
- * node. In this case, relevant watch items should be deleted
- * and poll tasks activated at least.
+ * Return the number of impacted children on success, < 0
+ * on error.
  */
 static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
 {
-	xmlNode *child, *sibling, *node;
-	xmlChar *null, *name, *href;
+	xmlNode *child, *sibling, *peer;
+	xmlChar *name, *href;
 	int count = 0;
 
-	if (!from) {
+	if (!from || !to) {
 		return 0;
 	}
 
@@ -1155,65 +1222,73 @@ static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
 			continue;
 		}
 
-		/* Delete an existing reference node */
-		if ((null = xmlGetProp(child, BAD_CAST OBIX_ATTR_NULL)) != NULL) {
-			if (xmlStrcmp(null, BAD_CAST XML_TRUE) != 0) {
-				xmlFree(null);
-				continue;
-			}
-			xmlFree(null);
-
+		/*
+		 * Find its peer under the destination node
+		 *
+		 * Since reference nodes can't be addressed by their hrefs which
+		 * point to other nodes, their name attributes are checked instead
+		 *
+		 * For other tags, the href attributes are examined
+		 */
+		if (xmlStrcmp(child->name, BAD_CAST OBIX_OBJ_REF) == 0) {
 			if (!(name = xmlGetProp(child, BAD_CAST OBIX_ATTR_NAME))) {
 				continue;
 			}
 
-			/*
-			 * So far confine deletion only on reference node.
-			 *
-			 * Since reference nodes can't be addressed by their hrefs
-			 * which point to other nodes, the name attribute is used
-			 * to find a matching children.
-			 */
-			node = xml_find_child(to, OBIX_OBJ_REF, OBIX_ATTR_NAME,
+			peer = xml_find_child(to, OBIX_OBJ_REF, OBIX_ATTR_NAME,
 								  (const char *)name);
 			xmlFree(name);
-
-			if (node != NULL) {
-				xmldb_delete_node(node, 0);
-				count++;
+		} else {
+			if (!(href = xmlGetProp(child, BAD_CAST OBIX_ATTR_HREF))) {
+				continue;
 			}
 
-			continue;
-		}
-
-		if (!(href = xmlGetProp(child, BAD_CAST OBIX_ATTR_HREF))) {
-			continue;
-		}
-
-		node = xml_find_child(to, (const char *)child->name,
-							  OBIX_ATTR_HREF, (const char *)href);
-		xmlFree(href);
-
-		/* Skip the current child if it is there already */
-		if (node != NULL) {
-			continue;
+			peer = xml_find_child(to, (const char *)child->name,
+								  OBIX_ATTR_HREF, (const char *)href);
+			xmlFree(href);
 		}
 
 		/*
-		 * Detach the current children from the from node so that
-		 * deleting the input document that contains the from node
-		 * won't impact its descendants that have been reparented
-		 * to the global DOM tree.
-		 *
-		 * Also, set any descendants' href relative so as to ensure
-		 * href consisitency in the global DOM tree.
+		 * Delete a matching peer if the child node is a null object,
+		 * and the peer or its parent is writable
 		 */
-		if (xmldb_add_child(to, child, 1, 1) == NULL) {
-			xmlFreeNode(child);
-			return -1;
+		if (peer && xml_is_null(child) == 1 &&
+			xmldb_node_writable(peer, SEARCH_WRITABLE_PARENT) == 1) {
+			xmldb_notify_watches(peer, WATCH_EVT_NODE_DELETED);
+			xmldb_delete_node(peer, 0);
+			count++;
 		}
 
-		count++;
+		/*
+		 * Reparent the child node if it is not a null object and
+		 * its peer does not exist
+		 *
+		 * NOTE:
+		 * Skip checking if the target node is writable or not provided
+		 * that more nodes are added, which is very helpful to recover
+		 * from an inadvertent deletion of a sub node of a non-writable
+		 * device contract
+		 *
+		 * TODO:
+		 * Once the signOff handler has been implemented, no need to
+		 * make such exception.
+		 */
+		if (!peer && xml_is_null(child) == 0) {
+			/*
+			 * Detach the current children from the from node so that
+			 * deleting the input document that contains the from node
+			 * won't impact its descendants that have been reparented
+			 * to the global DOM tree.
+			 *
+			 * Also, set any descendants' href relative so as to ensure
+			 * href consisitency in the global DOM tree.
+			 */
+			if (xmldb_add_child(to, child, 1, 1) == NULL) {
+				xmlFreeNode(child);
+				return -1;
+			}
+			count++;
+		}
 	}
 
 	return count;
@@ -1443,107 +1518,88 @@ void xmldb_dispose()
 	log_debug("XML Database is disposed");
 }
 
-static int xmldb_node_writable_helper(xmlNode **current, void *arg1, void *arg2)
-{
-	xmlNode *node = *current;
-	xmlChar *writable;
-	int *depth = (int *)arg2;
-
-	if (node->type != XML_ELEMENT_NODE) {
-		return 0;
-	}
-
-	if (*depth != SEARCH_WRITABLE_INDEFINITE) {
-		*depth -= 1;
-
-		/*
-		 * Bail out if the maximal search threshold
-		 * has been consumed
-		 */
-		if (*depth < 0) {
-			return -1;
-		}
-	}
-
-	/*
-	 * Keep on iterating all ancestors if the current node has no
-	 * writable attribute
-	 */
-	if (!(writable = xmlGetProp(node, BAD_CAST OBIX_ATTR_WRITABLE))) {
-		return 0;
-	}
-
-	if (xmlStrcmp(writable, BAD_CAST XML_TRUE) == 0) {
-		*(int *)arg1 = 1;
-	} else {
-		*(int *)arg1 = 0;
-	}
-
-	xmlFree(writable);
-
-	/* Return < 0 so as to stop the caller's loop */
-	return -1;
-}
-
 /*
- * Check if the given node is writable, which not necessarily
- * means the node must have a 'writable="true"' attribute since
- * one of its ancestors may have such attribute established.
+ * Update the target node according to the input subtree.
  *
- * The maximal search depth from the given node all the way to
- * the topest level of global DOM tree is decided by the second
- * parameter.
+ * NOTE:
+ * A device contract that was signed up eariler can have its subtree
+ * addded or deleted, as long as they are writable in the first place.
  *
- * Return 1 if the given node is writable, 0 non-writable.
- */
-static int xmldb_node_writable(xmlNode *node, int max_depth)
-{
-	int writable = 0;
-
-	/*
-	 * Skip checking return value since the helper function will
-	 * bail out if the writable attribute has been found on the
-	 * nearest ancestor
-	 */
-	xml_for_each_ancestor_or_self(node, xmldb_node_writable_helper,
-								  &writable, &max_depth);
-
-	return (writable == 1) ? 1 : 0;
-}
-
-/*
- * Update the val attribute of the destination node by that of the
- * given input node. Also copy any existing children of the input
- * node to the destination node.
+ * However, any signed up contract cannot be removed via a write
+ * operation, clients would have to go through the signOff procedure
+ * for this purpose, where access control is enforced.
  */
 xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
-								  xmlNode **updatedNode, int *changed)
+								  xmlNode **updatedNode)
 {
 	xmldb_errcode_t result;
-	xmlNode *node, *copy;
+	xmlNode *node, *copy, *parent;
 	xmlChar *newValue, *oldValue;
-	int ret;
+	int ret, changed = 0;
 
-	*changed = 0;
-
+	/*
+	 * Find the target node and check if either it or
+	 * its parent is writable
+	 */
 	if (!(node = xmldb_get_node(BAD_CAST href))) {
 		return ERR_UPDATE_NODE_NO_SUCH_URI;
 	}
 
+	*updatedNode = node;
+
 	/*
-	 * Allow the writable attribute on a parent node also have
-	 * effects on its direct children
+	 * If null="true" is set in the request, delete the target node
+	 * directly, in which case no children of the input subtree should
+	 * be cared about at all
+	 *
+	 * NOTE:
+	 * Since no device lobby or any devices at various level would ever
+	 * be declared as writable, we are assured that no device contract
+	 * is ever removed from a normal write request. Clients would have
+	 * to issue a signOff request to this end, where ownership of the
+	 * to-be-deleted device contract is checked
 	 */
-	if (xmldb_node_writable(node, SEARCH_WRITABLE_PARENT) != 1) {
-		return ERR_UPDATE_NODE_NOT_WRITABLE;
+	if (xml_is_null(input) == 1) {
+		/*
+		 * If the target node is to-be-deleted, then either it or its
+		 * parent must be writable
+		 */
+		if (xmldb_node_writable(node, SEARCH_WRITABLE_PARENT) != 1) {
+			return ERR_UPDATE_NODE_NOT_WRITABLE;
+		}
+
+		parent = node->parent;
+		/*
+		 * Of course, invalidating all existing watch meta and relevant
+		 * watch_item_t should take place BEFORE the subtree is actually
+		 * deleted. Also relevant poll tasks won't access the deleted
+		 * node at all but fill in watchOut with a null object, therefore
+		 * no synchronisation issue exists
+		 */
+		xmldb_notify_watches(node, WATCH_EVT_NODE_DELETED);
+
+		xmldb_delete_node(node, 0);
+
+		/*
+		 * While the watches on the parent or any ancestor node should
+		 * be notified AFTER the deletion finished, so that polling threads
+		 * can return a watchOut contract with the updated subtree
+		 */
+		xmldb_notify_watches(parent, WATCH_EVT_NODE_CHANGED);
+
+		*updatedNode = NULL;
+		return ERR_SUCCESS;
 	}
 
 	/*
 	 * If the input node contains a val attribute, then have the target
-	 * node updated. Otherwise skip to copy any existing children to the
-	 * target node.
+	 * node updated.
 	 */
 	if ((newValue = xmlGetProp(input, BAD_CAST OBIX_ATTR_VAL)) != NULL) {
+		/*
+		 * TODO:
+		 * The sanity check on data types should be enforced here
+		 */
 		if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_BOOL) == 0 &&
 			xmlStrcmp(newValue, BAD_CAST XML_TRUE) != 0 &&
 			xmlStrcmp(newValue, BAD_CAST XML_FALSE) != 0) {
@@ -1551,12 +1607,24 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 			goto failed;
 		}
 
+		/*
+		 * If the val attribute of the target node is to-be-updated,
+		 * then itself must be writable
+		 */
+		if (xmldb_node_writable(node, SEARCH_WRITABLE_SELF) != 1) {
+			result = ERR_UPDATE_NODE_NOT_WRITABLE;
+			goto failed;
+		}
+
+		/*
+		 * Raise the changed flag if "val" attribute is first set, or assumed
+		 * a different value
+		 */
 		if ((oldValue = xmlGetProp(node, BAD_CAST OBIX_ATTR_VAL)) != NULL) {
-			*changed = ((xmlStrcmp(oldValue, newValue) == 0) ? 0 : 1);
+			changed = ((xmlStrcmp(oldValue, newValue) == 0) ? 0 : 1);
 			xmlFree(oldValue);
 		} else {
-			/* Raise the changed flag if "val" attribute is first set */
-			*changed = 1;
+			changed = 1;
 		}
 
 		if (xmlSetProp(node, BAD_CAST OBIX_ATTR_VAL, newValue) == NULL) {
@@ -1565,16 +1633,21 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 		}
 	}
 
+	/*
+	 * Reparent any children from the input subtree to the target node
+	 */
 	if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_REF) != 0) {
 		/*
-		 * TODO:
-		 * In theroy, input node should be directly passed in as the first
-		 * parameter since its children will be unlinked and then reparented
-		 * to the target node. However, xmlUnlinkNode is not good enough
-		 * to wipe out all connections between the input node and its children,
-		 * after the input node is deleted (along with its owner document),
-		 * the tag names of its children in the global DOM tree will be
-		 * removed as well.
+		 * NOTE:
+		 * In theroy, input node should be directly passed in as
+		 * the first parameter since its children will be unlinked and
+		 * then reparented to the target node.
+		 *
+		 * However, unfortunately, xmlUnlinkNode alone is not sufficient
+		 * to cut off the connections between the input node and its
+		 * children, after the input node is deleted (along with its owner
+		 * document), the tags of its children in the global DOM tree will
+		 * be removed as well.
 		 *
 		 * A workaround is to make a copy of the input node
 		 */
@@ -1585,14 +1658,18 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 		if (ret < 0) {
 			result = ERR_UPDATE_NODE_REPARENT;
 			goto failed;
-		} else if (ret > 0) {
-			/* Raise the changed flag if more children are inserted */
-			*changed = 1;
 		}
+
+		changed += ret;
 	}
 
-	*updatedNode = node;
-	result = 0;
+	/*
+	 * Lastly, notify watches monitoring the target node or any of
+	 * its ancestors AFTER all changes are done.
+	 */
+	if (changed > 0) {
+		xmldb_notify_watches(node, WATCH_EVT_NODE_CHANGED);
+	}
 
 	/* Fall through */
 

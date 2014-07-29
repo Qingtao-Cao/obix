@@ -1,7 +1,19 @@
 <?xml version="1.0"?>
-<obj name="ExampleTimer" href="/obix/deviceRoot/example" writable="true">
-	<obj href="parent" val="yes">
-		<reltime name="time" href="/obix/deviceRoot/example/parent/time" val="PT0S"/>
-		<bool name="reset" href="/oibx/deviceRoot/example/parent/reset" val="false" writable="true"/>
+<!--
+	An example oBIX contract signed up at the oBIX server.
+
+	The root node of the contract deliberately has the writable="true" setup
+	so as to test that the signUp handler will always have it removed.
+
+	Moreover, any writable attribute on any descendant won't be touched,
+	therefore a device contract can have its subnodes added or deleted.
+
+	However, since the device contract itself is not writable, once a direct
+	subnode is removed, it cannot be re-installed.
+-->
+<obj name="ExampleDevice" href="/obix/deviceRoot/example" writable="true">
+	<obj href="parent" val="yes" writable="true">
+		<reltime name="time" href="time" val="PT0S"/>
+		<bool name="reset" href="/oibx/deviceRoot/example/parent/reset" val="false"/>
 	</obj>
 </obj>
