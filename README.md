@@ -184,9 +184,6 @@ Fedora/RHEL systems can use the specfile redhat/obix.spec, and create a local ta
 
     git archive --format=tar --prefix=obix-1.0/ 1.0 | gzip >obix-1.0.tar.gz
 
-    
-TODO: currently the specfile is looking for a local tarball. Pre-release we need to remove this line and uncomment the link to a tarball on Github.
-
 # 5. Running oBIX Server
 
 oBIX Server is implemented as a FastCGI script which can be executed by any HTTP server with FCGI support.
@@ -204,7 +201,7 @@ To start a local lighttpd instance of oBIX:
     $ make
     $ make test
 
-This will start a local instance of lighttpd. You can access the server via: localhost:4242/obix
+This will start a local instance of lighttpd. You can access the server via: localhost:4242/obix (there is a redirect in place from localhost:4242 to /obix).
 
 You can run any of the scripts in the directory **tests/scripts**.
 
@@ -248,8 +245,17 @@ To configure a standalone instance:
     
         $ curl http://localhost/obix/
 
+## 5.3 Firewall
 
-## 5.3 Troubleshooting (Standalone Lighttpd Instance)
+Lighttpd will use port 80 by default. You need to open this port on your firewall.
+
+If you are using iptables, this command will temporarily allow port 80:
+
+```
+/sbin/iptables -A INPUT -m state --state NEW -p tcp --dport 80 -j ACCEPT
+```
+
+## 5.4 Troubleshooting (Standalone Lighttpd Instance)
 
 Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders differ in the case of Self-contained Lighttpd Instance, adjust accordingly.
 
@@ -263,7 +269,7 @@ Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders
 
 * Normally multiple oBIX Server threads would be displayed. However, if no oBIX Server threads are running, it can be helpful to get to know relevant lighttpd error messages:
 
-		$ tail /var/log/lighttpd/error.log
+		$ sudo tail /var/log/lighttpd/error.log
 
 * Strace is very handy to nail down the reason why lighttpd failed to start oBIX Server:
 
@@ -283,3 +289,6 @@ Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders
 
 * If history index files are touched or new log files installed (e.g. for test purposes), be sure to verify the log file abstracts in the index file are consistent with the real log files.
 
+* If obix-fcgi binary failed to find libobix.so, its path can be specified in the "bin-environment" setting of the obix-fcgi.conf file.
+
+* If the oBIX server oops on the fly, gdb can be used to attach to a running instance of the obix-fcgi binary and capture the calltrace on the spot.

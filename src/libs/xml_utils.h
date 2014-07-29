@@ -136,6 +136,8 @@ long xml_get_child_long(const xmlNode *parent, const char *tag,
 
 int xml_is_hidden(const xmlNode *node);
 
+int xml_is_null(const xmlNode *node);
+
 int xml_for_each_ancestor_or_self(xmlNode *child, xml_item_cb_t callback,
 								  void *arg1, void *arg2);
 

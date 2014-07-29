@@ -22,14 +22,14 @@
 #define _HISTORY_H_
 
 #include <libxml/tree.h>
-#include "response.h"
+#include "obix_request.h"
 
 int obix_hist_init(const char *);
 void obix_hist_dispose(void);
 
-xmlNode *handlerHistoryGet(response_t *, const char *, xmlNode *);
-xmlNode *handlerHistoryAppend(response_t *, const char *, xmlNode *);
-xmlNode *handlerHistoryQuery(response_t *, const char *, xmlNode *);
+xmlNode *handlerHistoryGet(obix_request_t *, xmlNode *);
+xmlNode *handlerHistoryAppend(obix_request_t *, xmlNode *);
+xmlNode *handlerHistoryQuery(obix_request_t *, xmlNode *);
 
 int is_history_requests(const char *uri);
 

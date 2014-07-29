@@ -12,15 +12,15 @@ IF (LIBXML2_FOUND)
 ENDIF (LIBXML2_FOUND)
 
 # Standard build flags
-SET (CMAKE_C_FLAGS_DEBUG "-g -Wall")
+SET (CMAKE_C_FLAGS "-g -Wall -Werror")
 
 # Debug build flags. cmake -DCMAKE_BUILD_TYPE=Debug .
-SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND -DDEBUG_CACHE")
+SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND -DDEBUG_CACHE")
 
 # Location to install header files
 SET(INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
 
-ADD_EXECUTABLE(obix-fcgi batch.c history.c libxml_config.c obix_fcgi.c post_handler.c response.c server.c watch.c xml_storage.c)
+ADD_EXECUTABLE(obix-fcgi batch.c history.c libxml_config.c obix_fcgi.c post_handler.c obix_request.c server.c watch.c xml_storage.c)
 
 TARGET_LINK_LIBRARIES(obix-fcgi fcgi rt pthread libobix ${LIBS})
 

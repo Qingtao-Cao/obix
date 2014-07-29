@@ -25,7 +25,7 @@
 
 #include <libxml/tree.h>
 #include "libxml_config.h"
-#include "response.h"
+#include "obix_request.h"
 #include "xml_utils.h"
 
 extern xmlDoc* _storage;
@@ -82,7 +82,7 @@ typedef enum xmldb_dom_action {
 	/*
 	 * Actions for xmldb_delete_node
 	 */
-	DOM_DELETE_EMPTY_PARENT = (1 << 3),
+	DOM_DELETE_EMPTY_PARENT = (1 << 3)
 } xmldb_dom_action_t;
 
 void xmldb_delete_any_hidden(xmlNode *node);
@@ -102,7 +102,7 @@ xmlNode * const xmldb_fatal_error();
  * @remarks             This is an allocating function. It's up to the caller to
  *                      release the memory returned by this function with xmlFreeNode().
  */
-xmlNode *xmldb_dump(response_t *response);
+xmlNode *xmldb_dump(obix_request_t *request);
 
 /**
  * Dumps the full contents of an xmlNode to a string buffer.
@@ -147,12 +147,11 @@ xmldb_errcode_t xmldb_put_node(xmlNode *node, xmldb_dom_action_t action);
  *                      written to the destination href.
  * @param href          URI of the object to be updated.
  * @param updatedNode   An [out] pointer to the node in the XML tree that has been updated
- * @param changed		A pointer to a flag indicating whether changes taken place
  * @returns             An xmldb_errcode_t indicating 0 success on success,
  *                      or a positive value otherwise.
  */
 xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
-								  xmlNode **updatedNode, int *changed);
+								  xmlNode **updatedNode);
 
 /**
  * Retrieves a node from the XML storage by the href pointed to by @a href
@@ -186,7 +185,7 @@ xmlNode *xmldb_copy_sys(const char *sys);
  */
 xmlChar *xmldb_node_path(xmlNode *node);
 
-xmlNode *xmldb_put_ref(const char *lobby, xmlNode *newDevice, int *existed);
+xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed);
 
 xmlNode *xmldb_add_child(xmlNode *parent, xmlNode *node, int unlink, int relative);
 

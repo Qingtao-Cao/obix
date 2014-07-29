@@ -1,5 +1,5 @@
 Name:           obix
-Version:        1.0.4
+Version:        1.1
 Release:        0%{?dist}
 Summary:        ONEDC toolkit
 
@@ -59,7 +59,11 @@ The %{name}-doc package contains documentation for
 
 
 %build
+%if 0%{?rhel}
+cmake -DPROJECT_DOC_DIR_SUFFIX="%{name}-%{version}" .
+%else
 cmake -DPROJECT_DOC_DIR="%{_pkgdocdir}" .
+%endif
 make %{?_smp_mflags} VERBOSE=1
 
 
@@ -100,6 +104,8 @@ exit 0
 %dir %{_sysconfdir}/obix
 %dir %{_sharedstatedir}/obix/histories
 
+# lighttpd server needs to write data to this dir
+%attr(0755,obix,lighttpd) %dir %{_sharedstatedir}/obix/histories
 
 %files devel
 %{_includedir}/obix
@@ -118,6 +124,9 @@ exit 0
 
 
 %changelog
+* Tue Jul 29 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1
+- Updated for 1.1 release
+
 * Mon Jul 28 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.4-0
 - Updated following Fedora packaging review
 

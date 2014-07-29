@@ -34,7 +34,7 @@
 #include "obix_utils.h"
 #include "ptask.h"
 #include "server.h"
-#include "response.h"
+#include "obix_request.h"
 #include "xml_storage.h"
 
 /*
@@ -67,8 +67,8 @@ static int server_threads;
 static const char *CONFIG_FILE = "server_config.xml";
 
 static const char *HTTP_STATUS_OK =
-"Status: 200 OK\r\n"
-"Content-Type: text/xml\r\n";
+	"Status: 200 OK\r\n"
+	"Content-Type: text/xml\r\n";
 
 static const char *HTTP_CONTENT_LOCATION = "Content-Location: %s\r\n";
 static const char *HTTP_CONTENT_LENGTH = "Content-Length: %lu\r\n";
@@ -87,55 +87,54 @@ static void printUsageNotice(char *programName)
 			  programName);
 }
 
-
 /**
  * Decodes a URL-Encoded string.
- * 
+ *
  * See http://www.w3schools.com/tags/ref_urlencode.asp
- * 
+ *
  * @param	dst		A pointer to the destination buffer which holds
- * 					enough bytes to decode the result, which should
- * 					always be strlen(source) + 1 for null terminator
+ *					enough bytes to decode the result, which should
+ *					always be strlen(source) + 1 for null terminator
  *					or less.
  * @param	src		A pointer to the string that is to be decoded.
- * 
+ *
  * @remarks @see http://stackoverflow.com/a/14530993
  */
-void obix_fcgi_url_decode(char *dst, const char *src)
+static void obix_fcgi_url_decode(char *dst, const char *src)
 {
 	char a, b;
-	
+
 	while (*src) {
-		if ((*src == '%') && ((a = src[1]) 
-			&& (b = src[2])) && (isxdigit(a) 
-			&& isxdigit(b))) {
-			
+		if ((*src == '%') &&
+			((a = src[1]) && (b = src[2])) &&
+			(isxdigit(a)  && isxdigit(b))) {
 			if (a >= 'a') {
 				a -= 'a' - 'A';
 			}
+
 			if (a >= 'A') {
 				a -= ('A' - 10);
 			} else {
 				a -= '0';
 			}
-			
+
 			if (b >= 'a') {
 				b -= 'a' - 'A';
 			}
-			
+
 			if (b >= 'A') {
 				b -= ('A' - 10);
 			} else {
 				b -= '0';
 			}
-			
+
 			*dst++ = 16 * a + b;
 			src += 3;
 		} else {
 			*dst++ = *src++;
 		}
 	}
-	
+
 	*dst++ = '\0';
 }
 
@@ -195,51 +194,59 @@ static void obix_fcgi_shutdown()
 	log_debug("FCGI connection has been shutdown");
 }
 
-void obix_fcgi_sendResponse(response_t *response)
+void obix_fcgi_sendResponse(obix_request_t *request)
 {
-	FCGX_Request *request = response->request;
+	FCGX_Request *fcgiRequest = request->request;
 	response_item_t *item, *n;
-	long len = obix_response_get_len(response);
-	int items = obix_response_get_items(response);
+	long len = obix_request_get_response_len(request);
+	int items = obix_request_get_response_items(request);
 	int i = 0;
+	const char *response_uri;
 
 	/* Header section: HTTP/1.1 200 OK */
-	if (FCGX_FPrintF(request->out, "%s", HTTP_STATUS_OK) == EOF) {
+	if (FCGX_FPrintF(fcgiRequest->out, "%s", HTTP_STATUS_OK) == EOF) {
 		log_error("Failed to send HTTP_STATUS_OK header");
 		goto failed;
 	}
 
-	/* Header section: content-location: uri */
-	if (response->uri != NULL) {
-		if (FCGX_FPrintF(request->out, HTTP_CONTENT_LOCATION, response->uri) == EOF) {
-			log_error("Failed to write HTTP \"Content-Location\" header");
-			goto failed;
-		}
+	/*
+	 * Header section: content-location
+	 *
+	 * If response_uri is not set, then fall back on the decoded request_uri.
+	 * This way, handlers can have a chance to specify another URI as the
+	 * Content-Location, for example, for newly generated history facilities
+	 * or watch objects
+	 */
+	response_uri = (request->response_uri != NULL) ?
+					request->response_uri : request->request_decoded_uri;
+	if (FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION, response_uri) == EOF) {
+		log_error("Failed to write HTTP \"Content-Location\" header");
+		goto failed;
 	}
 
 	if (len > 0) {
-		if (FCGX_FPrintF(request->out, HTTP_CONTENT_LENGTH, len) == EOF) {
+		if (FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LENGTH, len) == EOF) {
 			log_error("Failed to write HTTP \"Content-Length\" header");
 			goto failed;
 		}
 	}
 
 	/* Separate headers from response body */
-	if (FCGX_FPrintF(request->out, "%s", HTTP_HEADER_SEPARATOR) == EOF) {
+	if (FCGX_FPrintF(fcgiRequest->out, "%s", HTTP_HEADER_SEPARATOR) == EOF) {
 		log_error("Failed to write delimitor after HTTP headers");
 		goto failed;
 	}
 
-	pthread_mutex_lock(&response->mutex);
-	list_for_each_entry_safe(item, n, &response->items, list) {
+	pthread_mutex_lock(&request->mutex);
+	list_for_each_entry_safe(item, n, &request->response_items, list) {
 		list_del(&item->list);
-		pthread_mutex_unlock(&response->mutex);
+		pthread_mutex_unlock(&request->mutex);
 
 		/*
 		 * Now that the current item has been dequeued, mutex could be
 		 * safely dropped during lengthy operations
 		 */
-		if (FCGX_FPrintF(request->out, "%s", item->body) == EOF) {
+		if (FCGX_FPrintF(fcgiRequest->out, "%s", item->body) == EOF) {
 			goto failed;
 		}
 
@@ -249,10 +256,10 @@ void obix_fcgi_sendResponse(response_t *response)
 		 * Take advantage of this chance to have the response item
 		 * removed as well
 		 */
-		obix_response_destroy_item(item);
-		pthread_mutex_lock(&response->mutex);
+		obix_request_destroy_response_item(item);
+		pthread_mutex_lock(&request->mutex);
 	}
-	pthread_mutex_unlock(&response->mutex);
+	pthread_mutex_unlock(&request->mutex);
 
 	/* Fall through */
 
@@ -271,7 +278,7 @@ static int obix_fcgi_init(xml_config_t *config)
 
 	obix_fcgi_loadConfig(config);
 
-	obix_response_set_listener(&obix_fcgi_sendResponse);
+	obix_request_set_listener(&obix_fcgi_sendResponse);
 
 	if ((error = FCGX_Init()) != 0) {
 		log_error("Failed to initialize FCGI channel: %d", error);
@@ -338,58 +345,50 @@ static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 	return document;
 }
 
-static void obix_handle_request(response_t *response)
+static void obix_handle_request(obix_request_t *request)
 {
-	FCGX_Request *request = response->request;
+	FCGX_Request *fcgiRequest = request->request;
 	xmlDoc *inputDoc = NULL;
-	const char *uri;
 	const char *requestType;
-	char *decodedUri;
-	
 
-	if (!(uri = FCGX_GetParam(FCGI_REQUEST_URI, request->envp)) ||
-		(*uri != '/')) {
+	if (!(request->request_uri = FCGX_GetParam(FCGI_REQUEST_URI, fcgiRequest->envp)) ||
+		(*request->request_uri != '/')) {
 		log_error("Invalid %s in current request", FCGI_REQUEST_URI);
-		obix_server_handleError(response, uri, "Invalid URI");
+		obix_server_handleError(request, "Invalid URI");
 		return;
 	}
 
-	if (!(decodedUri = (char *)malloc(strlen(uri) + 1)) ) {
+	if (!(request->request_decoded_uri = (char *)malloc(strlen(request->request_uri) + 1))) {
 		log_error("Could not allocate enough memory to decode the input URI");
+		obix_server_handleError(request, "Failed to decode input URI");
 		return;
 	}
-	
-	obix_fcgi_url_decode(decodedUri, uri);
-	
-	if (!(requestType = FCGX_GetParam(FCGI_REQUEST_METHOD, request->envp))) {
+
+	obix_fcgi_url_decode(request->request_decoded_uri, request->request_uri);
+
+	if (!(requestType = FCGX_GetParam(FCGI_REQUEST_METHOD, fcgiRequest->envp))) {
 		log_error("Invalid %s in current request", FCGI_REQUEST_METHOD);
-		obix_server_handleError(response, decodedUri, "Missing HTTP verb");
-		goto failed;
+		obix_server_handleError(request, "Missing HTTP verb");
+		return;
 	}
 
 	if (strcmp(requestType, FCGI_REQUEST_METHOD_GET) == 0) {
-		obix_server_handleGET(response, decodedUri);
+		obix_server_handleGET(request);
 	} else if (strcmp(requestType, FCGI_REQUEST_METHOD_PUT) == 0) {
-		inputDoc = obix_fcgi_read(request);
-		obix_server_handlePUT(response, decodedUri, inputDoc);
+		inputDoc = obix_fcgi_read(fcgiRequest);
+		obix_server_handlePUT(request, inputDoc);
 		if (inputDoc != NULL) {
 			xmlFreeDoc(inputDoc);
 		}
 	} else if (strcmp(requestType, FCGI_REQUEST_METHOD_POST) == 0) {
-		inputDoc = obix_fcgi_read(request);
-		obix_server_handlePOST(response, decodedUri, inputDoc);
+		inputDoc = obix_fcgi_read(fcgiRequest);
+		obix_server_handlePOST(request, inputDoc);
 		if (inputDoc != NULL) {
 			xmlFreeDoc(inputDoc);
 		}
 	} else {
-		obix_server_handleError(response, decodedUri, "Illegal HTTP verb");
+		obix_server_handleError(request, "Illegal HTTP verb");
 	}
-	
-	/* Fall through */
-failed:
-	free(decodedUri);
-
-	return;
 }
 
 /*
@@ -407,8 +406,8 @@ failed:
  */
 static void payload(void)
 {
-	FCGX_Request *request = NULL;
-	response_t *response = NULL;
+	FCGX_Request *fcgiRequest = NULL;
+	obix_request_t *request = NULL;
 
 #ifdef DEBUG_VALGRIND
 	int count = 0;
@@ -419,22 +418,22 @@ static void payload(void)
 #ifdef DEBUG_VALGRIND
 		if ((MAX_REQUESTS_SERVED > 0) && (count++ == MAX_REQUESTS_SERVED)) {
 			log_debug("Threshold %d reached, exiting...", MAX_REQUESTS_SERVED);
-			request = NULL;		/* avoid double-free */
+			fcgiRequest = NULL;		/* avoid double-free */
 			break;
 		}
 #endif
 
-		if (!(request = obix_request_create())) {
+		if (!(fcgiRequest = obix_fcgi_request_create())) {
 			log_error("Failed to create FCGI Request structure");
 			break;
 		}
 
-		if (!(response = obix_response_create(request))) {
+		if (!(request = obix_request_create(fcgiRequest))) {
 			log_error("Failed to create Response structure");
 			break;
 		}
 
-		obix_handle_request(response);
+		obix_handle_request(request);
 
 		/*
 		 * The [request, response] pair will be released regardless on error
@@ -448,8 +447,8 @@ static void payload(void)
 #endif
 	}
 
-	if (request) {
-		obix_request_destroy(request);
+	if (fcgiRequest) {
+		obix_fcgi_request_destroy(fcgiRequest);
 	}
 }
 
@@ -493,3 +492,5 @@ config_failed:
 	xmlCleanupParser();
 	return -1;
 }
+
+
