@@ -10,28 +10,41 @@ usage()
 {
 	cat<<EOF
 usage:
-	$0 [ -v ] < -d "device href segment" > < -s "timestamp" > [ -c "content" ]
+	$0 	< -d "device href segment" > < -s "timestamp" >
+		[ -e "kWh" ] [ -p "kW" ] [-v "voltage"]
+		[ -i "current_intensity" ]
 Where
-	-v Verbose mode
 	-d The href segment of the device, e.g., "/M1/DH1/BCM01/CB01/"
 	-s The start timestamp, as in format '$(date +%FT%T)'
-	-c The body of the history record without <obj> and </obj> enclosure
+	-e Total energy consumption
+	-p Power load
+	-v Voltage
+	-i Current intensity
 
 EOF
 }
 
-device= verbose= timestamp= content=
+device= timestamp=
 
-while getopts :vd:s:c: opt
+current_intensity="0.000000"
+voltage="230.000000"
+energy="0.000000"
+power="0.000000"
+
+while getopts :d:s:i:v:p:e: opt
 do
 	case $opt in
 	d)	device=$OPTARG
 		;;
 	s)	timestamp=$OPTARG
 		;;
-	c)	content=$OPTARG
+	i)	current_intensity=$OPTARG
 		;;
-	v)	verbose="-v"
+	v)	voltage=$OPTARG
+		;;
+	e)	energy=$OPTARG
+		;;
+	p)	power=$OPTARG
 		;;
 	esac
 done
@@ -52,8 +65,12 @@ curl $verbose -XPOST --data "
 <obj is=\"obix:historyAppendIn\">
 	<list name=\"data\" of=\"obix:HistoryRecord\">
 		<obj is=\"obix:HistoryRecord\">
-			<abstime name=\"timestamp\" val=\"$timestamp\"/> 
-			<obj data=\"$content\"/>
+			<abstime name=\"timestamp\" val=\"$timestamp\"/>
+			<real name=\"kWh\" val=\"$energy\"/>
+			<real name=\"kW\" val=\"$power\"/>
+			<real name=\"V\" val=\"$voltage\"/>
+			<real name=\"PF\" val=\"0.900000\"/>
+			<real name=\"I\" val=\"$current_intensity\"/>
 		</obj>
 	</list>
 </obj>" \
