@@ -59,7 +59,11 @@ The %{name}-doc package contains documentation for
 
 
 %build
+%if 0%{?rhel}
+cmake -DPROJECT_DOC_DIR_SUFFIX="%{name}-%{version}" .
+%else
 cmake -DPROJECT_DOC_DIR="%{_pkgdocdir}" .
+%endif
 make %{?_smp_mflags} VERBOSE=1
 
 
