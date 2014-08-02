@@ -1,4 +1,5 @@
 # oBIX Server
+
 Providing oBIX Server implementation for C language
  
 Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]    
@@ -182,9 +183,6 @@ See redhat/obix.spec for further details.
 Fedora/RHEL systems can use the specfile redhat/obix.spec, and create a local tarball from git. In this example there is a local git tag named "1.0":
 
     git archive --format=tar --prefix=obix-1.0/ 1.0 | gzip >obix-1.0.tar.gz
-
-    
-TODO: urrently the specfile is looking for a local tarball. Pre-release we need to remove this line and uncomment the link to a tarball on Github.
 
 # 5. Running oBIX Server
 

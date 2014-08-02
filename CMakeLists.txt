@@ -15,7 +15,11 @@ SET(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install dir prefix")
 IF(NOT PROJECT_DOC_DIR)
     SET(PROJECT_DOC_DIR "/usr/share/doc" CACHE PATH "Install dir for docs")
 ENDIF(NOT PROJECT_DOC_DIR)
-    
+
+IF(NOT PROJECT_DOC_DIR_SUFFIX)
+    SET(PROJECT_DOC_DIR_SUFFIX "obix-doc")
+ENDIF(NOT PROJECT_DOC_DIR_SUFFIX)    
+
 # Location of history files.
 IF(NOT OBIX_VAR_LIB_DIR)
     SET(OBIX_VAR_LIB_DIR "/var/lib/obix" CACHE PATH "Var lib directory path")
@@ -103,7 +107,7 @@ INSTALL(FILES "res/obix-fcgi.conf"
 #
 SET(INSTALL_DOCS README.md COPYING)
 INSTALL(FILES ${INSTALL_DOCS}
- DESTINATION "${PROJECT_DOC_DIR}")
+ DESTINATION "${PROJECT_DOC_DIR}/${PROJECT_DOC_DIR_SUFFIX}")
 
     
 ######################################
