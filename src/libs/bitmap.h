@@ -22,7 +22,7 @@
 #define _BITMAP_H
 
 #include <pthread.h>
-#include "list.h"
+#include <list.h>
 
 /**
  * Describes a bitmap node.

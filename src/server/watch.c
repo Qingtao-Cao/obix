@@ -44,7 +44,7 @@
 #include "obix_request.h"
 #include "xml_storage.h"
 #include "ptask.h"
-#include "list.h"
+#include <list.h>
 #include "libxml_config.h"
 #include "log_utils.h"
 #include "obix_utils.h"

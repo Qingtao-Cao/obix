@@ -1,5 +1,5 @@
 Name:           obix
-Version:        1.1
+Version:        1.1.1
 Release:        0%{?dist}
 Summary:        ONEDC toolkit
 
@@ -8,6 +8,7 @@ URL:            https://github.com/ONEDC/obix
 Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz#/obix-%{version}.tar.gz
 
 BuildRequires:  fcgi-devel
+BuildRequires:  kernel-devel
 BuildRequires:  libxml2-devel
 BuildRequires:  cmake >= 2.6
 
@@ -124,6 +125,9 @@ exit 0
 
 
 %changelog
+* Tue Jul 29 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1.1-0
+- Updated for 1.1.1 release
+
 * Tue Jul 29 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1
 - Updated for 1.1 release
 

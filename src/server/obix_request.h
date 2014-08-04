@@ -25,7 +25,7 @@
 
 #include <fcgiapp.h>
 #include <pthread.h>
-#include "list.h"
+#include <list.h>
 
 typedef struct response_item {
 	/* Full or a part of response from oBIX server */
