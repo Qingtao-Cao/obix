@@ -1,6 +1,6 @@
 Name:           obix
 Version:        1.1
-Release:        0%{?dist}
+Release:        1%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
@@ -72,6 +72,7 @@ make DESTDIR=%{buildroot} install
 find %{buildroot} -name '*.la' -exec rm -f {} ';'
 
 ln -sf %{_sharedstatedir}/obix/histories %{buildroot}/%{_sysconfdir}/obix/res/server/
+ln -sf %{_sysconfdir}/obix/res/obix-fcgi.conf %{buildroot}/%{_sysconfdir}/lighttpd/conf.d/
 
 %pre
 getent group obix >/dev/null || groupadd -r obix
@@ -102,7 +103,6 @@ exit 0
 %config(noreplace) %{_sysconfdir}/obix/res/server/sys
 
 %dir %{_sysconfdir}/obix
-%dir %{_sharedstatedir}/obix/histories
 
 # lighttpd server needs to write data to this dir
 %attr(0755,obix,lighttpd) %dir %{_sharedstatedir}/obix/histories
@@ -124,7 +124,10 @@ exit 0
 
 
 %changelog
-* Tue Jul 29 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1
+* Mon Aug 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1-1
+- Updated specfile to use sym link for obix-fcgi.conf
+
+* Tue Jul 29 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1-0
 - Updated for 1.1 release
 
 * Mon Jul 28 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.4-0
