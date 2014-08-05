@@ -1172,7 +1172,7 @@ static int xmldb_node_writable_helper(xmlNode **current, void *arg1, void *arg2)
  * one of its ancestors may have such attribute established.
  *
  * The maximal search depth from the given node all the way to
- * the top level of global DOM tree is decided by the second
+ * the topmost level of global DOM tree is decided by the second
  * parameter.
  *
  * Return 1 if the given node is writable, 0 non-writable.
