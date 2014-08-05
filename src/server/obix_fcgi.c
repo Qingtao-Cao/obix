@@ -38,7 +38,7 @@
 #include "xml_storage.h"
 
 /*
- * This macro will be enabled in the debug verion image built for
+ * This macro will be enabled in the debug version image built for
  * test purpose. The oBIX server will shut down after receiving
  * a certain amount of requests so as to have valgrind check its
  * memory usage during the shutdown procedure.
@@ -233,7 +233,7 @@ void obix_fcgi_sendResponse(obix_request_t *request)
 
 	/* Separate headers from response body */
 	if (FCGX_FPrintF(fcgiRequest->out, "%s", HTTP_HEADER_SEPARATOR) == EOF) {
-		log_error("Failed to write delimitor after HTTP headers");
+		log_error("Failed to write delimiter after HTTP headers");
 		goto failed;
 	}
 
@@ -294,7 +294,7 @@ static int obix_fcgi_init(xml_config_t *config)
  * in 2 kiB chunks.
  *
  * @param	request	A pointer to the FastCGI request structure containing bytes
- *					recieved from the client
+ *					received from the client
  * @returns		A pointer to the XML document parsed as a result of the stream,
  *				or NULL if no valid XML document could be understood from the client.
  * @remark		This is an allocating function.  It's up to the caller to free the memory

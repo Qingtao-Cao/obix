@@ -437,7 +437,7 @@ void obix_server_reply_object(obix_request_t *request, xmlNode *obixObject)
 	 * Due to the fact that glibc free() won't nullify the released memory
 	 * region(for sake of performance) it is insufficient to only check
 	 * the response pointer, since it may point to somewhere already freed.
-	 * Its request pointer should be checked as well, which whill have been
+	 * Its request pointer should be checked as well, which will have been
 	 * nullified deliberately in obix_response_destroy
 	 */
 	if (!request || !request->request) {

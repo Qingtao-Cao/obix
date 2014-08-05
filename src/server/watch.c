@@ -24,7 +24,7 @@
  *	. no limitation on the number of watches
  *	. no limitation on the number of objects monitored by one watch
  *	. no limitation on the number of oBIX clients sharing one watch
- *	. multiple watches able to monitor one same object, in particuar,
+ *	. multiple watches able to monitor one same object, in particular,
  *	  nested watches installed at different levels in one subtree
  *	. long poll mechanism
  *	. support parallelism and thread safe, specifically, multiple long
@@ -60,7 +60,7 @@ typedef struct watch_set {
 	/* The bitmap to get ID for the next watch object, starting from 0 */
 	bitmap_t *map;
 
-	/* The deamon to lease idle watch objects */
+	/* The daemon to lease idle watch objects */
 	Task_Thread *lease_thread;
 
 	/* All watch objects' queue */
@@ -124,7 +124,7 @@ typedef struct watch {
 	/*
 	 * The number of poll tasks for this watch. The changes indicators
 	 * in both watch and watch item should not be reset unless for the
-	 * last poll task otherwise only the first poll task could havest
+	 * last poll task otherwise only the first poll task could harvest
 	 * the changes
 	 */
 	int tasks_count;
@@ -164,7 +164,7 @@ typedef struct watch_item {
 
 	/*
 	 * Pointing to the meta node installed by this watch object
-	 * as children of the minitored object
+	 * as children of the monitored object
 	 */
 	xmlNode *meta;
 
@@ -301,7 +301,7 @@ static err_msg_t watch_err_msg[] = {
 /* 2^32 = 4,294,967,296, containing 10 digits */
 #define WATCH_ID_MAX_BITS	10
 
-/* The default lease time, in milisecond, of a watch object */
+/* The default lease time, in millisecond, of a watch object */
 #define WATCH_LEASE_DEF		(24*60*60*1000)
 
 /* Template of the watch object URI */
@@ -319,7 +319,7 @@ static const char *WATCH_ID_PREFIX = "watch";
  *
  *		watchService/0/watch0 ~ watch63
  *		watchService/1/watch64 ~ watch127
- *		watchServuie/2/watch128 ~ watch191
+ *		watchService/2/watch128 ~ watch191
  *		...
  */
 static const int MAX_WATCHES_PER_FOLDER = 64;
@@ -960,7 +960,7 @@ static void delete_watch_helper(watch_t *watch)
  * have been dequeued by THAT thread already.
  *
  * Note,
- * 1. Thanks to the fact that threads handling Watch.Delete reuquests
+ * 1. Thanks to the fact that threads handling Watch.Delete requests
  * will wait for relevant lease tasks to be finished in the first place,
  * it's safe for the latter to hold a pointer to relevant watch object.
  */
@@ -1024,7 +1024,7 @@ static watch_t *create_watch(void)
 	 * their direct parent nodes may not exist yet
 	 */
 	if (xmldb_put_node(watch->node, DOM_CREATE_ANCESTORS) != 0) {
-		log_error("Failed to resgister %s node to DOM tree", watch->uri);
+		log_error("Failed to register %s node to DOM tree", watch->uri);
 		goto dom_failed;
 	}
 
@@ -1044,7 +1044,7 @@ static watch_t *create_watch(void)
 		return NULL;
 	}
 
-	/* Fianlly, enlist the new watch into global list */
+	/* Finally, enlist the new watch into global list */
 	pthread_mutex_lock(&watchset->mutex);
 	list_add_tail(&watch->list, &watchset->watches);
 	pthread_mutex_unlock(&watchset->mutex);
@@ -1262,7 +1262,7 @@ static void poll_backlog_dispose(poll_backlog_t *bl)
 
 	/*
 	 * Raise the shutting down flag and wake up poll threads that
-	 * are being blocked for any oustanding poll tasks.
+	 * are being blocked for any outstanding poll tasks.
 	 *
 	 * Although only one thread can grab the backlog->mutex at any
 	 * one time, it will release the mutex before calling pthread_exit()
@@ -1296,7 +1296,7 @@ static void poll_backlog_dispose(poll_backlog_t *bl)
 	 * terminated, no mutex is ever needed any more.
 	 */
 	if (list_empty(&bl->list_all) == 0) {
-		log_warning("Dangling poll tasks found (Shouldn't happend!)");
+		log_warning("Dangling poll tasks found (Shouldn't happen!)");
 		list_for_each_entry_safe(task, n, &bl->list_all, list_all) {
 			list_del(&task->list_all);
 			do_and_free_task(task);
@@ -1634,7 +1634,7 @@ static int create_poll_task(watch_t *watch, long expiry,
 	request->no_reply = 1;
 
 	clock_gettime(CLOCK_REALTIME, &task->expiry); /* since now on */
-	task->expiry.tv_sec += expiry / 1000;		/* in miliseconds */
+	task->expiry.tv_sec += expiry / 1000;		/* in milliseconds */
 	task->expiry.tv_nsec += (expiry % 1000) * 1000;
 
 	task->request = request;
@@ -1903,7 +1903,7 @@ retry:
 
 		/*
 		 * Wait until the first poll task is expired or any poll tasks
-		 * neends to be attended for changes already taken place
+		 * needs to be attended for changes already taken place
 		 */
 		while (list_empty(&bl->list_active) == 1 &&
 			   get_expired_task(bl, &closest_expiry) == NULL &&

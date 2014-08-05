@@ -102,7 +102,7 @@ static xmlNode *__xmldb_fatal_error;
  * given node or its parent are writable
  *
  * The limitation on searching depth is introduced to help reduce
- * potential mistake of inadvertantly setting up 'writable="true"'
+ * potential mistake of inadvertently setting up 'writable="true"'
  * attribute to one node which will result in any of its descendants
  * writable
  */
@@ -256,7 +256,7 @@ static int xmldb_invalid_cache_helper(xmlNode **current, void *arg1, void *arg2)
  * will bring about segfault.
  *
  * Furthermore, in a less likely case that a node's href is
- * changed, relvant cache node would have to be invalidated as
+ * changed, relevant cache node would have to be invalidated as
  * well.
  */
 static void xmldb_invalid_cache(xmlNode *root)
@@ -381,7 +381,7 @@ out:
 
 /**
  * Sets the href attribute of every single node in the given
- * subtree relative, that is, not preceded or folllowed by
+ * subtree relative, that is, not preceded or followed by
  * any slashes.
  *
  * @param node		A pointer to xmlNode structure containing
@@ -444,7 +444,7 @@ xmlNode *xmldb_add_child(xmlNode *parent, xmlNode *node,
  * been deleted.
  *
  * Anyway, a "null" object will help notify clients that relevant
- * object does not exist anymore.
+ * object does not exist any more.
  */
 xmlNode *xmldb_copy_node(const xmlNode *orig, xml_copy_exclude_flags_t flag)
 {
@@ -799,7 +799,7 @@ out:
  *                          information.
  * @returns                 A pointer to the newly created obix:List XML subtree
  *                          with all the FastCGI variables listed as <str>'s in it,
- *                          or NULL if an error occured.
+ *                          or NULL if an error occurred.
  * @remark                  This is an allocating function.  It's up to the caller
  *                          to free the memory returned from this function with xmlFree().
  */
@@ -826,7 +826,7 @@ static xmlNode *xmldb_fcgi_var_list(obix_request_t *request)
 
 	for (envp = request->request->envp; *envp != NULL; ++envp) {
 		if (!(curEnvNode = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_STR, NULL))) {
-			log_error("Failed to allocate the oBIX:str value for FCGI varabile");
+			log_error("Failed to allocate the oBIX:str value for FCGI variable");
 			break;
 		}
 
@@ -1032,9 +1032,9 @@ static int xmldb_create_ancestors_helper(const char *token, void *arg1,
  * all the way down to the node with the specified href
  *
  * Note,
- * 1. Practice caution when calling this function since mis-use
+ * 1. Practice caution when calling this function since misuse
  * will easily lead to a mess in the global DOM tree. Therefore
- * this fucntion should not be used by signUp handler
+ * this function should not be used by signUp handler
  */
 static xmlNode *xmldb_create_ancestors(const xmlChar *href)
 {
@@ -1172,7 +1172,7 @@ static int xmldb_node_writable_helper(xmlNode **current, void *arg1, void *arg2)
  * one of its ancestors may have such attribute established.
  *
  * The maximal search depth from the given node all the way to
- * the topest level of global DOM tree is decided by the second
+ * the top level of global DOM tree is decided by the second
  * parameter.
  *
  * Return 1 if the given node is writable, 0 non-writable.
@@ -1281,7 +1281,7 @@ static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
 			 * to the global DOM tree.
 			 *
 			 * Also, set any descendants' href relative so as to ensure
-			 * href consisitency in the global DOM tree.
+			 * href consistency in the global DOM tree.
 			 */
 			if (xmldb_add_child(to, child, 1, 1) == NULL) {
 				xmlFreeNode(child);
@@ -1331,7 +1331,7 @@ static int xmldb_load_files_helper(const char *dir, const char *file)
 
 	/**
 	 * If the root node of the current XML document already exists
-	 * in the DOM tree and is not a refernece, re-parent all its
+	 * in the DOM tree and is not a reference, re-parent all its
 	 * children to that node.
 	 *
 	 * Otherwise, add the whole root subtree under its parent,
@@ -1474,7 +1474,7 @@ int xmldb_init(const xml_config_t *context)
 	}
 
 	if (!(__xmldb_fatal_error = xmldb_copy_sys(OBIX_SYS_FATAL_ERROR_STUB))) {
-		log_error("Failed to allocate the fatel Error contract.");
+		log_error("Failed to allocate the fatal Error contract.");
 		goto failed;
 	}
 
@@ -1522,8 +1522,8 @@ void xmldb_dispose()
  * Update the target node according to the input subtree.
  *
  * NOTE:
- * A device contract that was signed up eariler can have its subtree
- * addded or deleted, as long as they are writable in the first place.
+ * A device contract that was signed up earlier can have its subtree
+ * added or deleted, as long as they are writable in the first place.
  *
  * However, any signed up contract cannot be removed via a write
  * operation, clients would have to go through the signOff procedure
@@ -1639,7 +1639,7 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 	if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_REF) != 0) {
 		/*
 		 * NOTE:
-		 * In theroy, input node should be directly passed in as
+		 * In theory, input node should be directly passed in as
 		 * the first parameter since its children will be unlinked and
 		 * then reparented to the target node.
 		 *
