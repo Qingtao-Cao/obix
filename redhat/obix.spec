@@ -125,7 +125,7 @@ exit 0
 
 
 %changelog
-* Mon Aug 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1-1
+* Mon Aug 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1-1-1
 - Updated specfile to use sym link for obix-fcgi.conf
 
 * Tue Jul 29 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1.1-0
