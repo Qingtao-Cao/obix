@@ -90,17 +90,20 @@ SET (CMAKE_LINKER "/usr/bin/ld")
 # Install the res directory structure into /etc/obix
 #
 FILE(MAKE_DIRECTORY "${CMAKE_BUILD_DIR}/obix")
+FILE(MAKE_DIRECTORY "${CMAKE_BUILD_DIR}/lighttpd/conf.d")
 INSTALL(DIRECTORY "${CMAKE_BUILD_DIR}/obix"
+    DESTINATION "/etc")
+INSTALL(DIRECTORY "${CMAKE_BUILD_DIR}/lighttpd"
     DESTINATION "/etc")
 INSTALL(DIRECTORY "res"
     DESTINATION "${OBIX_ETC_DIR}")
 
 
 ######################################
-# Install obix-fcgi.conf into /etc/lighttpd/conf.d/
-#
-INSTALL(FILES "res/obix-fcgi.conf"
-    DESTINATION "${LIGHTTPD_CONF_DIR}")
+# Link obix-fcgi.conf to /etc/lighttpd/conf.d/
+INSTALL(CODE "
+        EXECUTE_PROCESS(COMMAND ln -s ${OBIX_ETC_DIR}/res/obix-fcgi.conf ${LIGHTTPD_CONF_DIR})
+        ")
 
 ######################################
 # Install docs

@@ -33,7 +33,7 @@
 #include <sys/uio.h>
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
-#include "list.h"		/* list_head */
+#include <list.h>		/* list_head */
 #include "log_utils.h"
 #include "obix_utils.h"
 #include "xml_utils.h"
@@ -184,7 +184,7 @@ static const char *XP_HIST_RECORDS = "./obj[@is='obix:HistoryFileAbstract']";
  * the get request with a unique device id that this history
  * facility is created for.
  *
- * Initialially it will be populated with an index skeleton,
+ * Initially it will be populated with an index skeleton,
  * then abstract(obix:HistoryFileAbstract) for each log file
  * named after the date when data generated.
  */
@@ -1260,7 +1260,7 @@ static char *parse_log(char *data,
 
 		n += strlen(RECORD_END);	/* Next byte after the end of current record */
 
-		/* Move the desirable record to eariler part of data buf */
+		/* Move the desirable record to earlier part of data buf */
 		if (w == p) {
 			w = n;
 		} else {

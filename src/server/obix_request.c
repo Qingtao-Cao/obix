@@ -245,7 +245,7 @@ void obix_request_append_response_item(obix_request_t *request, response_item_t 
  * caller should specify copy == 0 for dynamically allocated
  * strings so that they can be released on behalf of their
  * creator, whereas copy == 1 for those static strings so
- * that the copy instead of the orignal, static ones will be
+ * that the copy instead of the original, static ones will be
  * released.
  *
  * 2. On failure callers should pay attention to release
