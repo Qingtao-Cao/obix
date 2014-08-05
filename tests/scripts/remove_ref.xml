@@ -1,4 +1,0 @@
-<?xml version="1.0"?>
-<obj name="reset" href="/obix/deviceRoot/example/parent/reset" val="true">
-	<ref name="int_ref" href="/obix/deviceRoot/TestDevice/int" null="true"/>
-</obj>

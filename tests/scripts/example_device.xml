@@ -5,15 +5,13 @@
 	The root node of the contract deliberately has the writable="true" setup
 	so as to test that the signUp handler will always have it removed.
 
-	Moreover, any writable attribute on any descendant won't be touched,
-	therefore a device contract can have its subnodes added or deleted.
-
-	However, since the device contract itself is not writable, once a direct
-	subnode is removed, it cannot be re-installed.
+	Moreover, the "reset" sub node has an absolute href, however, the signUp
+	handler will always trim absolute href down to relative href, except
+	for any ref node of course.
 -->
 <obj name="ExampleDevice" href="/obix/deviceRoot/example" writable="true">
-	<obj href="parent" val="yes" writable="true">
+	<obj href="parent">
 		<reltime name="time" href="time" val="PT0S"/>
-		<bool name="reset" href="/oibx/deviceRoot/example/parent/reset" val="false"/>
+		<bool name="reset" href="/obix/deviceRoot/example/parent/reset" val="false"/>
 	</obj>
 </obj>
