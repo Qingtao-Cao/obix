@@ -8,6 +8,7 @@ URL:            https://github.com/ONEDC/obix
 Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz#/obix-%{version}.tar.gz
 
 BuildRequires:  fcgi-devel
+BuildRequires:  kernel-devel
 BuildRequires:  libxml2-devel
 BuildRequires:  cmake >= 2.6
 
@@ -127,8 +128,8 @@ exit 0
 * Mon Aug 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1-1
 - Updated specfile to use sym link for obix-fcgi.conf
 
-* Tue Jul 29 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1-0
-- Updated for 1.1 release
+* Tue Jul 29 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1.1-0
+- Updated for 1.1.1 release
 
 * Mon Jul 28 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.0.4-0
 - Updated following Fedora packaging review

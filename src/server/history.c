@@ -33,7 +33,7 @@
 #include <sys/uio.h>
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
-#include "list.h"		/* list_head */
+#include <list.h>		/* list_head */
 #include "log_utils.h"
 #include "obix_utils.h"
 #include "xml_utils.h"
