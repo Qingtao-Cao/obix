@@ -25,3 +25,4 @@ tests/lighttpd/log/error.log
 tests/lighttpd/run/lighttpd.pid
 tests/tests/obix-fcgi
 install_manifest.txt
+cmake_install.cmake
