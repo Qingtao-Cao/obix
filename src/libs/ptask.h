@@ -84,9 +84,13 @@
  * under normal circumstances, used to verify that
  * nobody uses non-initialized pointers
  */
+#ifndef LIST_POISON1
 #define LIST_POISON1 ((void *) 0x00100100)
-#define LIST_POISON2 ((void *) 0x00200200)
+#endif
 
+#ifndef LIST_POISON2
+#define LIST_POISON2 ((void *) 0x00200200)
+#endif
 
 /**
  * Specifies that the task should be executed indefinite number of times
