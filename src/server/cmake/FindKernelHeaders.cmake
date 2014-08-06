@@ -7,7 +7,7 @@ execute_process(
 
 # Find the headers
 find_path(KERNELHEADERS_DIR
-  NAMES list.h
+  NAMES include/linux/list.h
   PATHS /usr/src/kernels/${KERNEL_RELEASE}
 )
 

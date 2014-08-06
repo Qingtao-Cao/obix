@@ -3,6 +3,7 @@ BUILD/
 build*
 BUILDROOT
 CMakeCache.txt
+cmake_install.cmake
 CTestTestfile.cmake
 CMakeFiles
 libtool
