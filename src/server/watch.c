@@ -50,8 +50,6 @@
 #include "xml_utils.h"
 #include "bitmap.h"
 #include "watch.h"
-#undef LIST_POISON1
-#undef LIST_POISON2
 #include "ptask.h"
 
 /*

@@ -22,9 +22,14 @@
 
 #include <ctype.h>
 #include <assert.h>
+#include <pthread.h>
 #include "log_utils.h"
 #include "server.h"
-#include <pthread.h>
+#include "obix_request.h"
+
+#ifdef DEBUG_CACHE
+#include "xml_storage.h"
+#endif
 
 /*
  * This macro will be enabled in the debug version image built for

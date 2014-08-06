@@ -24,8 +24,7 @@
 #define _OBIX_REQUEST_H
 
 #include <fcgiapp.h>
-#include <fcgiapp.h>
-#include <my_list.h>
+#include "my_list.h"
 
 typedef struct response_item {
 	/* Full or a part of response from oBIX server */

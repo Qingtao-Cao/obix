@@ -19,16 +19,12 @@
  *
  * *****************************************************************************/
 
-
-#include <linux/stddef.h>
 #include <assert.h>
-#include <libxml/tree.h>
 #include "log_utils.h"
 #include "obix_utils.h"
 #include "xml_utils.h"
 #include "xml_storage.h"
-#include "server.h" 
-#include "my_list.h"
+#include "server.h"
 
 /*
  * XPath Predict for any node contained in obix:BatchIn contract
