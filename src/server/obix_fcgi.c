@@ -22,20 +22,9 @@
 
 #include <ctype.h>
 #include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <fcgiapp.h>
-#include <pthread.h>
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-#include "libxml_config.h"
 #include "log_utils.h"
-#include "obix_utils.h"
-#include "ptask.h"
 #include "server.h"
-#include "obix_request.h"
-#include "xml_storage.h"
+#include <pthread.h>
 
 /*
  * This macro will be enabled in the debug version image built for
