@@ -1535,19 +1535,51 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 	xmldb_errcode_t result;
 	xmlNode *node, *copy, *parent;
 	xmlChar *newValue, *oldValue;
+	char *href_src, *href_dst, *href_copy;
 	int ret, changed = 0;
 
 	/*
-	 * Find the target node and check if either it or
-	 * its parent is writable
+	 * Find the target node and perform some sanity checks on the
+	 * input node - tags should always be the same, either names
+	 * or hrefs should be the same
+	 *
+	 * NOTE:
+	 * Ref nodes can't be addressed by their hrefs, therefore node
+	 * won't points to a ref node at all
 	 */
 	if (!(node = xmldb_get_node(BAD_CAST href))) {
 		return ERR_UPDATE_NODE_NO_SUCH_URI;
 	}
 
+	/* tags mismatch */
+	if (xmlStrcmp(node->name, input->name) != 0) {
+		return ERR_UPDATE_NODE_BAD_INPUT;
+	}
+
+	/* check on href only if provided */
+	href_src = (char *)xmlGetProp(input, BAD_CAST OBIX_ATTR_HREF);
+	if (href_src) {
+		if (!(href_copy = strdup(href))) {
+			free(href_src);
+			return ERR_UPDATE_NODE_NO_MEM;
+		}
+
+		href_dst = (slash_preceded(href_src) == 1) ? href_copy : basename(href_copy);
+
+		ret = strcmp(href_dst, href_src);
+		free(href_src);
+		free(href_copy);
+
+		if (ret != 0) {
+			return ERR_UPDATE_NODE_BAD_INPUT;
+		}
+	}
+
 	*updatedNode = node;
 
 	/*
+	 * Check if the target node or its parent is writable
+	 *
 	 * If null="true" is set in the request, delete the target node
 	 * directly, in which case no children of the input subtree should
 	 * be cared about at all
@@ -1635,33 +1667,30 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 
 	/*
 	 * Reparent any children from the input subtree to the target node
+	 *
+	 * NOTE:
+	 * In theory, input node should be directly passed in as
+	 * the first parameter since its children will be unlinked and
+	 * then reparented to the target node.
+	 *
+	 * However, unfortunately, xmlUnlinkNode alone is not sufficient
+	 * to cut off the connections between the input node and its
+	 * children, after the input node is deleted (along with its owner
+	 * document), the tags of its children in the global DOM tree will
+	 * be removed as well.
+	 *
+	 * A workaround is to make a copy of the input node
 	 */
-	if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_REF) != 0) {
-		/*
-		 * NOTE:
-		 * In theory, input node should be directly passed in as
-		 * the first parameter since its children will be unlinked and
-		 * then reparented to the target node.
-		 *
-		 * However, unfortunately, xmlUnlinkNode alone is not sufficient
-		 * to cut off the connections between the input node and its
-		 * children, after the input node is deleted (along with its owner
-		 * document), the tags of its children in the global DOM tree will
-		 * be removed as well.
-		 *
-		 * A workaround is to make a copy of the input node
-		 */
-		copy = xml_copy(input, XML_COPY_EXCLUDE_COMMENTS);
-		ret = xmldb_reparent_children(copy, node);
-		xmlFreeNode(copy);	/* Only needed when the input is copied */
+	copy = xml_copy(input, XML_COPY_EXCLUDE_COMMENTS);
+	ret = xmldb_reparent_children(copy, node);
+	xmlFreeNode(copy);	/* Only needed when the input is copied */
 
-		if (ret < 0) {
-			result = ERR_UPDATE_NODE_REPARENT;
-			goto failed;
-		}
-
-		changed += ret;
+	if (ret < 0) {
+		result = ERR_UPDATE_NODE_REPARENT;
+		goto failed;
 	}
+
+	changed += ret;
 
 	/*
 	 * Lastly, notify watches monitoring the target node or any of
