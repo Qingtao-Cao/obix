@@ -55,6 +55,7 @@ This project has been created for running on Linux platforms. It was tested on v
 Other Linux distributions for embedded devices were not tested but may possibly be used if all project dependencies are satisfied.
 
 The project has the following libraries or packages dependencies:
+ - kernel-devel
  - fcgi-devel
  - libxml2-devel
  - glibc-devel
