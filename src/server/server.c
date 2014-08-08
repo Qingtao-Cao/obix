@@ -114,6 +114,10 @@ static err_msg_t server_err_msg[] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
 		.msgs = "Failed to reparent children of input doc to the XML database"
 	},
+	[ERR_XMLDB_ERR_OFFSET + ERR_UPDATE_NODE_BAD_INPUT] = {
+		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
+		.msgs = "The input root node mis-matches with the target node"
+	},
 	[ERR_XMLDB_ERR_OFFSET + ERR_PUT_NODE_NO_HREF] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
 		.msgs = "No href in the provided node"

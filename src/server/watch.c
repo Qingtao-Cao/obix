@@ -43,8 +43,6 @@
 #include <libxml/xpath.h>
 #include "obix_request.h"
 #include "xml_storage.h"
-#include "ptask.h"
-#include <list.h>
 #include "libxml_config.h"
 #include "log_utils.h"
 #include "obix_utils.h"
@@ -52,6 +50,7 @@
 #include "xml_utils.h"
 #include "bitmap.h"
 #include "watch.h"
+#include "ptask.h"
 
 /*
  * Descriptor of all watch objects on the oBIX server
