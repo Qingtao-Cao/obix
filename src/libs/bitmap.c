@@ -24,8 +24,6 @@
  * watches allowable on the oBIX server
  */
 
-#include <stdlib.h>
-#include <string.h>
 #include "bitmap.h"
 
 /*

@@ -1,6 +1,6 @@
 Name:           obix
-Version:        1.1.1
-Release:        1%{?dist}
+Version:        1.1.2
+Release:        0%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
@@ -125,6 +125,9 @@ exit 0
 
 
 %changelog
+* Fri Aug 08 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1.2-0
+- Updated for 1.1.2 release
+
 * Mon Aug 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1.1-1
 - Updated specfile to use sym link for obix-fcgi.conf
 

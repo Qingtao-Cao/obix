@@ -8,11 +8,16 @@
 	The attempt to change the val attribute also requires the target node
 	itself is writable.
 
-	Lastly, newly provided nodes are simply added to the target node,
-	regardless of whether they are writable or not.
+	However, newly provided nodes are simply added to the target node,
+	regardless of whether the latter is writable or not.
+
+	Lastly, now that the target node has been precisely specified by
+	the request URI, the input root node may have an absolute href, or
+	relative href, or even no href at all. However, its tag name must
+	match with that of the target node.
 -->
-<obj name="reset" href="/obix/deviceRoot/example/parent/reset">
+<bool href="/obix/deviceRoot/example/parent/reset">
 	<ref name="int_ref" href="/obix/deviceRoot/TestDevice/int" null="true"/>
 	<bool name="bool" href="bool" val="false"/>
 	<str name="string" href="string" writable="true"/>
-</obj>
+</bool>

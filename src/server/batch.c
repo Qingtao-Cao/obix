@@ -20,7 +20,6 @@
  * *****************************************************************************/
 
 #include <assert.h>
-#include <libxml/tree.h>
 #include "log_utils.h"
 #include "obix_utils.h"
 #include "xml_utils.h"
