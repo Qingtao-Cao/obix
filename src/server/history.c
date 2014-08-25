@@ -699,11 +699,22 @@ static void hist_create_file_wrapper(xmlNode *node, void *arg1, void *arg2)
  * Setup and register a XML node for a device, which bridges
  * the device's index subtree with that of global DOM tree
  *
- * Return the address of relevant XML node on success, NULL otherwise
+ * Return the address of relevant XML node on success, NULL
+ * otherwise
+ *
+ * NOTE: If the given devhref happens to be an ancestor of the
+ * href of existing history facility, then its corresponding
+ * node would have been established already because of the
+ * usage of the DOM_CREATE_ANCESTORS option.
  */
 static xmlNode *create_devnode(const char *devhref)
 {
 	xmlNode *node;
+
+	if ((node = xmldb_get_node((xmlChar *)devhref)) != NULL) {
+		log_debug("Ancestor history facility already created at %s", devhref);
+		return node;
+	}
 
 	if (!(node = xmldb_copy_sys(OBIX_SYS_HIST_DEV_STUB))) {
 		log_error("Failed to get a %s object", OBIX_SYS_HIST_DEV_STUB);
@@ -715,7 +726,16 @@ static xmlNode *create_devnode(const char *devhref)
 		goto failed;
 	}
 
-	if (xmldb_put_node(node, DOM_CREATE_ANCESTORS) != 0) {
+	/*
+	 * NO DOM_CHECK_SANITY is used since the node with the
+	 * given href has been assured not existing
+	 *
+	 * Also, only the XML nodes for ancestor hrefs may be created
+	 * if needed, however, NO parent history facilities will ever
+	 * be created because no descriptors nor index files would have
+	 * been created.
+	 */
+	if (xmldb_put_node(node, DOM_CREATE_ANCESTORS_HIST) != 0) {
 		log_error("Failed to add node with href %s into XML database", devhref);
 		goto failed;
 	}
@@ -849,7 +869,7 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 	char *href = NULL;
 	int ret;
 
-	assert(dev_id && indexpath); /* devhref is NULL when starting up from disk */
+	assert(dev_id && indexpath);
 
 	if (!(dev = (obix_hist_dev_t *)malloc(sizeof(obix_hist_dev_t)))) {
 		log_error("Failed to allocae history facility for %s", dev_id);

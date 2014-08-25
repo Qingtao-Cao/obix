@@ -87,6 +87,15 @@ typedef struct list_href {
 	struct list_head list;
 } list_href_t;
 
+/*
+ * The type of the stub that new node should be cloned from
+ */
+typedef enum xmldb_stub_type {
+	STUB_NORMAL = 0,
+	STUB_HISTORY = 1
+}xmldb_stub_type_t;
+
+
 /* The place where all data is stored. */
 xmlDoc *_storage = NULL;
 
@@ -1008,11 +1017,19 @@ char *xmldb_dump_node(const xmlNode *node)
 static int xmldb_create_ancestors_helper(const char *token, void *arg1,
 										 void *arg2)
 {
-	xmlNode *parent = *(xmlNode **)arg1;	/* arg2 is ignored */
+	xmlNode *parent = *(xmlNode **)arg1;
+	xmldb_stub_type_t *type = (xmldb_stub_type_t *)arg2;
 	xmlNode *node;
 
 	if (!(node = xml_find_child(parent, NULL, OBIX_ATTR_HREF, token))) {
-		if (!(node = xmlNewNode(NULL, BAD_CAST OBIX_OBJ))) {
+
+		if (*type == STUB_NORMAL) {
+			node = xmlNewNode(NULL, BAD_CAST OBIX_OBJ);
+		} else  if (*type == STUB_HISTORY) {
+			node = xmldb_copy_sys(OBIX_SYS_HIST_DEV_STUB);
+		}
+
+		if (!node) {
 			return -1;
 		}
 
@@ -1036,12 +1053,13 @@ static int xmldb_create_ancestors_helper(const char *token, void *arg1,
  * will easily lead to a mess in the global DOM tree. Therefore
  * this function should not be used by signUp handler
  */
-static xmlNode *xmldb_create_ancestors(const xmlChar *href)
+static xmlNode *xmldb_create_ancestors(const xmlChar *href,
+									   xmldb_stub_type_t *type)
 {
 	xmlNode *parent = xmlDocGetRootElement(_storage);
 
 	if (for_each_str_token(STR_DELIMITER_SLASH, (const char *)href,
-						   xmldb_create_ancestors_helper, &parent, NULL) < 0) {
+						   xmldb_create_ancestors_helper, &parent, type) < 0) {
 		parent = NULL;
 	}
 
@@ -1070,6 +1088,7 @@ xmldb_errcode_t xmldb_put_node(xmlNode *node, xmldb_dom_action_t action)
 	xmlChar *href = NULL;
 	xmlChar *parentHref = NULL;
 	int ret;
+	xmldb_stub_type_t type = STUB_NORMAL;
 
 	assert(node);
 
@@ -1084,11 +1103,16 @@ xmldb_errcode_t xmldb_put_node(xmlNode *node, xmldb_dom_action_t action)
 	}
 
 	if (!(parentNode = xmldb_get_node(parentHref))) {
-		if ((action & DOM_CREATE_ANCESTORS) == 0) {
+		if ((action & (DOM_CREATE_ANCESTORS |
+					   DOM_CREATE_ANCESTORS_HIST)) == 0) {
 			ret = ERR_PUT_NODE_NO_PARENT_OBJ;
 			goto failed;
 		} else {
-			if (!(parentNode = xmldb_create_ancestors(parentHref))) {
+			if ((action & DOM_CREATE_ANCESTORS_HIST) > 0) {
+				type = STUB_HISTORY;
+			}
+
+			if (!(parentNode = xmldb_create_ancestors(parentHref, &type))) {
 				ret = ERR_PUT_NODE_NO_PARENT_OBJ;
 				goto failed;
 			}

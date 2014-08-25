@@ -79,11 +79,12 @@ typedef enum xmldb_dom_action {
 	DOM_CHECK_SANITY = 1,
 	DOM_CREATE_ANCESTORS = (1 << 1),
 	DOM_NOTIFY_WATCHES = (1 << 2),
+	DOM_CREATE_ANCESTORS_HIST = (1 << 3),
 
 	/*
 	 * Actions for xmldb_delete_node
 	 */
-	DOM_DELETE_EMPTY_PARENT = (1 << 3)
+	DOM_DELETE_EMPTY_PARENT = (1 << 4)
 } xmldb_dom_action_t;
 
 void xmldb_delete_any_hidden(xmlNode *node);
