@@ -1294,7 +1294,7 @@ static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
 	return count;
 }
 
-static int xmldb_load_files_helper(const char *dir, const char *file)
+static int xmldb_load_files_helper(const char *dir, const char *file, void *arg)
 {
 	xmlDoc *doc = NULL;
 	xmlNode *root = NULL;
@@ -1399,7 +1399,7 @@ static int xmldb_load_files(const xml_config_t *context)
 	}
 
 	if (for_each_file_name(dir, SERVER_DB_FILE_PREFIX, SERVER_DB_FILE_SUFFIX,
-						   xmldb_load_files_helper) < 0) {
+						   xmldb_load_files_helper, NULL) < 0) {
 		log_error("Failed to load XML files under %s", dir);
 		free(dir);
 		return -1;
@@ -1413,7 +1413,7 @@ static int xmldb_load_files(const xml_config_t *context)
 	}
 
 	if (for_each_file_name(dir, SERVER_DB_FILE_PREFIX, SERVER_DB_FILE_SUFFIX,
-						   xmldb_load_files_helper) < 0) {
+						   xmldb_load_files_helper, NULL) < 0) {
 		log_error("Failed to load XML DB files under %s", dir);
 		free(dir);
 		return -1;
@@ -1427,7 +1427,7 @@ static int xmldb_load_files(const xml_config_t *context)
 	}
 
 	if (for_each_file_name(dir, SERVER_DB_FILE_PREFIX, SERVER_DB_FILE_SUFFIX,
-						   xmldb_load_files_helper) < 0) {
+						   xmldb_load_files_helper, NULL) < 0) {
 		log_error("Failed to load XML DB files under %s", dir);
 		free(dir);
 		return -1;

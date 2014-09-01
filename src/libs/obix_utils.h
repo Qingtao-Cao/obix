@@ -236,10 +236,10 @@ bool obix_obj_implementsContract(xmlNode* obj, const char* contract);
 long str_to_long(const char *str);
 int timespec_compare(const struct timespec *m1, const struct timespec *m2);
 
-typedef int (*load_file_cb_t)(const char *dir, const char *file);
+typedef int (*load_file_cb_t)(const char *dir, const char *file, void *arg);
 
 int for_each_file_name(const char *dir, const char *prefix,
-						const char *suffix, load_file_cb_t cb);
+						const char *suffix, load_file_cb_t cb, void *arg);
 
 int slash_preceded(const char *s);
 int slash_followed(const char *s);
