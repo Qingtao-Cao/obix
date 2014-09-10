@@ -20,7 +20,6 @@
  *
  * *****************************************************************************/
 
-#include <assert.h>
 #include <regex.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,9 +28,8 @@
 #include <libxml/tree.h>
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
-#include "libxml_config.h"
+#include "xml_config.h"
 #include "xml_utils.h"
-#include "hist_utils.h"
 #include "obix_utils.h"
 #include "log_utils.h"
 #include "xml_storage.h"
@@ -169,8 +167,6 @@ static int xmldb_init_cache(void)
 
 static void xmldb_dispose_cache_node(int i)
 {
-	assert(i >= 0 && i < XMLDB_CACHE_LEN);
-
 	if (_xmldb_cache[i].href != NULL) {
 		xmlFree(_xmldb_cache[i].href);
 		_xmldb_cache[i].href = NULL;
@@ -337,8 +333,6 @@ static int xmldb_set_relative_href_helper(xmlNode **current, void *arg1, void *a
 	int hrefLen, i, ret = 0;
 	xmlNode *node = *current;
 
-	assert(node);
-
 	/*
 	 * The href attribute of a reference node will be absolute
 	 * URI and must be left intact, since it's used to specify
@@ -409,7 +403,10 @@ xmlNode *xmldb_add_child(xmlNode *parent, xmlNode *node,
 						 int unlink,		/* 0 for newly created node */
 						 int relative)		/* 1 for copied node */
 {
-	assert(parent && node);
+	if (!parent || !node) {
+		log_error("Illegal parameters provided to xmldb_add_child");
+		return NULL;
+	}
 
 	/*
 	 * Detach the current node from its original document if existing
@@ -529,8 +526,8 @@ void xmldb_delete_node(xmlNode *node, xmldb_dom_action_t action)
 	xmlNode *parent = node->parent;
 
 	xmldb_invalid_cache(node);
-	xmlUnlinkNode(node);
-	xmlFreeNode(node);
+
+	xml_delete_node(node);
 
 	if ((action & DOM_DELETE_EMPTY_PARENT) > 0 &&
 		parent != NULL &&
@@ -621,8 +618,6 @@ xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed)
 	xmlChar *deviceDisplayName = NULL;
 	xmlChar *deviceDisplay = NULL;
 	xmlChar *deviceIs = NULL;
-
-	assert(lobby && newDevice);
 
 	*existed = 0;
 
@@ -818,8 +813,6 @@ static xmlNode *xmldb_fcgi_var_list(obix_request_t *request)
 	xmlNode *envList = NULL;
 	xmlNode *curEnvNode = NULL;
 
-	assert(request && request->request);
-
 	if (!(envList = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_LIST, NULL))) {
 		log_error("Failed to allocate the oBIX:List contract");
 		return NULL;
@@ -870,8 +863,6 @@ xmlNode *xmldb_dump(obix_request_t *request)
 	xmlNode *fcgiVarList = NULL;
 	xmlNode *storageCopy = NULL;
 
-	assert(request);
-
 	if (!(obixDump = xmlNewNode(NULL, BAD_CAST OBIX_OBJ))) {
 		log_error("Failed to allocate an XML node for the response");
 		goto failed;
@@ -919,7 +910,7 @@ failed:
 
 char *xmlDebugDumpNode(const xmlNode *node)
 {
-	return (node != NULL) ? xmldb_dump_node(node) : NULL;
+	return (node != NULL) ? xml_dump_node(node) : NULL;
 }
 #endif
 
@@ -963,55 +954,6 @@ out:
 	}
 
 	return node;
-}
-
-/*
- * Copy the implementation of this function since
- * it does not exist on libxml2-2.7
- */
-static char *xmldb_buffer_detach(xmlBuffer *buf)
-{
-	xmlChar *ret;
-
-	if (!buf) {
-		return NULL;
-	}
-
-	if (buf->alloc == XML_BUFFER_ALLOC_IMMUTABLE) {
-		return NULL;
-	}
-
-	ret = buf->content;
-	buf->content = NULL;
-	buf->size = buf->use = 0;
-
-	return (char *)ret;
-}
-
-char *xmldb_dump_node(const xmlNode *node)
-{
-	xmlBuffer *buffer = NULL;
-	char *data;
-
-	assert(node);
-
-	if (!(buffer = xmlBufferCreate())) {
-		return NULL;
-	}
-
-	/*
-	 * level == 0, since it is undesirable to add extra indenting
-	 * for the closing </obj> for each record;
-	 *
-	 * format == 1, so that "\r\n" will be applied after each
-	 * child of the current record
-	 */
-	data = xmlNodeDump(buffer, NULL, (xmlNode *)node, 0, 1) > 0 ?
-					   xmldb_buffer_detach(buffer) : NULL;
-
-	xmlBufferFree(buffer);
-
-	return data;
 }
 
 static int xmldb_create_ancestors_helper(const char *token, void *arg1,
@@ -1089,8 +1031,6 @@ xmldb_errcode_t xmldb_put_node(xmlNode *node, xmldb_dom_action_t action)
 	xmlChar *parentHref = NULL;
 	int ret;
 	xmldb_stub_type_t type = STUB_NORMAL;
-
-	assert(node);
 
 	if (!(href = xmlGetProp(node, BAD_CAST OBIX_ATTR_HREF))) {
 		return ERR_PUT_NODE_NO_HREF;
@@ -1327,8 +1267,6 @@ static int xmldb_load_files_helper(const char *dir, const char *file, void *arg)
 	char *path;
 	int ret = -1;
 
-	assert(file);
-
 	if (link_pathname(&path, dir, NULL, file, NULL) < 0) {
 		log_error("Failed to assemble absolute path name for %s/%s", dir, file);
 		return -1;
@@ -1410,15 +1348,13 @@ failed:
  *
  * It doesn't matter in what order files in one sub-folder are loaded
  */
-static int xmldb_load_files(const xml_config_t *context)
+static int xmldb_load_files(const char *resdir)
 {
 	char *dir;
 
-	assert(context);
-
-	if (link_pathname(&dir, context->resourcePath, NULL,
-					  SERVER_DB_DIR_CORE, NULL) < 0) {
-		log_error("Failed to assemble absolute pathname for %s", SERVER_DB_DIR_CORE);
+	if (link_pathname(&dir, resdir, NULL, SERVER_DB_DIR_CORE, NULL) < 0) {
+		log_error("Failed to assemble absolute pathname for %s",
+				  SERVER_DB_DIR_CORE);
 		return -1;
 	}
 
@@ -1430,9 +1366,9 @@ static int xmldb_load_files(const xml_config_t *context)
 	}
 	free(dir);
 
-	if (link_pathname(&dir, context->resourcePath, NULL,
-					  SERVER_DB_DIR_SYS, NULL) < 0) {
-		log_error("Failed to assemble absolute pathname for %s", SERVER_DB_DIR_SYS);
+	if (link_pathname(&dir, resdir, NULL, SERVER_DB_DIR_SYS, NULL) < 0) {
+		log_error("Failed to assemble absolute pathname for %s",
+				  SERVER_DB_DIR_SYS);
 		return -1;
 	}
 
@@ -1444,9 +1380,9 @@ static int xmldb_load_files(const xml_config_t *context)
 	}
 	free(dir);
 
-	if (link_pathname(&dir, context->resourcePath, NULL,
-					  SERVER_DB_DIR_DEVICES, NULL) < 0) {
-		log_error("Failed to assemble absolute pathname for %s", SERVER_DB_DIR_DEVICES);
+	if (link_pathname(&dir, resdir, NULL, SERVER_DB_DIR_DEVICES, NULL) < 0) {
+		log_error("Failed to assemble absolute pathname for %s",
+				  SERVER_DB_DIR_DEVICES);
 		return -1;
 	}
 
@@ -1461,11 +1397,11 @@ static int xmldb_load_files(const xml_config_t *context)
 	return 0;
 }
 
-int xmldb_init(const xml_config_t *context)
+int obix_xmldb_init(const char *resdir)
 {
 	xmlNode *newRootNode = NULL;
 
-	if (_storage != NULL) {
+	if (_storage) {
 		return 0;
 	}
 
@@ -1474,12 +1410,13 @@ int xmldb_init(const xml_config_t *context)
 		return -1;
 	}
 
-	if (!(_storage = xmlNewDoc(BAD_CAST "1.0"))) {
+	if (!(_storage = xmlNewDoc(BAD_CAST XML_VERSION))) {
 		log_error("Unable to initialize the storage.");
 		return -1;
 	}
 
-	if (!(newRootNode = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ, NULL))) {
+	if (!(newRootNode = xmlNewDocNode(_storage, NULL,
+									  BAD_CAST OBIX_OBJ, NULL))) {
 		log_error("Failed to allocate a new root node for the XML database");
 		goto failed;
 	}
@@ -1492,8 +1429,8 @@ int xmldb_init(const xml_config_t *context)
 
 	xmlDocSetRootElement(_storage, newRootNode);
 
-	if (xmldb_load_files(context) < 0) {
-		log_error("Failed to load XML files in %s", context->resourcePath);
+	if (xmldb_load_files(resdir) < 0) {
+		log_error("Failed to load XML files in %s", resdir);
 		goto failed;
 	}
 
@@ -1558,7 +1495,7 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 {
 	xmldb_errcode_t result;
 	xmlNode *node, *copy, *parent;
-	xmlChar *newValue, *oldValue;
+	xmlChar *newValue = NULL, *oldValue = NULL;
 	char *href_src, *href_dst, *href_copy;
 	int ret, changed = 0;
 
@@ -1723,6 +1660,8 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 	if (changed > 0) {
 		xmldb_notify_watches(node, WATCH_EVT_NODE_CHANGED);
 	}
+
+	result = ERR_SUCCESS;
 
 	/* Fall through */
 

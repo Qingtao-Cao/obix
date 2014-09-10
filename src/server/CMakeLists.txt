@@ -11,9 +11,12 @@ IF (LIBXML2_FOUND)
     SET (LIBS ${LIBS} ${LIBXML2_LIBRARIES})
 ENDIF (LIBXML2_FOUND)
 
-set (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+set (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+
 include(FindKernelHeaders)
-INCLUDE_DIRECTORIES(${KERNELHEADERS_INCLUDE_DIRS})
+IF (KERNELHEADERS_FOUND)
+	INCLUDE_DIRECTORIES(${KERNELHEADERS_INCLUDE_DIRS})
+ENDIF (KERNELHEADERS_FOUND)
 
 # Standard build flags
 SET (CMAKE_C_FLAGS "-g -Wall -Werror")
@@ -24,9 +27,9 @@ SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRI
 # Location to install header files
 SET(INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
 
-ADD_EXECUTABLE(obix-fcgi batch.c history.c libxml_config.c obix_fcgi.c post_handler.c obix_request.c server.c watch.c xml_storage.c)
+ADD_EXECUTABLE(obix-fcgi batch.c history.c obix_fcgi.c obix_request.c server.c watch.c xml_storage.c)
 
-TARGET_LINK_LIBRARIES(obix-fcgi fcgi rt pthread libobix ${LIBS})
+TARGET_LINK_LIBRARIES(obix-fcgi fcgi rt pthread libobix-common ${LIBS})
 
 # Install binary 
 INSTALL(TARGETS obix-fcgi DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")

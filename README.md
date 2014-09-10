@@ -1,16 +1,16 @@
-# oBIX Server
+# oBIX
 
-Providing oBIX Server implementation for C language
+Providing oBIX Server and client implementation for C language
  
 Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]    
 Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]    
 Copyright (c) 2009 Andrey Litvinov [litvinov.andrey@gmail.com]
  
-oBIX Server is free software licensed under the GPLv3+ License. The text for this license can be found in the COPYING file.
+oBIX is free software licensed under the GPLv3+ License. The text for this license can be found in the COPYING file.
 
 # 1. Project Overview
 
-oBIX Server is an open source project derived from the C oBIX Tools (CoT) project, an open source project dedicated to the development of embedded Building Automation solutions based on oBIX standard (http://www.obix.org). 
+oBIX is an open source project derived from the C oBIX Tools (CoT) project developed by the original author around 2009, but gets rewritten from scratch since 2013. It is an open source project dedicated to the development of embedded Building Automation solutions based on oBIX standard (http://www.obix.org). 
 
 The whole project is written in C and has tiny resource requirements. It allows the project to run on embedded Linux platforms, such as OpenWrt (http://openwrt.org).
 
@@ -222,7 +222,7 @@ This will bring in the dependencies of lighttpd and lighttpd-fastcgi.
 
 To configure a standalone instance:
 
-1. Edit /etc/obix/res/server/server_config.xml file with an XML editor. Update server-address and any other fields if required (default is localhost).
+1. Edit /etc/obix/res/server/server_config.xml file with an XML editor. Update settings if required.
 
 2. The default /etc/obix/res/obix-fcgi.conf links /usr/bin/obix-fcgi to /etc/obix/res/server. Update the paths if you wish to deploy to different locations.
 

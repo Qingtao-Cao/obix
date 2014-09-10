@@ -19,7 +19,6 @@
  * *****************************************************************************/
 
 #include <pthread.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -37,7 +36,6 @@
 #include "log_utils.h"
 #include "obix_utils.h"
 #include "xml_utils.h"
-#include "hist_utils.h"    /* part of history facility needed by client side */
 #include "xml_storage.h"
 #include "obix_request.h"
 #include "server.h"
@@ -149,11 +147,6 @@ obix_hist_t *_history;
 #define INDEX_FILENAME_SUFFIX	".xml"
 #define LOG_FILENAME_SUFFIX		".fragment"
 
-#define HIST_ABS_DATE			"date"
-#define HIST_ABS_COUNT			"count"
-#define HIST_ABS_START			"start"
-#define HIST_ABS_END			"end"
-
 #define HIST_REC_VAL			"value"
 #define DEVICE_ID				"dev_id"
 
@@ -229,7 +222,9 @@ enum {
 	ERR_EMPTY_DEV,
 	ERR_NO_DEVID,
 	ERR_WRITE_INDEX,
-	ERR_NO_PERM
+	ERR_NO_PERM,
+	ERR_NO_DEV_ID,
+	ERR_CORRUPT_DEV
 };
 
 static err_msg_t hist_err_msg[] = {
@@ -305,6 +300,14 @@ static err_msg_t hist_err_msg[] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
 		.msgs = "Failed to create history folder or index file for the device"
 	},
+	[ERR_NO_DEV_ID] = {
+		.type = OBIX_CONTRACT_ERR_BAD_URI,
+		.msgs = "Failed to get device ID from the requested href"
+	},
+	[ERR_CORRUPT_DEV] = {
+		.type = OBIX_CONTRACT_ERR_SERVER,
+		.msgs = "Corrupted index file of current device"
+	}
 };
 
 /**
@@ -474,7 +477,7 @@ static int write_logfile(obix_hist_file_t *file, xmlNode *record)
 	char *data;
 	struct iovec iov[2];
 
-	if (!(data = xmldb_dump_node(record))) {
+	if (!(data = xml_dump_node(record))) {
 		log_error("Failed to dump record content");
 		return -1;
 	}
@@ -560,7 +563,10 @@ static obix_hist_file_t *hist_create_file(obix_hist_dev_t *dev,
 	obix_hist_file_t *file = NULL;
 	struct stat statbuf;
 
-	assert(dev && abstract);
+	if (!dev || !abstract) {
+		log_error("Illegal parameters provided to create a hist file descriptor");
+		return NULL;
+	}
 
 	if (!(file = (obix_hist_file_t *)malloc(sizeof(obix_hist_file_t)))) {
 		log_error("Failed to allocae file descriptor");
@@ -869,7 +875,10 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 	char *href = NULL;
 	int ret;
 
-	assert(dev_id && indexpath);
+	if (!dev_id || !indexpath) {
+		log_error("Illegal parameter provided to create a hist device descriptor");
+		return NULL;
+	}
 
 	if (!(dev = (obix_hist_dev_t *)malloc(sizeof(obix_hist_dev_t)))) {
 		log_error("Failed to allocae history facility for %s", dev_id);
@@ -943,7 +952,7 @@ static void hist_flush_index(obix_hist_dev_t *dev)
 {
 	char *data;
 
-	if (!(data = xmldb_dump_node(dev->index))) {
+	if (!(data = xml_dump_node(dev->index))) {
 		log_error("Failed to dump XML subtree of %s", dev->devhref);
 		return;
 	}
@@ -1137,7 +1146,7 @@ static int hist_append_dev(obix_request_t *request,
 		goto out;
 	}
 
-	data = xmldb_dump_node(aout);
+	data = xml_dump_node(aout);
 	xmlFreeNode(aout);
 
 	if (!data) {
@@ -1169,7 +1178,7 @@ out:
  * DOM tree for sake of efficiency. To this end the format of markups of a
  * record and timestamp tag have to be crystal-clearly defined, which should
  * be in accordance with those provided in HistoryAppendIn contract and the
- * outcome of xmldb_dump_node(called by write_logfile).
+ * outcome of xml_dump_node(called by write_logfile).
  */
 static const char *RECORD_START = "<obj ";
 static const char *RECORD_END = "</obj>\r\n";
@@ -1370,7 +1379,10 @@ static int hist_query_dev_helper(obix_request_t *request,
 	d_latest = xml_get_child_val(last->abstract, OBIX_OBJ_ABSTIME,
 								 HIST_ABS_END);
 
-	assert(d_oldest && d_latest);
+	if (!d_oldest || !d_latest) {
+		ret = ERR_CORRUPT_DEV;
+		goto failed;
+	}
 
 	/* All start and end TS and limit are allowable to be omitted */
 	if (!(start = xml_get_child_val(input, OBIX_OBJ_ABSTIME, FILTER_START))) {
@@ -1694,8 +1706,6 @@ int obix_hist_init(const char *resdir)
 	char *dev_id, *indexpath;
 	obix_hist_dev_t *dev;
 
-	assert(resdir);
-
 	if (_history) {
 		log_error("History facility already initialized");
 		return -1;
@@ -1740,12 +1750,12 @@ int obix_hist_init(const char *resdir)
 
 	while ((dirp = readdir(dp))) {
 		dev_id = dirp->d_name;
-		if (strcmp(dev_id, ".") == 0 ||
-			strcmp(dev_id, "..") == 0)
+		if (strcmp(dev_id, ".") == 0 || strcmp(dev_id, "..") == 0) {
 			continue;		/* Skip dot and dot-dot */
+		}
 
 		if (link_pathname(&indexpath, _history->dir, dev_id,
-							INDEX_FILENAME, INDEX_FILENAME_SUFFIX) < 0) {
+						  INDEX_FILENAME, INDEX_FILENAME_SUFFIX) < 0) {
 			log_error("Failed to allocate index file name for %s", dev_id);
 			closedir(dp);
 			obix_hist_dispose();
@@ -1894,7 +1904,7 @@ static int get_dev_id_helper(const char *token, void *arg1, void *arg2)
  * to convert them into a new string from slash delimiter to dot
  * delimiter.
  *
- * Return 0 on success, < 0 otherwise
+ * Return 0 on success, > 0 otherwise
  *
  * Note,
  * 1. Callers should free the returned device ID string after use.
@@ -1944,7 +1954,9 @@ static xmlNode *handlerHistoryHelper(obix_request_t *request, xmlNode *input,
 	int ret = ERR_NO_MEM;
 
 	/* Find the device to operate on */
-	if ((ret = get_dev_id(request->request_decoded_uri, op_name, &dev_id)) > 0) {
+	if ((ret = get_dev_id(request->request_decoded_uri, op_name,
+						  &dev_id)) != 0) {
+		ret = ERR_NO_DEV_ID;
 		goto failed;
 	}
 
@@ -1979,7 +1991,7 @@ static xmlNode *handlerHistoryHelper(obix_request_t *request, xmlNode *input,
 	return NULL;	/* Success */
 
 failed:
-	log_error("%s", hist_err_msg[ret].msgs);
+	log_error("%s : %s", request->request_decoded_uri, hist_err_msg[ret].msgs);
 
 	return obix_server_generate_error(request->request_decoded_uri,
 									  hist_err_msg[ret].type,
@@ -2066,7 +2078,7 @@ failed:
 	 */
 	obix_request_destroy_response_items(request);
 
-	log_error("%s", hist_err_msg[ret].msgs);
+	log_error("%s : %s", request->request_decoded_uri, hist_err_msg[ret].msgs);
 
 	return obix_server_generate_error(request->request_decoded_uri,
 									  hist_err_msg[ret].type,

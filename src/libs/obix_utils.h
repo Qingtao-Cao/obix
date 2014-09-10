@@ -22,218 +22,123 @@
 #ifndef OBIX_UTILS_H_
 #define OBIX_UTILS_H_
 
-#include <libxml2/libxml/tree.h>
-#include <stdbool.h>
+#include <libxml/tree.h>
 #include <sys/types.h>
 
-/** @name oBIX Error Contracts' URIs
- * Can be used to define the error type returned by an oBIX server.
- *
- * Note,
- * 1. They must be defined as macro instead of const char * so as to
- * be qualified to initialize global variables at compile time.
- * @{
+/*
+ * Error codes which are returned by library functions
+ */
+typedef enum {
+	OBIX_SUCCESS				= 0,
+	OBIX_ERR_INVALID_ARGUMENT	= -1,
+	OBIX_ERR_INVALID_STATE		= -2,
+	OBIX_ERR_NO_MEMORY			= -3,
+	OBIX_ERR_SERVER_ERROR		= -4,
+	OBIX_ERR_BAD_CONNECTION_HW	= -5
+} OBIX_ERRORCODE;
+
+/*
+ * Defined as macro so as to be constant and therefore
+ * able to be used as initialiser
  */
 #define OBIX_CONTRACT_ERR_BAD_URI		"obix:BadUriErr"
 #define OBIX_CONTRACT_ERR_UNSUPPORTED	"obix:UnsupportedErr"
 #define OBIX_CONTRACT_ERR_PERMISSION	"obix:PermissionErr"
 #define OBIX_CONTRACT_ERR_SERVER		"obix:ServerErr"
-/** @} */
 
-/** @name oBIX Object Types (XML Element Types)
- * @{
- */
-/** oBIX Object (@a obj) */
-extern const char* OBIX_OBJ;
-/** oBIX Reference (@a ref) */
-extern const char* OBIX_OBJ_REF;
-/** oBIX Operation (@a op) */
-extern const char* OBIX_OBJ_OP;
-/** oBIX List (@a list) */
-extern const char* OBIX_OBJ_LIST;
-/** oBIX Error (@a err) */
-extern const char* OBIX_OBJ_ERR;
-/** oBIX Boolean (@a bool) */
-extern const char* OBIX_OBJ_BOOL;
-/** oBIX Integer (@a int) */
-extern const char* OBIX_OBJ_INT;
-/** oBIX Real (@a real) */
-extern const char* OBIX_OBJ_REAL;
-/** oBIX String (@a str) */
-extern const char* OBIX_OBJ_STR;
-/** oBIX Enumeration (@a enum) */
-extern const char* OBIX_OBJ_ENUM;
-/** oBIX Absolute Time (@a abstime) */
-extern const char* OBIX_OBJ_ABSTIME;
-/** oBIX Relative Duration of Time (@a reltime) */
-extern const char* OBIX_OBJ_RELTIME;
-/** oBIX URI (@a uri) */
-extern const char* OBIX_OBJ_URI;
-/** oBIX Feed (@a feed) */
-extern const char* OBIX_OBJ_FEED;
+#define HIST_REC_TS_MAX_LEN				19
 
-extern const char *OBIX_OBJ_META;
-extern const char *OBIX_OBJ_DATE;
+#define OBIX_OBJ				"obj"
+#define OBIX_OBJ_REF			"ref"
+#define OBIX_OBJ_OP				"op"
+#define OBIX_OBJ_LIST			"list"
+#define OBIX_OBJ_ERR			"err"
+#define OBIX_OBJ_BOOL			"bool"
+#define OBIX_OBJ_INT			"int"
+#define OBIX_OBJ_REAL			"real"
+#define OBIX_OBJ_STR			"str"
+#define OBIX_OBJ_ENUM			"enum"
+#define OBIX_OBJ_ABSTIME		"abstime"
+#define OBIX_OBJ_RELTIME		"reltime"
+#define OBIX_OBJ_URI			"uri"
+#define OBIX_OBJ_FEED			"feed"
+#define OBIX_OBJ_META			"meta"
+#define OBIX_OBJ_DATE			"date"
 
-/** @} */
+#define HIST_ABS_DATE			"date"
+#define HIST_ABS_COUNT			"count"
+#define HIST_ABS_START			"start"
+#define HIST_ABS_END			"end"
 
-/** @name oBIX Object Names
- * Object names (value of @a name attributes), which are used in oBIX contracts.
- * @{
- */
-/** Name of @a signUp operation in the Lobby object. */
-extern const char* OBIX_NAME_SIGN_UP;
-/** Name of @a batch operation in the Lobby object. */
-extern const char* OBIX_NAME_BATCH;
-/** Name of the Watch Service in the Lobby object. */
-extern const char* OBIX_NAME_WATCH_SERVICE;
-/** Name of the @a watchService.make operation. */
-extern const char* OBIX_NAME_WATCH_SERVICE_MAKE;
-/** Name of the @a Watch.add operation. */
-extern const char* OBIX_NAME_WATCH_ADD;
-/** Name of the @a Watch.remove operation. */
-extern const char* OBIX_NAME_WATCH_REMOVE;
-/** Name of the @a Watch.pollChanges operation. */
-extern const char* OBIX_NAME_WATCH_POLLCHANGES;
-/** Name of the @a Watch.pollRefresh operation. */
-extern const char* OBIX_NAME_WATCH_POLLREFRESH;
-/** Name of the @a Watch.delete operation. */
-extern const char* OBIX_NAME_WATCH_DELETE;
-/** Name of the @a Watch.lease parameter. */
-extern const char* OBIX_NAME_WATCH_LEASE;
-/** Name of the @a Watch.pollWaitInterval object. */
-extern const char* OBIX_NAME_WATCH_POLL_WAIT_INTERVAL;
-/** Name of the @a Watch.pollWaitInterval.min parameter. */
-extern const char* OBIX_NAME_WATCH_POLL_WAIT_INTERVAL_MIN;
-/** Name of the @a Watch.pollWaitInterval.max parameter. */
-extern const char* OBIX_NAME_WATCH_POLL_WAIT_INTERVAL_MAX;
-/** @} */
+#define OBIX_CONN_HTTP			"http"
 
-/** String representation of oBIX @a NULL object. */
-extern const char* OBIX_OBJ_NULL_TEMPLATE;
-
-/** @name oBIX Object Attributes and Facets
- * @{
- */
-/** Object attribute @a "is". */
-extern const char* OBIX_ATTR_IS;
-/** Object attribute @a "name". */
-extern const char* OBIX_ATTR_NAME;
-/** Object attribute @a "of" */
+extern const char *OBIX_ATTR_IS;
+extern const char *OBIX_ATTR_NAME;
 extern const char *OBIX_ATTR_OF;
-/** Object attribute @a "href". */
-extern const char* OBIX_ATTR_HREF;
-/** Object attribute @a "val". */
-extern const char* OBIX_ATTR_VAL;
-/** Object attribute @a "null". */
-extern const char* OBIX_ATTR_NULL;
-/** oBIX facet @a "writable". */
-extern const char* OBIX_ATTR_WRITABLE;
-/** oBIX facet @a "display". */
-extern const char* OBIX_ATTR_DISPLAY;
-/** oBIX facet @a "displayName". */
-extern const char* OBIX_ATTR_DISPLAY_NAME;
-
+extern const char *OBIX_ATTR_HREF;
+extern const char *OBIX_ATTR_VAL;
+extern const char *OBIX_ATTR_NULL;
+extern const char *OBIX_ATTR_WRITABLE;
+extern const char *OBIX_ATTR_DISPLAY;
+extern const char *OBIX_ATTR_DISPLAY_NAME;
 extern const char *OBIX_ATTR_HIDDEN;
+
 extern const char *OBIX_META_ATTR_OP;
 extern const char *OBIX_META_ATTR_WATCH_ID;
 
-/** @} */
+extern const char *XML_TRUE;
+extern const char *XML_FALSE;
+extern const int XML_BOOL_MAX_LEN;
 
-/** String representation of boolean @a true value. */
-extern const char* XML_TRUE;
-/** String representation of boolean @a false value. */
-extern const char* XML_FALSE;
-
-/** obix:BatchOut */
-extern const char *OBIX_CONTRACT_BATCH_OUT;
-/** obix:Read */
 extern const char *OBIX_CONTRACT_OP_READ;
-/** obix:Write */
 extern const char *OBIX_CONTRACT_OP_WRITE;
-/** obix:Invoke */
 extern const char *OBIX_CONTRACT_OP_INVOKE;
+extern const char *OBIX_CONTRACT_HIST_AIN;
+extern const char *OBIX_CONTRACT_HIST_FLT;
 
-/**
- * Specifies a format of @a reltime value, generated by #obix_reltime_fromLong
+extern const char *HIST_OP_APPEND;
+extern const char *HIST_OP_QUERY;
+extern const char *HIST_INDEX;
+extern const char *HIST_REC_TS;
+extern const char *HIST_AIN_DATA;
+extern const char *HIST_AIN_TS_UND;
+extern const char *HIST_TS_INIT;
+
+extern const char *STR_DELIMITER_SLASH;
+extern const char *STR_DELIMITER_DOT;
+
+extern const char *OBIX_RELTIME_ZERO;
+extern const int OBIX_RELTIME_ZERO_LEN;
+
+extern const char *OBIX_DEVICE_ROOT;
+extern const int OBIX_DEVICE_ROOT_LEN;
+
+/*
+ * Reserve 10 bits for a physical value
  */
-typedef enum {
-    RELTIME_SEC,
-    RELTIME_MIN,
-    RELTIME_HOUR,
-    RELTIME_DAY,
-    RELTIME_MONTH,
-    RELTIME_YEAR
-} RELTIME_FORMAT;
+#define HIST_REC_VAL_MAX_LEN	10
 
-/**
- * Returns the first child node that matches the tag name pointed to by @a tagName from the
- * specified input tree @a inputTree.
- * @param inputTree     The XML Node to search
- * @param tagName       The tag name to compare with
- * @return              The child node, or NULL if not found.
+/*
+ * There would be 315,360,000 records if one oBIX adapter
+ * generates one record on each second over 10 years.
  */
-xmlNode *xmlNodeGetFirstChildByTag(const xmlNode *inputTree, const xmlChar *tagName);
+#define HIST_FLT_VAL_MAX_BITS	9
 
-/**
- * Returns the value of the XML attribute pointed to by @a attrName from the XML node pointed
- * to by @a inputNode as an integer.
+/* The number of decimal fraction desirable */
+#define FLOAT_FRACT_MAX_BITS    8
+
+/*
+ * The maximum string length of a converted 32bit float value,
+ * which consists of 1 byte for sign, 38 bytes for integral part,
+ * 1 byte for dot, and extra bytes for fractional part.
  */
-int xmlGetPropInt(const xmlNode *inputNode, const xmlChar *attrName, const int defaultValue);
+#define FLOAT_MAX_BITS		(1 + 38 + 1 + FLOAT_FRACT_MAX_BITS)
 
+#define UINT32_MAX_BITS		10
 
-/**
- * Returns an oBIX Null object, that conforms to the obix:nil contract.
- */
-xmlNode *obix_obj_null();
+int str_to_long(const char *str, long *val);
+int str_to_float(const char *str, float *val);
 
-/**
- * Parses string value of @a reltime object and returns corresponding time in
- * milliseconds. Follows @a xs:duration format.
- *
- * @note Durations which can overload @a long variable are not parsed.
- *
- * @param str String value of a @a reltime object which should be parsed.
- * @param duration If parsing is successful than the parsed value will be
- *                 written there.
- * @return @li @a 0 - Operation completed successfully;
- *         @li @a -1 - Parsing error (provided string has bad format);
- *         @li @a -2 - Provided @a reltime value is bigger than or equal to 24
- *                     days (The maximum possible value is
- *                     @a "P23DT23H59M59.999S"). Also this error code is
- *                     returned when the input value is not normalized: If some
- *                     of time components (e.g. hours) presents, than all
- *                     smaller components (minutes and seconds) should represent
- *                     less time than previous component. For example
- *                     @a "PT60M" and @a "PT60S" are allowed, but @a "PT1H60M"
- *                     and @a "PT1H60S" are not.
- */
-int obix_reltime_parseToLong(const char* str, long* duration);
-
-/**
- * Generates @a reltime value from the provided time in milliseconds.
- *
- * @param duration Time in milliseconds which should be converted.
- * @param format Format of the generated @a reltime value. Specifies the maximum
- *               time component for the output value. For example, converting
- *               2 minutes with @a RELTIME_MIN will result in @a "PT2M";
- *               @a RELTIME_SEC - @a "PT120S".
- * @return String, which represents provided time in @a xs:duration format, or
- *         @a NULL if memory allocation failed.
- */
-char* obix_reltime_fromLong(long duration, RELTIME_FORMAT format);
-
-/**
- * Checks whether oBIX object implements specified contract. Object implements
- * a contract when contract's URI is listed in object's @a is attribute.
- *
- * @param obj XML DOM structure representing an oBIX object.
- * @param contract URI of the contract which should be checked.
- * @return #TRUE if the object implements specified contract, #FALSE otherwise.
- */
-bool obix_obj_implementsContract(xmlNode* obj, const char* contract);
-
-long str_to_long(const char *str);
 int timespec_compare(const struct timespec *m1, const struct timespec *m2);
 
 typedef int (*load_file_cb_t)(const char *dir, const char *file, void *arg);
@@ -248,9 +153,6 @@ typedef int (*token_cb_t)(const char *token, void *arg1, void *arg2);
 
 int for_each_str_token(const char *delimiter, const char *str,
 					   token_cb_t cb, void *arg1, void *arg2);
-
-extern const char *STR_DELIMITER_SLASH;
-extern const char *STR_DELIMITER_DOT;
 
 int str_token_count_helper(const char *token, void *arg1, void *arg2);
 
@@ -273,8 +175,23 @@ int timestamp_find_common(char **start, char **end,
 int time_compare(const char *str1, const char *str2, int *res, int delimiter);
 
 /*
- * Note:
- * No assignment should ever be passed in the macro, or
+ * The string format of obix:reltime contract
+ *
+ * NOTE: only supports the format of "PnDTnHnMnS" and the maximal
+ * unit is day to avoid the complexity with month and year
+ */
+typedef enum {
+	RELTIME_SEC,
+	RELTIME_MIN,
+	RELTIME_HOUR,
+	RELTIME_DAY
+} RELTIME_FORMAT;
+
+int obix_reltime_to_long(const char *str, long *duration);
+char *obix_reltime_from_long(long millis, RELTIME_FORMAT format);
+
+/*
+ * NOTE: No assignment should ever be passed in the macro, or
  * unwanted effect ensue!
  */
 #define min(a, b)	(((a) <= (b)) ? (a) : (b))

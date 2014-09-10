@@ -24,7 +24,6 @@
 #define XML_STORAGE_H_
 
 #include <libxml/tree.h>
-#include "libxml_config.h"
 #include "obix_request.h"
 #include "xml_utils.h"
 
@@ -115,17 +114,7 @@ xmlNode *xmldb_dump(obix_request_t *request);
 char *xmlDebugDumpNode(const xmlNode *node);
 #endif
 
-/**
- * Initializes storage. Should be executed only once on startup.
- *
- * @param serverAddr Address of the server. Storage should know it in cases
- *        when requested URI contains full address. If @a NULL is
- *        provided than address will be retrieved from the Lobby
- *        object.
- *
- * @return error code or @a 0 on success.
- */
-int xmldb_init(const xml_config_t *context);
+int obix_xmldb_init(const char *resdir);
 
 /**
  * Stops work of the storage and releases all resources.
@@ -190,8 +179,6 @@ xmlChar *xmldb_node_path(xmlNode *node);
 xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed);
 
 xmlNode *xmldb_add_child(xmlNode *parent, xmlNode *node, int unlink, int relative);
-
-char *xmldb_dump_node(const xmlNode *node);
 
 xmlNode *xmldb_set_relative_href(xmlNode *node);
 

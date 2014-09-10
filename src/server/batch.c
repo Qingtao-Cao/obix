@@ -19,7 +19,6 @@
  *
  * *****************************************************************************/
 
-#include <assert.h>
 #include "log_utils.h"
 #include "obix_utils.h"
 #include "xml_utils.h"
@@ -35,9 +34,9 @@ static const char *XP_BATCHIN = "/list[@is='obix:BatchIn']/*";
 enum {
 	ERR_NO_VAL = 1,
 	ERR_NO_IS,
-	ERR_NO_RESP,
 	ERR_NO_MEM,
-	ERR_NO_CONTENT
+	ERR_BAD_IS,
+	ERR_NO_INPUT
 };
 
 static err_msg_t batch_err_msg[] = {
@@ -49,38 +48,33 @@ static err_msg_t batch_err_msg[] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
 		.msgs = "No required is attribute in BatchIn item"
 	},
-	[ERR_NO_RESP] = {
-		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "The handler for this BatchIn item did not respond"
+	[ERR_BAD_IS] = {
+		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
+		.msgs = "The required is attribute is NOT recognisable"
 	},
 	[ERR_NO_MEM] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
 		.msgs = "Failed to allocate BatchOut contract"
+	},
+	[ERR_NO_INPUT] = {
+		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
+		.msgs = "No required BatchIn document at all"
 	}
 };
 
-/**
- * Adds an oBIX object pointed to by @a item to the oBIX:BatchOut contract
- * pointed to by @a batchOutContract.
- *
- * @param	batchOutContract	A pointer to an initialized obix:BatchOut contract
- * @param	item				A pointer to an oBIX object to add to the batch
- *								out contract.
- * @remark	This is a consuming function, the XML node pointed to by @a item
- *			will be unlinked from it's previous tree and added to the contract
- *			pointed to by @a batchOutContract. Do not pass @a item to xmlFree() or
- *			undefined behaviour will occur in the response, the pointer to item
- *			should be freed when @a xmlFree() is called on @a batchOutContract.
- */
-static void obix_batch_add_item(xmlNode *batchOutContract, xmlNode *item)
+static void obix_batch_add_item(xmlNode *batchOut, xmlNode *item)
 {
-	assert(batchOutContract && item);
+	if (!item) {
+		log_error("No item provided to add into BatchIn contract!");
+		return;
+	}
 
-	if (xmldb_add_child(batchOutContract, item, 1, 0) == NULL) {
+	if (xmldb_add_child(batchOut, item, 1, 0) == NULL) {
 		log_error("could not add item into the provided BatchOut contract.");
+
 		/*
 		 * The item should be freed manually since it could not be released
-		 * along with the batch_out contract if failed to be added into it
+		 * along with the batchOut contract if failed to be added into it
 		 * in the first place
 		 */
 		xmlFree(item);
@@ -101,9 +95,7 @@ static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 	xmlNode *itemVal = NULL;
 	xmlChar *itemContract = NULL;
 	char *itemHref = NULL;
-	int ret;
-
-	assert(batchItem);
+	int ret = 0;
 
 	if (!(itemHref = (char *)xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
 		ret = ERR_NO_VAL;
@@ -115,20 +107,20 @@ static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 		goto failed;
 	}
 
-	if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_READ) == 0) {
+	if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_READ) == 0) {
 		itemVal = obix_server_read(request, itemHref);
-	} else if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
+	} else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
 		itemVal = obix_server_write(request, itemHref, batchItem->children);
-	} else if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
+	} else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
 		itemVal = obix_server_invoke(request, itemHref, batchItem->children);
+	} else {
+		ret = ERR_BAD_IS;
 	}
-
-	ret = ((itemVal == NULL) ? ERR_NO_RESP : 0);
 
 	/* Fall Through */
 
 failed:
-	if (ret) {
+	if (ret != 0) {
 		log_error("%s", batch_err_msg[ret].msgs);
 		itemVal = obix_server_generate_error(itemHref, batch_err_msg[ret].type,
 											 "obix:Batch", batch_err_msg[ret].msgs);
@@ -145,26 +137,30 @@ failed:
 	obix_batch_add_item(batch_out, itemVal);
 }
 
-static xmlNode *obix_batch_process(obix_request_t *request, xmlNode *batchInInput)
+static xmlNode *obix_batch_process(obix_request_t *request, xmlNode *input)
 {
-	xmlNode *batchOutContract = NULL;
+	xmlNode *batch_out = NULL;
 	int ret;
 
-	assert(batchInInput);
+	if (!input) {
+		ret = ERR_NO_INPUT;
+		goto failed;
+	}
 
-	if (!(batchOutContract = xmldb_copy_sys(OBIX_SYS_BATCH_OUT_STUB))) {
+	if (!(batch_out = xmldb_copy_sys(OBIX_SYS_BATCH_OUT_STUB))) {
 		ret = ERR_NO_MEM;
 		goto failed;
 	}
 
-	xml_xpath_for_each_item(batchInInput, XP_BATCHIN,
-							obix_batch_process_item, batchOutContract, request);
-	return batchOutContract;
+	xml_xpath_for_each_item(input, XP_BATCHIN,
+							obix_batch_process_item, batch_out, request);
+	return batch_out;
 
 failed:
 	log_error("%s", batch_err_msg[ret].msgs);
-	return obix_server_generate_error(request->request_decoded_uri, batch_err_msg[ret].type,
-						"obix:Batch", batch_err_msg[ret].msgs);
+	return obix_server_generate_error(request->request_decoded_uri,
+									  batch_err_msg[ret].type,
+									  "obix:Batch", batch_err_msg[ret].msgs);
 }
 
 /**

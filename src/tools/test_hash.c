@@ -40,19 +40,16 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <libxml/tree.h>
 #include <libxml/parser.h>
+#include "obix_utils.h"
 #include "hash.h"
-
-static const char *DEVICE_LOBBY = "/obix/deviceRoot/";
-static const int DEVICE_LOBBY_LEN = 17;
 
 typedef struct obix_dev {
 	xmlChar *href;
 	struct list_head list;
 } obix_dev_t;
 
-static struct list_head devlist;
+static LIST_HEAD(devlist);
 static hash_table_t *devtab;
 
 unsigned int device_get_hash(const unsigned char *str, const unsigned int size);
@@ -65,7 +62,7 @@ static hash_ops_t device_hash_ops = {
 
 unsigned int device_get_hash(const unsigned char *str, const unsigned int size)
 {
-	if (xmlStrncmp(str, (xmlChar *)DEVICE_LOBBY, DEVICE_LOBBY_LEN) == 0) {
+	if (xmlStrncmp(str, BAD_CAST OBIX_DEVICE_ROOT, OBIX_DEVICE_ROOT_LEN) == 0) {
 		str += DEVICE_LOBBY_LEN;
 	}
 

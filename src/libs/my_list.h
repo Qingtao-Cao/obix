@@ -27,6 +27,7 @@
 #define timer_t LIBC_timer_t
 #define loff_t LIBC_loff_t
 #define u_int64_t LIBC_u_int64_t
+#define uint64_t LIBC_u_int64_t
 #define int64_t LIBC_int64_t
 #define blkcnt_t LIBC_blkcnt_t
 /**
@@ -46,6 +47,7 @@
 #include <linux/list.h>
 #undef blkcnt_t
 #undef int64_t
+#undef uint64_t
 #undef u_int64_t
 #undef loff_t
 #undef timer_t

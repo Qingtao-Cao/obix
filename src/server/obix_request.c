@@ -20,7 +20,6 @@
  *
  * *****************************************************************************/
 
-#include <assert.h>
 #include <string.h>
 #include <pthread.h>
 #include "log_utils.h"
@@ -60,8 +59,6 @@ obix_request_t *obix_request_create(FCGX_Request *request)
 {
 	obix_request_t *obixRequest;
 
-	assert(request);
-
 	if (!(obixRequest = (obix_request_t *)malloc(sizeof(obix_request_t)))) {
 		log_error("Failed to create an oBIX request structure.");
 		return NULL;
@@ -95,7 +92,9 @@ void obix_request_destroy_response_item(response_item_t *item)
  */
 void obix_fcgi_request_destroy(FCGX_Request *request)
 {
-	assert(request);
+	if (!request) {
+		return;
+	}
 
 	FCGX_Finish_r(request);
 	FCGX_Free(request, 1);
@@ -158,7 +157,9 @@ void obix_request_destroy_response_items(obix_request_t *request)
  */
 void obix_request_destroy(obix_request_t *request)
 {
-	assert(request);
+	if (!request) {
+		return;
+	}
 
 	obix_fcgi_request_destroy(request->request);
 
@@ -189,7 +190,9 @@ response_item_t *obix_request_create_response_item(char *text, int size, int cop
 {
 	response_item_t *item;
 
-	assert(text && size > 0);
+	if (!text || size <= 0) {
+		return NULL;
+	}
 
 	if (!(item = (response_item_t *)malloc(sizeof(response_item_t)))) {
 		return NULL;
@@ -214,8 +217,6 @@ response_item_t *obix_request_create_response_item(char *text, int size, int cop
 
 void obix_request_add_response_item(obix_request_t *request, response_item_t *item)
 {
-	assert(request && item);
-
 	pthread_mutex_lock(&request->mutex);
 	list_add(&item->list, &request->response_items);
 	request->response_len += item->len;
@@ -225,8 +226,6 @@ void obix_request_add_response_item(obix_request_t *request, response_item_t *it
 
 void obix_request_append_response_item(obix_request_t *request, response_item_t *item)
 {
-	assert(request && item);
-
 	pthread_mutex_lock(&request->mutex);
 	list_add_tail(&item->list, &request->response_items);
 	request->response_len += item->len;

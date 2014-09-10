@@ -1,0 +1,441 @@
+<?xml version="1.0"?>
+<obj name="MESN" href="/obix/deviceRoot/M1/MESN" is="nextdc:mesn">
+  <abstime name="last_updated" href="last_updated" val="2014-09-01T05:45:06" writable="true"/>
+  <list name="hv_switchboards" href="hv_switchboards" is="obix:list" of="obix:obj nextdc:switchboard" writable="true">
+    <obj name="SwBrd1" href="SwBrd1" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="InFdr" href="InFdr" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1837.0" writable="true"/>
+          <real name="kWh" href="kWh" val="15839900.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="OFdr1" href="OFdr1" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="622.0" writable="true"/>
+          <real name="kWh" href="kWh" val="3683700.0" writable="true"/>
+        </obj>
+        <obj name="OFdr2" href="OFdr2" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="570.0" writable="true"/>
+          <real name="kWh" href="kWh" val="3709100.0" writable="true"/>
+        </obj>
+        <obj name="OFdr3" href="OFdr3" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="4775700.0" writable="true"/>
+        </obj>
+        <obj name="OFdr4" href="OFdr4" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="635.0" writable="true"/>
+          <real name="kWh" href="kWh" val="2875400.0" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="SwBrd2" href="SwBrd2" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="InFdr" href="InFdr" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="598.0" writable="true"/>
+          <real name="kWh" href="kWh" val="4943800.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="OFdr1" href="OFdr1" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="585.0" writable="true"/>
+          <real name="kWh" href="kWh" val="2804100.0" writable="true"/>
+        </obj>
+        <obj name="OFdr2" href="OFdr2" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="2851000.0" writable="true"/>
+        </obj>
+        <obj name="OFdr3" href="OFdr3" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="0.0" writable="true"/>
+        </obj>
+        <obj name="OFdr4" href="OFdr4" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="100.0" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="SwBrd3" href="SwBrd3" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="InFdr" href="InFdr" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="300.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="OFdr1" href="OFdr1" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="100.0" writable="true"/>
+        </obj>
+        <obj name="OFdr2" href="OFdr2" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="100.0" writable="true"/>
+        </obj>
+        <obj name="OFdr3" href="OFdr3" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="100.0" writable="true"/>
+        </obj>
+        <obj name="OFdr4" href="OFdr4" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="0.0" writable="true"/>
+        </obj>
+        <obj name="OFdr5" href="OFdr5" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="0.0" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+  </list>
+  <list name="main_switchboards" href="main_switchboards" is="obix:list" of="obix:obj nextdc:switchboard" writable="true">
+    <obj name="MsbA" href="MsbA" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-373.0" writable="true"/>
+          <real name="kWh" href="kWh" val="2803593.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="DhLp01" href="DhLp01" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.2" writable="true"/>
+          <real name="kWh" href="kWh" val="14223.8" writable="true"/>
+        </obj>
+        <obj name="DhLp04" href="DhLp04" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.1" writable="true"/>
+          <real name="kWh" href="kWh" val="10940.3" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbB" href="MsbB" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-141.0" writable="true"/>
+          <real name="kWh" href="kWh" val="2137884.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="DhLp02" href="DhLp02" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.1" writable="true"/>
+          <real name="kWh" href="kWh" val="8467.4" writable="true"/>
+        </obj>
+        <obj name="DhLp03" href="DhLp03" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.2" writable="true"/>
+          <real name="kWh" href="kWh" val="21951.6" writable="true"/>
+        </obj>
+        <obj name="LGP08" href="LGP08" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.8" writable="true"/>
+          <real name="kWh" href="kWh" val="13902.7" writable="true"/>
+        </obj>
+        <obj name="LGP16" href="LGP16" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.8" writable="true"/>
+          <real name="kWh" href="kWh" val="28614.6" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbC" href="MsbC" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-431.0" writable="true"/>
+          <real name="kWh" href="kWh" val="4670307.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="FcMcc1" href="FcMcc1" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="55.2" writable="true"/>
+          <real name="kWh" href="kWh" val="285182.4" writable="true"/>
+        </obj>
+        <obj name="LGP04" href="LGP04" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1.4" writable="true"/>
+          <real name="kWh" href="kWh" val="19661.0" writable="true"/>
+        </obj>
+        <obj name="LGP18" href="LGP18" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.5" writable="true"/>
+          <real name="kWh" href="kWh" val="15162.2" writable="true"/>
+        </obj>
+        <obj name="LGP19" href="LGP19" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="8.3" writable="true"/>
+          <real name="kWh" href="kWh" val="212637.3" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbD" href="MsbD" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-433.0" writable="true"/>
+          <real name="kWh" href="kWh" val="3929286.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="DhDb07" href="DhDb07" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1.9" writable="true"/>
+          <real name="kWh" href="kWh" val="67009.4" writable="true"/>
+        </obj>
+        <obj name="DhLp06" href="DhLp06" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.4" writable="true"/>
+          <real name="kWh" href="kWh" val="10804.6" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbE" href="MsbE" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-199.0" writable="true"/>
+          <real name="kWh" href="kWh" val="1162552.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="CracDb09" href="CracDb09" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="16.8" writable="true"/>
+          <real name="kWh" href="kWh" val="282024.7" writable="true"/>
+        </obj>
+        <obj name="CracDb12" href="CracDb12" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1.3" writable="true"/>
+          <real name="kWh" href="kWh" val="27475.2" writable="true"/>
+        </obj>
+        <obj name="DhDb09" href="DhDb09" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1.1" writable="true"/>
+          <real name="kWh" href="kWh" val="10482.6" writable="true"/>
+        </obj>
+        <obj name="DhDb12" href="DhDb12" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1.1" writable="true"/>
+          <real name="kWh" href="kWh" val="10100.9" writable="true"/>
+        </obj>
+        <obj name="LGP03" href="LGP03" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1.2" writable="true"/>
+          <real name="kWh" href="kWh" val="11930.9" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbF" href="MsbF" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-271.0" writable="true"/>
+          <real name="kWh" href="kWh" val="1379012.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="CracDb10" href="CracDb10" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.1" writable="true"/>
+          <real name="kWh" href="kWh" val="1523.2" writable="true"/>
+        </obj>
+        <obj name="CracDb11" href="CracDb11" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="15.6" writable="true"/>
+          <real name="kWh" href="kWh" val="216649.8" writable="true"/>
+        </obj>
+        <obj name="DhDb10" href="DhDb10" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1.4" writable="true"/>
+          <real name="kWh" href="kWh" val="10067.7" writable="true"/>
+        </obj>
+        <obj name="DhDb11" href="DhDb11" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.9" writable="true"/>
+          <real name="kWh" href="kWh" val="9401.3" writable="true"/>
+        </obj>
+        <obj name="LGP02" href="LGP02" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.5" writable="true"/>
+          <real name="kWh" href="kWh" val="7115.0" writable="true"/>
+        </obj>
+        <obj name="LGP06" href="LGP06" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.3" writable="true"/>
+          <real name="kWh" href="kWh" val="10134.8" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbG" href="MsbG" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-70.0" writable="true"/>
+          <real name="kWh" href="kWh" val="45347.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="Crac4G13" href="Crac4G13" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="4.7" writable="true"/>
+          <real name="kWh" href="kWh" val="69983.8" writable="true"/>
+        </obj>
+        <obj name="CracDb01" href="CracDb01" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="12.3" writable="true"/>
+          <real name="kWh" href="kWh" val="210816.6" writable="true"/>
+        </obj>
+        <obj name="CracDb04" href="CracDb04" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.1" writable="true"/>
+          <real name="kWh" href="kWh" val="1877.0" writable="true"/>
+        </obj>
+        <obj name="Mcc2" href="Mcc2" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.1" writable="true"/>
+          <real name="kWh" href="kWh" val="11319.9" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbH" href="MsbH" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-64.0" writable="true"/>
+          <real name="kWh" href="kWh" val="83610.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="Crac4H14" href="Crac4H14" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="7.2" writable="true"/>
+          <real name="kWh" href="kWh" val="107419.4" writable="true"/>
+        </obj>
+        <obj name="CracDb02" href="CracDb02" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="0.6" writable="true"/>
+        </obj>
+        <obj name="CracDb03" href="CracDb03" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="8.4" writable="true"/>
+          <real name="kWh" href="kWh" val="163686.6" writable="true"/>
+        </obj>
+        <obj name="LGP01" href="LGP01" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="7.5" writable="true"/>
+          <real name="kWh" href="kWh" val="126248.1" writable="true"/>
+        </obj>
+        <obj name="LGP05" href="LGP05" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.6" writable="true"/>
+          <real name="kWh" href="kWh" val="17396.2" writable="true"/>
+        </obj>
+        <obj name="LGP11" href="LGP11" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="7.8" writable="true"/>
+          <real name="kWh" href="kWh" val="133260.2" writable="true"/>
+        </obj>
+        <obj name="Mcc3" href="Mcc3" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="16.7" writable="true"/>
+          <real name="kWh" href="kWh" val="490759.0" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbI" href="MsbI" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-44.0" writable="true"/>
+          <real name="kWh" href="kWh" val="23802.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="Crac5I15" href="Crac5I15" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="7.0" writable="true"/>
+          <real name="kWh" href="kWh" val="72779.8" writable="true"/>
+        </obj>
+        <obj name="CracDb05" href="CracDb05" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="16.7" writable="true"/>
+          <real name="kWh" href="kWh" val="443492.3" writable="true"/>
+        </obj>
+        <obj name="CracDb08" href="CracDb08" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.1" writable="true"/>
+          <real name="kWh" href="kWh" val="2065.3" writable="true"/>
+        </obj>
+        <obj name="DhDb08" href="DhDb08" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.2" writable="true"/>
+          <real name="kWh" href="kWh" val="10626.9" writable="true"/>
+        </obj>
+        <obj name="DhLp05" href="DhLp05" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.6" writable="true"/>
+          <real name="kWh" href="kWh" val="16613.6" writable="true"/>
+        </obj>
+        <obj name="LGP07" href="LGP07" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.9" writable="true"/>
+          <real name="kWh" href="kWh" val="18059.1" writable="true"/>
+        </obj>
+        <obj name="LGP10" href="LGP10" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="8.1" writable="true"/>
+          <real name="kWh" href="kWh" val="193827.2" writable="true"/>
+        </obj>
+        <obj name="LGP15" href="LGP15" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="0.0" writable="true"/>
+        </obj>
+        <obj name="LGP17" href="LGP17" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="1.2" writable="true"/>
+          <real name="kWh" href="kWh" val="66142.0" writable="true"/>
+        </obj>
+        <obj name="Mcc1" href="Mcc1" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="86.9" writable="true"/>
+          <real name="kWh" href="kWh" val="389306.9" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+    <obj name="MsbJ" href="MsbJ" is="nextdc:switchboard">
+      <list name="input_feeders" href="input_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="ACB" href="ACB" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="-62.0" writable="true"/>
+          <real name="kWh" href="kWh" val="94479.0" writable="true"/>
+        </obj>
+      </list>
+      <list name="output_feeders" href="output_feeders" is="obix:list" of="obix:obj nextdc:power_meter" writable="true">
+        <obj name="Crac5J16" href="Crac5J16" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.2" writable="true"/>
+          <real name="kWh" href="kWh" val="52665.8" writable="true"/>
+        </obj>
+        <obj name="CracDb06" href="CracDb06" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.1" writable="true"/>
+          <real name="kWh" href="kWh" val="1978.0" writable="true"/>
+        </obj>
+        <obj name="CracDb07" href="CracDb07" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="23.5" writable="true"/>
+          <real name="kWh" href="kWh" val="510421.2" writable="true"/>
+        </obj>
+        <obj name="Mcc4" href="Mcc4" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="11.7" writable="true"/>
+          <real name="kWh" href="kWh" val="29804.6" writable="true"/>
+        </obj>
+        <obj name="Mcc5" href="Mcc5" is="nextdc:power_meter">
+          <real name="kW" href="kW" val="0.0" writable="true"/>
+          <real name="kWh" href="kWh" val="0.0" writable="true"/>
+        </obj>
+      </list>
+    </obj>
+  </list>
+  <list name="bulk_tanks" href="bulk_tanks" is="obix:list" of="obix:obj nextdc:bulk_tank" writable="true">
+    <obj name="BT1" href="BT1" is="nextdc:bulk_tank">
+      <int name="level" href="level" val="69" writable="true"/>
+    </obj>
+    <obj name="BT2" href="BT2" is="nextdc:bulk_tank">
+      <int name="level" href="level" val="48" writable="true"/>
+    </obj>
+    <obj name="BT3" href="BT3" is="nextdc:bulk_tank">
+      <int name="level" href="level" val="82" writable="true"/>
+    </obj>
+  </list>
+  <list name="day_tanks" href="day_tanks" is="obix:list" of="obix:obj nextdc:day_tank" writable="true">
+    <obj name="DT7" href="DT7" is="nextdc:day_tank">
+      <str name="lvl_10" href="lvl_10" val="Off" writable="true"/>
+      <str name="lvl_25" href="lvl_25" val="Off" writable="true"/>
+      <str name="lvl_50" href="lvl_50" val="Off" writable="true"/>
+      <str name="lvl_98" href="lvl_98" val="Off" writable="true"/>
+    </obj>
+    <obj name="DT8" href="DT8" is="nextdc:day_tank">
+      <str name="lvl_10" href="lvl_10" val="Off" writable="true"/>
+      <str name="lvl_25" href="lvl_25" val="Off" writable="true"/>
+      <str name="lvl_50" href="lvl_50" val="Off" writable="true"/>
+      <str name="lvl_98" href="lvl_98" val="On" writable="true"/>
+    </obj>
+    <obj name="DT9" href="DT9" is="nextdc:day_tank">
+      <str name="lvl_10" href="lvl_10" val="Off" writable="true"/>
+      <str name="lvl_25" href="lvl_25" val="Off" writable="true"/>
+      <str name="lvl_50" href="lvl_50" val="Off" writable="true"/>
+      <str name="lvl_98" href="lvl_98" val="On" writable="true"/>
+    </obj>
+    <obj name="DT10" href="DT10" is="nextdc:day_tank">
+      <str name="lvl_10" href="lvl_10" val="Off" writable="true"/>
+      <str name="lvl_25" href="lvl_25" val="Off" writable="true"/>
+      <str name="lvl_50" href="lvl_50" val="Off" writable="true"/>
+      <str name="lvl_98" href="lvl_98" val="On" writable="true"/>
+    </obj>
+    <obj name="DT11" href="DT11" is="nextdc:day_tank">
+      <str name="lvl_10" href="lvl_10" val="Off" writable="true"/>
+      <str name="lvl_25" href="lvl_25" val="Off" writable="true"/>
+      <str name="lvl_50" href="lvl_50" val="Off" writable="true"/>
+      <str name="lvl_98" href="lvl_98" val="Off" writable="true"/>
+    </obj>
+    <obj name="DT12" href="DT12" is="nextdc:day_tank">
+      <str name="lvl_10" href="lvl_10" val="Off" writable="true"/>
+      <str name="lvl_25" href="lvl_25" val="Off" writable="true"/>
+      <str name="lvl_50" href="lvl_50" val="Off" writable="true"/>
+      <str name="lvl_98" href="lvl_98" val="Off" writable="true"/>
+    </obj>
+    <obj name="DT13" href="DT13" is="nextdc:day_tank">
+      <str name="lvl_10" href="lvl_10" val="Off" writable="true"/>
+      <str name="lvl_25" href="lvl_25" val="Off" writable="true"/>
+      <str name="lvl_50" href="lvl_50" val="Off" writable="true"/>
+      <str name="lvl_98" href="lvl_98" val="Off" writable="true"/>
+    </obj>
+  </list>
+</obj>
