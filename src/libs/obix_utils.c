@@ -212,14 +212,15 @@ int for_each_str_token(const char *delimiter, const char *str,
  * 1. Callers should not make any assumption about the sequence
  * of file name retrieved by readdir
  */
-int for_each_file_name(const char *dir, const char *prefix,
-					   const char *suffix, load_file_cb_t cb)
+int for_each_file_name(const char *dir,
+					   const char *prefix, const char *suffix,
+					   load_file_cb_t cb, void *arg)
 {
 	struct stat	statbuf;
 	struct dirent *dirp;
 	DIR *dp;
 
-	assert(dir && cb);
+	assert(dir && cb);	/* prefix, suffix are optional */
 
 	if (lstat(dir, &statbuf) < 0) {
 		log_error("Unable to stat %s", dir);
@@ -244,13 +245,13 @@ int for_each_file_name(const char *dir, const char *prefix,
 		}
 
 		/* Skip if not matching specified prefix and suffix */
-		if (strstr(dirp->d_name, prefix) != dirp->d_name ||
-			strstr(dirp->d_name, suffix) !=
-				dirp->d_name + strlen(dirp->d_name) - strlen(suffix)) {
+		if ((prefix && strstr(dirp->d_name, prefix) != dirp->d_name) ||
+			(suffix && strstr(dirp->d_name, suffix) !=
+				dirp->d_name + strlen(dirp->d_name) - strlen(suffix))) {
 			continue;
 		}
 
-		if (cb(dir, dirp->d_name) < 0) {
+		if (cb(dir, dirp->d_name, arg) < 0) {
 			closedir(dp);
 			return -1;
 		}
