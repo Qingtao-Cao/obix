@@ -14,7 +14,8 @@ find_path(KERNELHEADERS_DIR
 if (KERNELHEADERS_DIR)
   set(KERNELHEADERS_INCLUDE_DIRS
     ${KERNELHEADERS_DIR}/include
-    ${KERNELHEADERS_DIR}/arch/x86/include/asm
+# Only needed on 2.x kernels
+#    ${KERNELHEADERS_DIR}/arch/x86/include/asm
     ${KERNELHEADERS_DIR}/include/arch/x86/include
     ${KERNELHEADERS_DIR}/include/arch/x86/include/generated
     CACHE PATH "Kernel headers include dirs" FORCE

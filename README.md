@@ -149,6 +149,17 @@ To build the obix-server:
 
 This creates an "out-of-source" build with all output, including the obix-fcgi binary and libobix libraries, found in the build directory.
 
+**Building on 2.x kernel**
+
+The 2.x kernel requires an additional kernel headers directory in FindKernelHeaders.cmake.
+Uncomment the KERNELHEADERS_DIR line in src/server/cmake/FindKernelHeaders.cmake and src/libs/cmake/FindKernelHeaders.cmake
+
+```
+# Only needed on 2.x kernels
+#  ${KERNELHEADERS_DIR}/arch/x86/include/asm
+```
+
+
 **Debug build**
 
 To enable the DEBUG macro and associated tools, specify CMAKE_BUILD_TYPE to "Debug":
