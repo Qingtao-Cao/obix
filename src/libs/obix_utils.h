@@ -24,7 +24,6 @@
 
 #include <libxml2/libxml/tree.h>
 #include <stdbool.h>
-//#include <sys/types.h>
 
 /** @name oBIX Error Contracts' URIs
  * Can be used to define the error type returned by an oBIX server.
