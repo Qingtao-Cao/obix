@@ -27,35 +27,35 @@
 #include "server.h"
 
 enum {
-    ERR_NO_VAL = 1,
-    ERR_NO_IS,
-    ERR_NO_RESP,
-    ERR_NO_MEM,
-    ERR_NO_CONTENT,
-    ERR_INVALID_INPUT
+	ERR_NO_VAL = 1,
+	ERR_NO_IS,
+	ERR_NO_RESP,
+	ERR_NO_MEM,
+	ERR_NO_CONTENT,
+	ERR_INVALID_INPUT
 };
 
 static err_msg_t batch_err_msg[] = {
-    [ERR_NO_VAL] = {
-        .type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-        .msgs = "No required val attribute in BatchIn item"
-    },
-    [ERR_NO_IS] = {
-        .type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-        .msgs = "No required is attribute in BatchIn item"
-    },
-    [ERR_NO_RESP] = {
-        .type = OBIX_CONTRACT_ERR_SERVER,
-        .msgs = "The handler for this BatchIn item did not respond"
-    },
-    [ERR_NO_MEM] = {
-        .type = OBIX_CONTRACT_ERR_SERVER,
-        .msgs = "Failed to allocate BatchOut contract"
-    },
-    [ERR_INVALID_INPUT] = {
-        .type = OBIX_CONTRACT_ERR_SERVER,
-        .msgs = "Provided obix:BatchIn document is invalid"
-    }
+	[ERR_NO_VAL] = {
+		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
+		.msgs = "No required val attribute in BatchIn item"
+	},
+	[ERR_NO_IS] = {
+		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
+		.msgs = "No required is attribute in BatchIn item"
+	},
+	[ERR_NO_RESP] = {
+		.type = OBIX_CONTRACT_ERR_SERVER,
+		.msgs = "The handler for this BatchIn item did not respond"
+	},
+	[ERR_NO_MEM] = {
+		.type = OBIX_CONTRACT_ERR_SERVER,
+		.msgs = "Failed to allocate BatchOut contract"
+	},
+	[ERR_INVALID_INPUT] = {
+		.type = OBIX_CONTRACT_ERR_SERVER,
+		.msgs = "Provided obix:BatchIn document is invalid"
+	}
 };
 
 /**
@@ -73,17 +73,17 @@ static err_msg_t batch_err_msg[] = {
  */
 static void obix_batch_add_item(xmlNode *batchOutContract, xmlNode *item)
 {
-    assert(batchOutContract && item);
+	assert(batchOutContract && item);
 
-    if (xmldb_add_child(batchOutContract, item, 1, 0) == NULL) {
-        log_error("could not add item into the provided BatchOut contract.");
-        /*
-         * The item should be freed manually since it could not be released
-         * along with the batch_out contract if failed to be added into it
-         * in the first place
-         */
-        xmlFree(item);
-    }
+	if (xmldb_add_child(batchOutContract, item, 1, 0) == NULL) {
+		log_error("could not add item into the provided BatchOut contract.");
+		/*
+		 * The item should be freed manually since it could not be released
+		 * along with the batch_out contract if failed to be added into it
+		 * in the first place
+		 */
+		xmlFree(item);
+	}
 }
 
 /**
@@ -95,101 +95,101 @@ static void obix_batch_add_item(xmlNode *batchOutContract, xmlNode *item)
  */
 static int obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 {
-    xmlNode *batch_out = *(xmlNode **)arg1;
-    obix_request_t *request = (obix_request_t *)arg2;
-    xmlNode *itemVal = NULL;
-    xmlChar *itemContract = NULL;
-    char *itemHref = NULL;
-    int ret;
+	xmlNode *batch_out = *(xmlNode **)arg1;
+	obix_request_t *request = (obix_request_t *)arg2;
+	xmlNode *itemVal = NULL;
+	xmlChar *itemContract = NULL;
+	char *itemHref = NULL;
+	int ret;
 
-    assert(batchItem);
+	assert(batchItem);
 
-    if (!(itemHref = (char *)xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
-        ret = ERR_NO_VAL;
-        goto failed;
-    }
+	if (!(itemHref = (char *)xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
+		ret = ERR_NO_VAL;
+		goto failed;
+	}
 
-    if (!(itemContract = xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_IS))) {
-        ret = ERR_NO_IS;
-        goto failed;
-    }
+	if (!(itemContract = xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_IS))) {
+		ret = ERR_NO_IS;
+		goto failed;
+	}
 
-    if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_READ) == 0) {
-        itemVal = obix_server_read(request, itemHref);
-    } else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
-        itemVal = obix_server_write(request, itemHref, batchItem->children);
-    } else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
-        itemVal = obix_server_invoke(request, itemHref, batchItem->children);
-    }
+	if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_READ) == 0) {
+		itemVal = obix_server_read(request, itemHref);
+	} else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
+		itemVal = obix_server_write(request, itemHref, batchItem->children);
+	} else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
+		itemVal = obix_server_invoke(request, itemHref, batchItem->children);
+	}
 
-    ret = ((itemVal == NULL) ? ERR_NO_RESP : 0);
+	ret = ((itemVal == NULL) ? ERR_NO_RESP : 0);
 
-    /* Fall Through */
+	/* Fall Through */
 
 failed:
-    if (ret) {
-        log_error("%s", batch_err_msg[ret].msgs);
-        itemVal = obix_server_generate_error(itemHref, batch_err_msg[ret].type,
-                                             "obix:Batch", batch_err_msg[ret].msgs);
-    }
+	if (ret) {
+		log_error("%s", batch_err_msg[ret].msgs);
+		itemVal = obix_server_generate_error(itemHref, batch_err_msg[ret].type,
+											 "obix:Batch", batch_err_msg[ret].msgs);
+	}
 
-    if (itemContract) {
-        xmlFree(itemContract);
-    }
+	if (itemContract) {
+		xmlFree(itemContract);
+	}
 
-    if (itemHref) {
-        free(itemHref);
-    }
+	if (itemHref) {
+		free(itemHref);
+	}
 
-    obix_batch_add_item(batch_out, itemVal);
+	obix_batch_add_item(batch_out, itemVal);
 
-    return 0;
+	return 0;
 }
 
 static xmlNode *obix_batch_process(obix_request_t *request, xmlNode *batchInInput)
 {
-    xmlNode *batchOutContract = NULL;
+	xmlNode *batchOutContract = NULL;
 	xmlNode *uriItem = NULL;
-    xmlChar *isAttr = NULL;
-    int ret;
+	xmlChar *isAttr = NULL;
+	int ret;
 
-    assert(batchInInput);
+	assert(batchInInput);
 
-    if (!(batchOutContract = xmldb_copy_sys(OBIX_SYS_BATCH_OUT_STUB))) {
-        ret = ERR_NO_MEM;
-        goto failed;
-    }
+	if (!(batchOutContract = xmldb_copy_sys(OBIX_SYS_BATCH_OUT_STUB))) {
+		ret = ERR_NO_MEM;
+		goto failed;
+	}
 
-    if (xmlStrcasecmp(batchInInput->name, BAD_CAST OBIX_OBJ_LIST) != 0
-            || xmlHasProp(batchOutContract, BAD_CAST OBIX_ATTR_IS) == false
-            || (isAttr = xmlGetProp(batchInInput, BAD_CAST OBIX_ATTR_IS)) == NULL
-            || xmlStrcmp(isAttr, BAD_CAST OBIX_CONTRACT_BATCH_IN) != 0) {
-        ret = ERR_INVALID_INPUT;
-        goto failed;
-    }
+	if (xmlStrcasecmp(batchInInput->name, BAD_CAST OBIX_OBJ_LIST) != 0
+			|| xmlHasProp(batchOutContract, BAD_CAST OBIX_ATTR_IS) == false
+			|| (isAttr = xmlGetProp(batchInInput, BAD_CAST OBIX_ATTR_IS)) == NULL
+			|| xmlStrcmp(isAttr, BAD_CAST OBIX_CONTRACT_BATCH_IN) != 0) {
+		ret = ERR_INVALID_INPUT;
+		goto failed;
+	}
 
-    for (uriItem = batchInInput->children; uriItem; uriItem = uriItem->next) {
+	for (uriItem = batchInInput->children; uriItem; uriItem = uriItem->next) {
 		if (xmlStrcasecmp(uriItem->name, BAD_CAST OBIX_OBJ_URI) != 0) {
 			continue;
 		}
-		
+
 		if (obix_batch_process_item(uriItem, &batchOutContract, request) < 0) {
 			break;
 		}
 	}
-	
-    xmlFree(isAttr);
 
-    return batchOutContract;
+	xmlFree(isAttr);
+
+	return batchOutContract;
 
 failed:
-    if (isAttr != NULL) {
-        xmlFree(isAttr);
-    }
+	if (isAttr != NULL) {
+		xmlFree(isAttr);
+	}
 
-    log_error("%s", batch_err_msg[ret].msgs);
-    return obix_server_generate_error(request->request_decoded_uri, batch_err_msg[ret].type,
-                                      "obix:Batch", batch_err_msg[ret].msgs);
+	log_error("%s", batch_err_msg[ret].msgs);
+	return obix_server_generate_error(request->request_decoded_uri, batch_err_msg[ret].type,
+									  "obix:Batch", batch_err_msg[ret].msgs);
 }
 
 /**
@@ -199,5 +199,5 @@ failed:
  */
 xmlNode *handlerBatch(obix_request_t *request, xmlNode *input)
 {
-    return obix_batch_process(request, input);
+	return obix_batch_process(request, input);
 }
