@@ -22,7 +22,7 @@
 #define _HASH_H
 
 #include <pthread.h>
-#include "my_list.h"
+#include "list.h"
 
 typedef struct hash_node {
 	const void *item;
