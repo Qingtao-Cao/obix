@@ -24,7 +24,6 @@
 
 #include <libxml2/libxml/tree.h>
 #include <stdbool.h>
-#include <sys/types.h>
 
 /** @name oBIX Error Contracts' URIs
  * Can be used to define the error type returned by an oBIX server.
@@ -144,6 +143,8 @@ extern const char *OBIX_META_ATTR_WATCH_ID;
 extern const char* XML_TRUE;
 /** String representation of boolean @a false value. */
 extern const char* XML_FALSE;
+
+extern const char *OBIX_CONTRACT_BATCH_IN;
 
 /** obix:BatchOut */
 extern const char *OBIX_CONTRACT_BATCH_OUT;

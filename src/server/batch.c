@@ -26,18 +26,13 @@
 #include "xml_storage.h"
 #include "server.h"
 
-/*
- * XPath Predict for any node contained in obix:BatchIn contract
- * (as children of its list node)
- */
-static const char *XP_BATCHIN = "/list[@is='obix:BatchIn']/*";
-
 enum {
 	ERR_NO_VAL = 1,
 	ERR_NO_IS,
 	ERR_NO_RESP,
 	ERR_NO_MEM,
-	ERR_NO_CONTENT
+	ERR_NO_CONTENT,
+	ERR_INVALID_INPUT
 };
 
 static err_msg_t batch_err_msg[] = {
@@ -56,6 +51,10 @@ static err_msg_t batch_err_msg[] = {
 	[ERR_NO_MEM] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
 		.msgs = "Failed to allocate BatchOut contract"
+	},
+	[ERR_INVALID_INPUT] = {
+		.type = OBIX_CONTRACT_ERR_SERVER,
+		.msgs = "Provided obix:BatchIn document is invalid"
 	}
 };
 
@@ -94,9 +93,9 @@ static void obix_batch_add_item(xmlNode *batchOutContract, xmlNode *item)
  * @param	batchItem	A pointer to an obix:Batch item, pulled from a BatchIn contract.
  * @remark	In catastrophic cases, this function may return NULL.
  */
-static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
+static int obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 {
-	xmlNode *batch_out = (xmlNode *)arg1;
+	xmlNode *batch_out = *(xmlNode **)arg1;
 	obix_request_t *request = (obix_request_t *)arg2;
 	xmlNode *itemVal = NULL;
 	xmlChar *itemContract = NULL;
@@ -115,11 +114,11 @@ static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
 		goto failed;
 	}
 
-	if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_READ) == 0) {
+	if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_READ) == 0) {
 		itemVal = obix_server_read(request, itemHref);
-	} else if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
+	} else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
 		itemVal = obix_server_write(request, itemHref, batchItem->children);
-	} else if (xmlStrcmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
+	} else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
 		itemVal = obix_server_invoke(request, itemHref, batchItem->children);
 	}
 
@@ -143,11 +142,15 @@ failed:
 	}
 
 	obix_batch_add_item(batch_out, itemVal);
+
+	return 0;
 }
 
 static xmlNode *obix_batch_process(obix_request_t *request, xmlNode *batchInInput)
 {
 	xmlNode *batchOutContract = NULL;
+	xmlNode *uriItem = NULL;
+	xmlChar *isAttr = NULL;
 	int ret;
 
 	assert(batchInInput);
@@ -157,14 +160,36 @@ static xmlNode *obix_batch_process(obix_request_t *request, xmlNode *batchInInpu
 		goto failed;
 	}
 
-	xml_xpath_for_each_item(batchInInput, XP_BATCHIN,
-							obix_batch_process_item, batchOutContract, request);
+	if (xmlStrcasecmp(batchInInput->name, BAD_CAST OBIX_OBJ_LIST) != 0
+			|| xmlHasProp(batchOutContract, BAD_CAST OBIX_ATTR_IS) == false
+			|| (isAttr = xmlGetProp(batchInInput, BAD_CAST OBIX_ATTR_IS)) == NULL
+			|| xmlStrcmp(isAttr, BAD_CAST OBIX_CONTRACT_BATCH_IN) != 0) {
+		ret = ERR_INVALID_INPUT;
+		goto failed;
+	}
+
+	for (uriItem = batchInInput->children; uriItem; uriItem = uriItem->next) {
+		if (xmlStrcasecmp(uriItem->name, BAD_CAST OBIX_OBJ_URI) != 0) {
+			continue;
+		}
+
+		if (obix_batch_process_item(uriItem, &batchOutContract, request) < 0) {
+			break;
+		}
+	}
+
+	xmlFree(isAttr);
+
 	return batchOutContract;
 
 failed:
+	if (isAttr != NULL) {
+		xmlFree(isAttr);
+	}
+
 	log_error("%s", batch_err_msg[ret].msgs);
 	return obix_server_generate_error(request->request_decoded_uri, batch_err_msg[ret].type,
-						"obix:Batch", batch_err_msg[ret].msgs);
+									  "obix:Batch", batch_err_msg[ret].msgs);
 }
 
 /**
