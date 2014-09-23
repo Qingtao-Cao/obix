@@ -23,6 +23,7 @@ src/test/generate_logs
 tests/lighttpd/log/access.log
 tests/lighttpd/log/error.log
 tests/lighttpd/run/lighttpd.pid
-tests/tests/obix-fcgi
+tests/obix-fcgi
+tests/tests/
 install_manifest.txt
 cmake_install.cmake
