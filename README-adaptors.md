@@ -2,8 +2,7 @@
  
 Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]    
 
-oBIX-adaptors is free software licensed under GPLv3 License.
-Text of the license can be found in the COPYING file.
+oBIX-adaptors is free software licensed under GPLv3 License. Text of the license can be found in the COPYING file.
 
 This file contains a description of the project in the following sections:
 
@@ -18,7 +17,6 @@ The package has the following library dependencies:
  - libcsv
  - libxml2
  - libmodbus-devel
- - kernel-devel
  - ONEDC/obix.git
 
 Note, the oBIX client side APIs have a tight connection with the server implementation and therefore they are provided by the oBIX server package that can be downloaded by below command:

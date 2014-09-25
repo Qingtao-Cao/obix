@@ -24,8 +24,8 @@
  * Build below command:
  *
  *	$ gcc -g -Wall -Werror test_hash.c ../libs/hash.c
- *		  -I../libs/ -I/usr/src/kernels/`uname -r`/include -I/usr/include/libxml2/
- *		  -lxml2 -o test_hash
+ *		  -I../libs/ -I/usr/include/libxml2/
+ *		  -lxml2 -lobix-common -o test_hash
  *
  * Run with following arguments:
  *
@@ -63,7 +63,7 @@ static hash_ops_t device_hash_ops = {
 unsigned int device_get_hash(const unsigned char *str, const unsigned int size)
 {
 	if (xmlStrncmp(str, BAD_CAST OBIX_DEVICE_ROOT, OBIX_DEVICE_ROOT_LEN) == 0) {
-		str += DEVICE_LOBBY_LEN;
+		str += OBIX_DEVICE_ROOT_LEN;
 	}
 
 	return hash_bkdr(str, size);

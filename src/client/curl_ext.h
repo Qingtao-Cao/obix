@@ -24,7 +24,7 @@
 
 #include <libxml/tree.h>
 #include <curl/curl.h>
-#include "my_list.h"
+#include "list.h"
 
 /*
  * A set of quantums that store scattered chunk of data received by libcurl.

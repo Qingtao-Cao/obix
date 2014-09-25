@@ -24,7 +24,7 @@
 
 #include <pthread.h>
 #include <libxml/tree.h>
-#include "my_list.h"
+#include "list.h"
 #include "curl_ext.h"
 #include "obix_utils.h"
 
