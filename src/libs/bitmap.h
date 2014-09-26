@@ -24,7 +24,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
-#include "list.h"
+#include "my_list.h"
 
 /**
  * Describes a bitmap node.
