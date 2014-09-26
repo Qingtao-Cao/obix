@@ -97,7 +97,6 @@ const char *OBIX_META_ATTR_WATCH_ID = "watch_id";
 const char *XML_TRUE = "true";
 const char *XML_FALSE = "false";
 
-const char *OBIX_CONTRACT_BATCH_IN = "obix:BatchIn";
 const char *OBIX_CONTRACT_BATCH_OUT = "obix:BatchOut";
 const char *OBIX_CONTRACT_OP_READ = "obix:Read";
 const char *OBIX_CONTRACT_OP_WRITE = "obix:Write";
