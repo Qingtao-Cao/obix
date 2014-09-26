@@ -21,65 +21,17 @@
 
 #include <unistd.h>
 #include <sys/syscall.h>
-#include <assert.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
 #include <errno.h>
-#include <libxml/tree.h>
+#include <math.h>			/* HUGE_VAL */
+#include <float.h>			/* FLT_EPSILON */
 #include "obix_utils.h"
 #include "log_utils.h"
 
-#define SERVER_DB_PREFIX	"server_"
-#define SERVER_DB_SUFFIX	".xml"
-
-/** @name oBIX Object Types (XML Element Types)
- * @{
- */
-const char *OBIX_OBJ = "obj";
-const char *OBIX_OBJ_REF = "ref";
-const char *OBIX_OBJ_OP = "op";
-const char *OBIX_OBJ_LIST = "list";
-const char *OBIX_OBJ_ERR = "err";
-const char *OBIX_OBJ_BOOL = "bool";
-const char *OBIX_OBJ_INT = "int";
-const char *OBIX_OBJ_REAL = "real";
-const char *OBIX_OBJ_STR = "str";
-const char *OBIX_OBJ_ENUM = "enum";
-const char *OBIX_OBJ_ABSTIME = "abstime";
-const char *OBIX_OBJ_RELTIME = "reltime";
-const char *OBIX_OBJ_URI = "uri";
-const char *OBIX_OBJ_FEED = "feed";
-const char *OBIX_OBJ_META = "meta";
-const char *OBIX_OBJ_DATE = "date";
-/** @} */
-
-/** @name oBIX Object Names
- * Object names which are used in oBIX contracts.
- * @{
- */
-const char *OBIX_NAME_SIGN_UP = "signUp";
-const char *OBIX_NAME_BATCH = "batch";
-const char *OBIX_NAME_WATCH_SERVICE = "watchService";
-const char *OBIX_NAME_WATCH_SERVICE_MAKE = "make";
-const char *OBIX_NAME_WATCH_ADD = "add";
-const char *OBIX_NAME_WATCH_REMOVE = "remove";
-const char *OBIX_NAME_WATCH_POLLCHANGES = "pollChanges";
-const char *OBIX_NAME_WATCH_POLLREFRESH = "pollRefresh";
-const char *OBIX_NAME_WATCH_DELETE = "delete";
-const char *OBIX_NAME_WATCH_LEASE = "lease";
-const char *OBIX_NAME_WATCH_POLL_WAIT_INTERVAL = "pollWaitInterval";
-const char *OBIX_NAME_WATCH_POLL_WAIT_INTERVAL_MIN = "min";
-const char *OBIX_NAME_WATCH_POLL_WAIT_INTERVAL_MAX = "max";
-/** @} */
-
-const char *OBIX_OBJ_NULL_TEMPLATE = "<obj null=\"true\"/>";
-
-/** @name oBIX Object Attributes and Facets
- * @{
- */
 const char *OBIX_ATTR_IS = "is";
 const char *OBIX_ATTR_OF = "of";
 const char *OBIX_ATTR_NAME = "name";
@@ -90,21 +42,44 @@ const char *OBIX_ATTR_WRITABLE = "writable";
 const char *OBIX_ATTR_DISPLAY = "display";
 const char *OBIX_ATTR_DISPLAY_NAME = "displayName";
 const char *OBIX_ATTR_HIDDEN = "hidden";
+
 const char *OBIX_META_ATTR_OP = "op";
 const char *OBIX_META_ATTR_WATCH_ID = "watch_id";
-/** @} */
 
 const char *XML_TRUE = "true";
 const char *XML_FALSE = "false";
+const int XML_BOOL_MAX_LEN = 5;
 
-const char *OBIX_CONTRACT_BATCH_IN = "obix:BatchIn";
-const char *OBIX_CONTRACT_BATCH_OUT = "obix:BatchOut";
+const char *STR_DELIMITER_SLASH = "/";
+const char *STR_DELIMITER_DOT = ".";
+
+const char *HIST_REC_TS = "timestamp";
+const char *HIST_AIN_DATA = "data";
+const char *HIST_AIN_TS_UND = "UNSPECIFIED";
+const char *HIST_OP_APPEND = "append";
+const char *HIST_OP_QUERY = "query";
+const char *HIST_INDEX = "index";
+const char *HIST_TS_INIT = "1970-01-01T0:0:0";
+
+/*
+ * oBIX contracts used by the server side
+ */
 const char *OBIX_CONTRACT_OP_READ = "obix:Read";
 const char *OBIX_CONTRACT_OP_WRITE = "obix:Write";
 const char *OBIX_CONTRACT_OP_INVOKE = "obix:Invoke";
 
-const char *STR_DELIMITER_SLASH = "/";
-const char *STR_DELIMITER_DOT = ".";
+/*
+ * oBIX contracts used by the client side
+ */
+const char *OBIX_CONTRACT_HIST_AIN = "obix:HistoryAppendIn";
+const char *OBIX_CONTRACT_HIST_FLT = "obix:HistoryFilter";
+const char *OBIX_CONTRACT_BATCH_IN = "obix:BatchIn";
+
+const char *OBIX_RELTIME_ZERO = "PT0S";
+const int OBIX_RELTIME_ZERO_LEN = 4;
+
+const char *OBIX_DEVICE_ROOT = "/obix/deviceRoot/";
+const int OBIX_DEVICE_ROOT_LEN = 17;
 
 /*
  * Get the TID of the calling thread
@@ -122,7 +97,9 @@ pid_t get_tid(void)
  */
 int slash_preceded(const char *s)
 {
-	assert(s);
+	if (!s) {
+		return 0;
+	}
 
 	return (s[0] == '/') ? 1 : 0;
 }
@@ -132,9 +109,17 @@ int slash_preceded(const char *s)
  */
 int slash_followed(const char *s)
 {
-	assert(s);
+	int len;
 
-	return (s[strlen(s) - 1] == '/') ? 1 : 0;
+	if (!s) {
+		return 0;
+	}
+
+	if ((len = strlen(s)) == 0) {	/* empty string */
+		return 0;
+	}
+
+	return (s[len - 1] == '/') ? 1 : 0;
 }
 
 /**
@@ -221,7 +206,10 @@ int for_each_file_name(const char *dir,
 	struct dirent *dirp;
 	DIR *dp;
 
-	assert(dir && cb);	/* prefix, suffix are optional */
+	if (!dir || !cb) {		/* prefix, suffix are optional */
+		log_error("Illegal parameters provided");
+		return -1;
+	}
 
 	if (lstat(dir, &statbuf) < 0) {
 		log_error("Unable to stat %s", dir);
@@ -262,30 +250,60 @@ int for_each_file_name(const char *dir,
 	return 0;
 }
 
-/**
+/*
  * Convert a number character string without '+/-' prefix
  * into an integer
  */
-long str_to_long(const char *str)
+int str_to_long(const char *str, long *val)
 {
 	char *endptr;
-	long val;
+
+	*val = 0;
 
 	errno = 0;
-	val = strtol(str, &endptr, 10);
-	if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN)) ||
-		(errno != 0 && val == 0)) {
+	*val = strtol(str, &endptr, 10);
+	if ((errno == ERANGE && (*val == LONG_MAX || *val == LONG_MIN)) ||
+		(errno != 0 && *val == 0)) {
 		return -1;
 	}
 
 	/* empty string, no number characters */
 	if (endptr == str) {
-		return -1;
+		return -2;
 	}
 
 	/* Simply ignore any trailing slashes or non-number characters */
 
-	return val;
+	return 0;
+}
+
+/*
+ * Convert a string into a float
+ *
+ * Return 0 on success, -1 otherwise
+ *
+ * TODO:
+ * Should float be compared against HUGE_VALX directly?
+ */
+int str_to_float(const char *str, float *val)
+{
+	char *endptr;
+
+	errno = 0;
+	*val = strtof(str, &endptr);
+	if ((errno = ERANGE && (*val == HUGE_VALF || *val == HUGE_VALL)) ||
+		(errno != 0 && fabs(*val) < FLT_EPSILON)) {
+		return -1;
+	}
+
+	/* empty string */
+	if (endptr == str) {
+		return -2;
+	}
+
+	/* Simply ignore any trailing slashes or non-number characters */
+
+	return 0;
 }
 
 /**
@@ -307,15 +325,6 @@ int timespec_compare(const struct timespec *m1, const struct timespec *m2)
 	}
 
 	return 0;
-}
-
-xmlNode *obix_obj_null(void)
-{
-    xmlNode *nullNode = xmlNewNode(NULL, BAD_CAST OBIX_OBJ);
-
-    xmlSetProp(nullNode, BAD_CAST OBIX_ATTR_NULL, BAD_CAST XML_TRUE);
-
-    return nullNode;
 }
 
 /*
@@ -385,9 +394,11 @@ int link_pathname(char **p, const char *root, const char *parent,
 	char *buf;
 	char *fmt;
 
-	assert(root);
+	*p = NULL;
 
-	len = strlen(root);
+	if (!root || ((len = strlen(root)) == 0)) {
+		return -1;
+	}
 
 	/* Extra "/" after root */
 	if (slash_followed(root) == 0) {
@@ -600,7 +611,9 @@ int timestamp_compare(const char *ts1, const char *ts2, int *res_d, int *res_t)
 	char *date2 = NULL, *time2 = NULL;
 	int ret = -1;
 
-	assert(ts1 && ts2);
+	if (!ts1 || !ts2) {
+		return -1;
+	}
 
 	if (timestamp_split(ts1, &date1, &time1) < 0 ||
 		timestamp_split(ts2, &date2, &time2) < 0) {
@@ -711,8 +724,8 @@ int timestamp_find_common(char **start, char **end,
 	return 0;
 }
 
-
-int obix_reltime_parseToLong(const char *str, long *duration) {
+int obix_reltime_to_long(const char *str, long *duration)
+{
     int negativeFlag = 0;
     int parsedSomething = 0;
     long result = 0;
@@ -889,127 +902,142 @@ int obix_reltime_parseToLong(const char *str, long *duration) {
     return 0;
 }
 
-char *obix_reltime_fromLong(long millis, RELTIME_FORMAT format) {
-    // helper function which calculates required length of a string for
-    // storing positive integer value + one symbol
+/*
+ * Get the number of digits of a unsigned long value
+ */
+static int long_len(const unsigned long l)
+{
+	int len;
 
-    int plonglen(long l) {
-        // quite nice stuff, don't you think so? :)
-        // but I think it is better than divide/multiply number on each step.
-        const long size[] = {
-            0, 9, 99, 999, 9999, 99999, 999999,
-            9999999, 99999999, 999999999, LONG_MAX
-        };
+	long size[] = {
+		0, 9, 99, 999, 9999, 99999, 999999,
+		9999999, 99999999, 999999999, LONG_MAX
+	};
 
-        int length;
+	for (len = 0; l > size[len]; len++) ;
 
-        for (length = 0; l > size[length]; length++)
-            ;
+	if (len) {	/* One more byte for string terminator */
+		len++;
+	}
 
-        // reserve one more byte for terminating symbol
-        if (length > 0) {
-            length++;
-        }
-
-        return length;
-    }
-
-    int days = 0;
-    int hours = 0;
-    long minutes = 0;
-    long seconds = 0;
-    int negativeFlag = 0;
-
-    int stringSize = 3;
-
-    if (millis == 0) {
-        // quick shortcut for zero case
-        char *reltime = (char *) malloc(5);
-        if (reltime == NULL) {
-            return NULL;
-        }
-
-        strcpy(reltime, "PT0S");
-        return reltime;
-    }
-
-    if (millis < 0) {
-        millis = -millis;
-        negativeFlag = 1;
-        stringSize++;
-    }
-
-    seconds = millis / 1000;
-    millis %= 1000;
-
-    if (format >= RELTIME_MIN) {
-        minutes = seconds / 60;
-        seconds -= minutes * 60;
-
-        if (format >= RELTIME_HOUR) {
-            hours = minutes / 60;
-            minutes %= 60;
-
-            if (format >= RELTIME_DAY) {
-                days = hours / 24;
-                hours %= 24;
-            }
-        }
-    }
-
-    stringSize += plonglen(days);
-    stringSize += plonglen(hours);
-    stringSize += plonglen(minutes);
-    stringSize += plonglen(seconds);
-    if (millis > 0) {
-        stringSize += 4;
-    }
-
-    char *reltime = (char *) malloc(stringSize);
-    if (reltime == NULL) {
-        return NULL;
-    }
-
-    // generating string of a kind 'PnDTnHnMnS'
-    int pos = 0;
-    if (negativeFlag == 1) {
-        reltime[pos++] = '-';
-    }
-
-    // obligatory symbol
-    reltime[pos++] = 'P';
-
-    if (days > 0) {
-        pos += sprintf(reltime + pos, "%dD", days);
-    }
-
-    if ((millis > 0) || (seconds > 0) || (minutes > 0) || (hours > 0)) {
-        reltime[pos++] = 'T';
-    }
-
-    if (hours > 0) {
-        pos += sprintf(reltime + pos, "%dH", hours);
-    }
-
-    if (minutes > 0) {
-        pos += sprintf(reltime + pos, "%ldM", minutes);
-    }
-
-    if ((seconds > 0) || (millis > 0)) {
-        pos += sprintf(reltime + pos, "%ld", seconds);
-
-        if (millis > 0) {
-            pos += sprintf(reltime + pos, ".%03ld", millis);
-            // remove all trailing zeros'
-            while (reltime[pos - 1] == '0') {
-                pos--;
-            }
-        }
-
-        reltime[pos++] = 'S';
-        reltime[pos] = '\0';
-    }
-
-    return reltime;
+	return len;
 }
 
+/*
+ * Generate a string representation in format of "PnDTnHnMnS"
+ * from the given long value.
+ *
+ * The 'P' and 'T' are obligatory symbols
+ *
+ * NOTE: the second value may contain decimal part
+ */
+char *obix_reltime_from_long(long millis, RELTIME_FORMAT format)
+{
+	int seconds, minutes, hours, days;
+	int negativeFlag = 0, pos;
+	char *reltime;
+	int stringSize = 1;		/* 'P' */
+
+	if (millis == 0) {
+		if (!(reltime = (char *)malloc(OBIX_RELTIME_ZERO_LEN + 1))) {
+			return NULL;
+		}
+
+		return strcpy(reltime, OBIX_RELTIME_ZERO);
+	}
+
+	if (millis < 0) {
+		millis *= -1;
+		negativeFlag = 1;
+		stringSize++;		/* '-' */
+	}
+
+	minutes = hours = days = 0;
+
+	seconds = millis / 1000;
+	millis %= 1000;
+
+	if (format >= RELTIME_MIN) {
+		minutes = seconds / 60;
+		seconds %= 60;
+
+		if (format >= RELTIME_HOUR) {
+			hours = minutes / 60;
+			minutes %= 60;
+
+			if (format >= RELTIME_DAY) {
+				days = hours / 24;
+				hours %= 24;
+			}
+	    }
+	}
+
+	if (millis > 0) {
+		stringSize += long_len(millis);
+		stringSize++;	/* '.' */
+	}
+
+	if (seconds > 0) {
+		stringSize += long_len(seconds);
+		stringSize++;	/* 'S' */
+	}
+
+	if (minutes > 0) {
+		stringSize += long_len(minutes);
+		stringSize++;	/* 'M' */
+	}
+
+	if (hours > 0) {
+		stringSize += long_len(hours);
+		stringSize++;	/* 'H' */
+	}
+
+	if (days > 0) {
+		stringSize += long_len(days);
+		stringSize++;	/* 'D' */
+	}
+
+	if (millis > 0 || seconds > 0 || minutes > 0 || hours > 0) {
+		stringSize++;	/* 'T' */
+	}
+
+	if (!(reltime = (char *)malloc(stringSize + 1))) {
+		return NULL;
+	}
+
+	pos = 0;
+	if (negativeFlag == 1) {
+		reltime[pos++] = '-';
+	}
+
+	reltime[pos++] = 'P';
+
+	if (days > 0) {
+		pos += sprintf(reltime + pos, "%dD", days);
+	}
+
+	if (millis > 0 || seconds > 0 || minutes > 0 || hours > 0) {
+		reltime[pos++] = 'T';
+	}
+
+	if (hours > 0) {
+		pos += sprintf(reltime + pos, "%dH", hours);
+	}
+
+	if (minutes > 0) {
+		pos += sprintf(reltime + pos, "%dM", minutes);
+	}
+
+	if (seconds > 0 || millis > 0) {
+		pos += sprintf(reltime + pos, "%d", seconds);
+
+		if (millis > 0) {
+			pos += sprintf(reltime + pos, ".%3ld", millis);
+		}
+
+		reltime[pos++] = 'S';
+	}
+
+	reltime[pos] = '\0';
+	return reltime;
+}

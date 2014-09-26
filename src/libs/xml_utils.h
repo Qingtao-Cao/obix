@@ -128,6 +128,9 @@ xmlNode *xml_find_child(const xmlNode *parent, const char *tag,
 
 long xml_get_long(xmlNode *inputNode, const char *attrName);
 
+char *xml_get_child_href(const xmlNode *parent, const char *tag,
+						const char *nameVal);
+
 char *xml_get_child_val(const xmlNode *parent, const char *tag,
 						const char *nameVal);
 
@@ -140,5 +143,16 @@ int xml_is_null(const xmlNode *node);
 
 int xml_for_each_ancestor_or_self(xmlNode *child, xml_item_cb_t callback,
 								  void *arg1, void *arg2);
+
+char *xml_dump_node(const xmlNode *node);
+
+xmlNode *obix_obj_null(void);
+
+void xml_delete_node(xmlNode *node);
+void xml_remove_children(xmlNode *parent);
+
+#ifdef DEBUG
+int xml_is_valid_doc(const char *, const char *);
+#endif
 
 #endif	/* _XML_UTILS_H_ */

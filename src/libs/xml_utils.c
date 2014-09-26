@@ -15,16 +15,19 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
-#include <assert.h>
-#include <libxml/tree.h>	/* xmlNode */
+#include <libxml/tree.h>
 #include <libxml/xpath.h>
-#include "xml_utils.h"		/* xpath_item_cb_t */
+#include "xml_utils.h"
 #include "obix_utils.h"
 #include "log_utils.h"
+
+#ifdef DEBUG
+#include <string.h>		/* strlen */
+#endif
 
 const char *XML_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n";
 const char *XML_VERSION = "1.0";
@@ -231,7 +234,9 @@ void xml_xpath_for_each_item(xmlNode *rootNode, const char *pattern,
 	xmlNode *member;
 	int i;
 
-	assert(rootNode && pattern && cb);	/* parameters are optional */
+	if (!rootNode || !pattern || !cb) {		/* parameters are optional */
+		return;
+	}
 
 	/*
 	 * Create a temporary document for the standalone node
@@ -340,11 +345,9 @@ xmlNode *xml_find_child(const xmlNode *parent, const char *tag,
 	xmlChar *attr_val;
 	int ret;
 
-	if (!parent) {
+	if (!parent || !attrName) {		/* attrVal, tag are optional */
 		return NULL;
 	}
-
-	assert(attrName);	/* attrVal, tag are optional */
 
 	for (node = parent->children; node; node = node->next) {
 		if (node->type != XML_ELEMENT_NODE) {
@@ -381,17 +384,37 @@ xmlNode *xml_find_child(const xmlNode *parent, const char *tag,
  */
 long xml_get_long(xmlNode *node, const char *attrName)
 {
-	xmlChar *attr_val;
+	char *attr_val;
 	long val;
+	int ret;
 
-	if (!(attr_val = xmlGetProp(node, (xmlChar *)attrName))) {
+	if (!(attr_val = (char *)xmlGetProp(node, BAD_CAST attrName))) {
 		return -1;
 	}
 
-	val = str_to_long((const char *)attr_val);
-	xmlFree(attr_val);
+	ret = str_to_long(attr_val, &val);
+	free(attr_val);
 
-    return val;		/* Attribute value or error code */
+    return (ret == 0) ? val : ret;
+}
+
+/**
+ * Get the href attribute of a matching children of the given node
+ * with specific tag and name attribute.
+ *
+ * Note,
+ * 1. Callers should release the returned string once done with it
+ */
+char *xml_get_child_href(const xmlNode *parent, const char *tag,
+						 const char *nameVal)
+{
+	xmlNode *node;
+
+	if (!(node = xml_find_child(parent, tag, OBIX_ATTR_NAME, nameVal))) {
+		return NULL;
+	}
+
+	return (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_HREF);
 }
 
 /**
@@ -423,14 +446,143 @@ long xml_get_child_long(const xmlNode *parent, const char *tag,
 {
 	char *value;
 	long l;
+	int ret;
 
 	if (!(value = xml_get_child_val(parent, tag, nameVal))) {
 		return -1;
 	}
 
-	l = str_to_long(value);
+	ret = str_to_long(value, &l);
 	free(value);
 
-    return l;		/* Attribute value or error code */
+    return (ret == 0) ? l : ret;
 }
+
+/*
+ * Copy the implementation of this function since
+ * it does not exist on libxml2-2.7
+ */
+static char *xml_buffer_detach(xmlBuffer *buf)
+{
+	xmlChar *ret;
+
+	if (!buf || buf->alloc == XML_BUFFER_ALLOC_IMMUTABLE) {
+		return NULL;
+	}
+
+	ret = buf->content;
+	buf->content = NULL;
+	buf->size = buf->use = 0;
+
+	return (char *)ret;
+}
+
+char *xml_dump_node(const xmlNode *node)
+{
+	xmlBuffer *buffer = NULL;
+	char *data;
+
+	if (!node) {
+		return NULL;
+	}
+
+	if (!(buffer = xmlBufferCreate())) {
+		return NULL;
+	}
+
+	/*
+	 * level == 0, since it is undesirable to add extra indenting
+	 * for the closing </obj> for each record;
+	 *
+	 * format == 1, so that "\r\n" will be applied after each
+	 * child of the current record
+	 */
+	data = xmlNodeDump(buffer, NULL, (xmlNode *)node, 0, 1) > 0 ?
+					   xml_buffer_detach(buffer) : NULL;
+
+	xmlBufferFree(buffer);
+
+	return data;
+}
+
+xmlNode *obix_obj_null(void)
+{
+    xmlNode *node;
+
+	if (!(node = xmlNewNode(NULL, BAD_CAST OBIX_OBJ)) ||
+	    !xmlSetProp(node, BAD_CAST OBIX_ATTR_NULL, BAD_CAST XML_TRUE)) {
+		xmlFreeNode(node);
+		node = NULL;
+	}
+
+    return node;
+}
+
+void xml_delete_node(xmlNode *node)
+{
+	if (!node) {
+		return;
+	}
+
+	/*
+	 * Always unlink the to-be-deleted node
+	 * just in case it belongs to any document
+	 */
+	xmlUnlinkNode(node);
+	xmlFreeNode(node);
+}
+
+/*
+ * Remove all chidlren from a given node
+ */
+void xml_remove_children(xmlNode *parent)
+{
+	xmlNode *child, *sibling;
+
+	if (!parent) {
+		return;
+	}
+
+	for (child = parent->children, sibling = ((child) ? child->next : NULL);
+		 child;
+		 child = sibling, sibling = ((child) ? child->next : NULL)) {
+		if (child->type != XML_ELEMENT_NODE) {
+			continue;		/* only interested in normal nodes */
+		}
+
+		xml_delete_node(child);
+	}
+}
+
+#ifdef DEBUG
+int xml_is_valid_doc(const char *data, const char *contract)
+{
+	xmlDoc *doc = NULL;
+	xmlNode *root;
+	xmlChar *is_attr = NULL;
+	int ret = 1;		/* Success */
+
+	if (!(doc = xmlParseMemory(data, strlen(data)))) {
+		log_error("The provided data is not a valid XML file: %s", data);
+		return 0;
+	}
+
+	if (contract) {
+		if (!(root = xmlDocGetRootElement(doc)) ||
+			!(is_attr = xmlGetProp(root, BAD_CAST OBIX_ATTR_IS)) ||
+			xmlStrcmp(is_attr, BAD_CAST contract) != 0) {
+			log_error("The provided data contains an illegal contract: %s "
+					  "(Required %s)", is_attr, contract);
+			ret = 0;
+		}
+	}
+
+	if (is_attr) {
+		xmlFree(is_attr);
+	}
+
+	xmlFreeDoc(doc);
+	return ret;
+}
+#endif
 

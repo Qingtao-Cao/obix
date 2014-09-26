@@ -17,20 +17,22 @@
 	* You should have received a copy of the GNU General Public License
 	* along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
 -->
-	<!--Lobby object for the oBIX server-->
+<!--
+	The Lobby object for the oBIX server
+
+	NOTE: the subnodes should contain relative hrefs except the ref
+	nodes, whose carry the absolute hrefs of the target nodes
+-->
 <obj href="/obix/" is="obix:Lobby /obix/def/SignUpLobby /obix/def/DevicesLobby">
-	<ref name="about" href="/obix/about" is="obix:About"/>
-	<op name="batch" href="batch" in="obix:BatchIn" out="obix:BatchOut">
-		<!--
-			op meta attribute is the index of operation handler in post_handler.c
-		-->
-		<meta op="8"/>
-	</op>
-	<ref name="historyService" href="/obix/historyService" is="obix:HistoryService"/>
-	<ref name="watchService" href="/obix/watchService" is="obix:WatchService"/>
-	<ref name="devices" href="/obix/devices" display="Device References" is="obix:list"/>
-	<obj name="deviceRoot" href="deviceRoot" display="Device Lobby" hidden="true"/>
 	<op name="signUp" href="signUp" in="obix:obj" out="obix:obj">
 		<meta op="7"/>
 	</op>
+	<op name="batch" href="batch" in="obix:BatchIn" out="obix:BatchOut">
+		<meta op="8"/>
+	</op>
+	<obj name="deviceRoot" href="deviceRoot" display="Device Lobby" hidden="true"/>
+	<ref name="about" href="/obix/about" is="obix:About"/>
+	<ref name="historyService" href="/obix/historyService" is="obix:HistoryService"/>
+	<ref name="watchService" href="/obix/watchService" is="obix:WatchService"/>
+	<ref name="devices" href="/obix/devices" display="Device References" is="obix:list"/>
 </obj>

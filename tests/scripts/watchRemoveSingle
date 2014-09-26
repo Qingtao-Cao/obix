@@ -52,7 +52,7 @@ folder=`expr $watch / $setsize`
 
 curl $verbose -XPOST --data "
 <obj is=\"obix:WatchIn\">
-	<list names=\"hrefs\">
+	<list name=\"hrefs\">
 		<uri val=\"$uri\"/>
 	</list>
 </obj> " \
