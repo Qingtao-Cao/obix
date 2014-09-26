@@ -153,10 +153,7 @@ static xmlNode *obix_batch_process(obix_request_t *request, xmlNode *batchInInpu
 	xmlChar *isAttr = NULL;
 	int ret;
 
-	if (batchInInput == NULL) {
-		ret = ERR_INVALID_INPUT;
-		goto failed;
-	}
+	assert(batchInInput);
 
 	if (!(batchOutContract = xmldb_copy_sys(OBIX_SYS_BATCH_OUT_STUB))) {
 		ret = ERR_NO_MEM;
