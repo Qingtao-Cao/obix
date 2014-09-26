@@ -25,12 +25,6 @@
 #include "xml_storage.h"
 #include "server.h"
 
-/*
- * XPath Predict for any node contained in obix:BatchIn contract
- * (as children of its list node)
- */
-static const char *XP_BATCHIN = "/list[@is='obix:BatchIn']/*";
-
 enum {
 	ERR_NO_VAL = 1,
 	ERR_NO_IS,
@@ -81,17 +75,9 @@ static void obix_batch_add_item(xmlNode *batchOut, xmlNode *item)
 	}
 }
 
-/**
- * Processes an obix:BatchIn item as pointed to by @a batchItem, and returns its response
- * or an obix:Err contract if the handler for the item returned an error.
- *
- * @param	batchItem	A pointer to an obix:Batch item, pulled from a BatchIn contract.
- * @remark	In catastrophic cases, this function may return NULL.
- */
-static void obix_batch_process_item(xmlNode *batchItem, void *arg1, void *arg2)
+static void obix_batch_process_item(xmlNode *batchItem, xmlNode *batch_out,
+									obix_request_t *request)
 {
-	xmlNode *batch_out = (xmlNode *)arg1;
-	obix_request_t *request = (obix_request_t *)arg2;
 	xmlNode *itemVal = NULL;
 	xmlChar *itemContract = NULL;
 	char *itemHref = NULL;
@@ -139,7 +125,8 @@ failed:
 
 static xmlNode *obix_batch_process(obix_request_t *request, xmlNode *input)
 {
-	xmlNode *batch_out = NULL;
+	xmlNode *batch_out = NULL, *item;
+	xmlChar *is_attr = NULL;;
 	int ret;
 
 	if (!input) {
@@ -152,11 +139,34 @@ static xmlNode *obix_batch_process(obix_request_t *request, xmlNode *input)
 		goto failed;
 	}
 
-	xml_xpath_for_each_item(input, XP_BATCHIN,
-							obix_batch_process_item, batch_out, request);
+	if (xmlStrcmp(input->name, BAD_CAST OBIX_OBJ_LIST) != 0 ||
+		!(is_attr = xmlGetProp(input, BAD_CAST OBIX_ATTR_IS)) ||
+		xmlStrcmp(is_attr, BAD_CAST OBIX_CONTRACT_BATCH_IN) != 0) {
+		ret = ERR_NO_IS;
+		goto failed;
+	}
+
+	for (item = input->children; item; item = item->next) {
+		if (item->type != XML_ELEMENT_NODE) {
+			continue;
+		}
+
+		if (xmlStrcmp(item->name, BAD_CAST OBIX_OBJ_URI) != 0) {
+			continue;
+		}
+
+		obix_batch_process_item(item, batch_out, request);
+	}
+
+	xmlFree(is_attr);
+
 	return batch_out;
 
 failed:
+	if (is_attr) {
+	    xmlFree(is_attr);
+	}
+
 	log_error("%s", batch_err_msg[ret].msgs);
 	return obix_server_generate_error(request->request_decoded_uri,
 									  batch_err_msg[ret].type,

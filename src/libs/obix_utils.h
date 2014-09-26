@@ -23,7 +23,6 @@
 #define OBIX_UTILS_H_
 
 #include <libxml/tree.h>
-#include <sys/types.h>
 
 /*
  * Error codes which are returned by library functions
@@ -95,6 +94,7 @@ extern const char *OBIX_CONTRACT_OP_WRITE;
 extern const char *OBIX_CONTRACT_OP_INVOKE;
 extern const char *OBIX_CONTRACT_HIST_AIN;
 extern const char *OBIX_CONTRACT_HIST_FLT;
+extern const char *OBIX_CONTRACT_BATCH_IN;
 
 extern const char *HIST_OP_APPEND;
 extern const char *HIST_OP_QUERY;

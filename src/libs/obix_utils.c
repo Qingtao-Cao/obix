@@ -73,6 +73,7 @@ const char *OBIX_CONTRACT_OP_INVOKE = "obix:Invoke";
  */
 const char *OBIX_CONTRACT_HIST_AIN = "obix:HistoryAppendIn";
 const char *OBIX_CONTRACT_HIST_FLT = "obix:HistoryFilter";
+const char *OBIX_CONTRACT_BATCH_IN = "obix:BatchIn";
 
 const char *OBIX_RELTIME_ZERO = "PT0S";
 const int OBIX_RELTIME_ZERO_LEN = 4;
