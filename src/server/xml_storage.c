@@ -1532,7 +1532,7 @@ void xmldb_dispose()
 xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 								  xmlNode **updatedNode)
 {
-	xmldb_errcode_t result = ERR_SUCCESS;
+	xmldb_errcode_t result;
 	xmlNode *node, *copy, *parent;
 	xmlChar *newValue, *oldValue;
 	char *href_src, *href_dst, *href_copy;
