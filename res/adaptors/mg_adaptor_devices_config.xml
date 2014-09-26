@@ -35,7 +35,7 @@
 			device_href of each BCM (see below) for the same purpose.
 		-->
 		<controller_address>
-			<ip val="10.4.17.222"/>
+			<ip val="1.2.3.4"/>
 			<port val="502"/>
 			<history_lobby val="/M1/DH1/"/>
 		</controller_address>
@@ -75,7 +75,7 @@
 				over at the beginning of each panel. If this is the case, set
 				the cb_offset value properly
 			-->
-			<cb_per_panel val="42"/>
+			<cb_per_panel val="1"/>
 
 			<!--
 				The number of CB devices skipped over at the beginning of each
@@ -109,6 +109,13 @@
 			AUX and CB respectively. Please refer to "E30 SERIES MODBUS POINT MAP"
 			document for details.
 
+			********************************************************************
+			IN ORDER TO AVOID POTENTIAL LICENSE ISSUES, THE REGISTERS LAYOUT ON
+			VERIS BCM HAVE BEEN DELIBERATELY ZEROED OUT. USERS OF THIS PROGRAM
+			WOULD HAVE TO GET ABOVE DOCUMENT BY THEMSELVES AND THEN SET RELEVANT
+			SETTINGS PROPERLY.
+			********************************************************************
+
 			Pay attention that in above document register number starts from 1,
 			therefore the adapter program should decrease them by 1 before passing
 			them to libmodbus APIs.
@@ -123,75 +130,75 @@
 		-->
 		<reg_table>
 			<sn>
-				<address val="1"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</sn>
 
 			<firmware>
-				<address val="3"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</firmware>
 
 			<model>
-				<address val="5"/>
+				<address val="0"/>
 				<count val="1"/>
 			</model>
 
 			<ct_config>
-				<address val="6"/>
+				<address val="0"/>
 				<count val="1"/>
 			</ct_config>
 
 			<location>
-				<address val="7"/>
-				<count val="64"/>
+				<address val="0"/>
+				<count val="1"/>
 			</location>
 
 			<!-- VOLTAGE INPUTS -->
 			<ac_freq>
-				<address val="600"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</ac_freq>
 
 			<volt_l2n>
-				<address val="602"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</volt_l2n>
 
 			<volt_l2l>
-				<address val="604"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</volt_l2l>
 
 			<volt_a>
-				<address val="606"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</volt_a>
 
 			<volt_b>
-				<address val="608"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</volt_b>
 
 			<volt_c>
-				<address val="610"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</volt_c>
 
 			<!-- AUX INPUTS -->
 			<total_kwh>
-				<address val="618"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</total_kwh>
 
 			<total_kw>
-				<address val="620"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</total_kw>
 
 			<ac_avg>
-				<address val="624"/>
-				<count val="2"/>
+				<address val="0"/>
+				<count val="1"/>
 			</ac_avg>
 
 			<!--
@@ -205,13 +212,13 @@
 				re-calculate them manually.
 			-->
 			<kwh>
-				<address val="2000"/>
-				<count val="84" />
+				<address val="0"/>
+				<count val="1" />
 			</kwh>
 
 			<kw>
-				<address val="2084"/>
-				<count val="84"/>
+				<address val="0"/>
+				<count val="1"/>
 			</kw>
 
 			<!--
@@ -220,13 +227,13 @@
 				instead of two float registers for each CB.
 			-->
 			<pf>
-				<address val="1294"/>
-				<count val="42"/>
+				<address val="0"/>
+				<count val="1"/>
 			</pf>
 
 			<I>
-				<address val="2252"/>
-				<count val="84" />
+				<address val="0"/>
+				<count val="1" />
 			</I>
 		</reg_table>
 	</meta>
