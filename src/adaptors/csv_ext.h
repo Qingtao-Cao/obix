@@ -77,11 +77,9 @@ typedef struct csv_file {
 } csv_file_t;
 
 /*
- * Descriptor for a CSV parser, its state and the number of CSV files
- * it is parsing.
- *
- * More than one file may have been generated during the period of
- * the relevant thread, therefore it needs to handle all of them
+ * Descriptor for a CSV wrapper, including a CSV parser, state machine
+ * and relevant parameters, the list of CSV files to be processed and
+ * the list of records interested by the user application
  */
 typedef struct csv_state {
 	/* The CSV Parser */

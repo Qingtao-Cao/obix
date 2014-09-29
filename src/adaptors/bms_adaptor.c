@@ -2375,6 +2375,12 @@ static void bms_reloc_csv_file(obix_bms_t *bms, csv_file_t *file)
  * in which case the file size could be zero, then the updater thread
  * will break from the loop and wait for relevant IN_CLOSE_WRITE event
  * and read it out in the next run.
+ *
+ * NOTE: CSV files should NOT been copied around or touched before
+ * being processed by this worker thread, since such operations will
+ * update all the three timestamp in a file's inode structure and thus
+ * break the logic to organise and handle CSV files sequentially
+ * according to their creation timestamp
  */
 static void bms_updater_task(void *arg)
 {
