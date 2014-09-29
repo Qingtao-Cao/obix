@@ -43,7 +43,7 @@ The last configuration file provides the XML templates to assemble the History.A
 
 --3-- CSV Layer
 
-The BMS adaptor manipulates another layer of wrapper API on top of those API exported by libcsv to organise existing CSV files and extract desirable records out of them. This extra layer is introduced in the hope to extract the high-level logic to handle CSV files from the application-specific details.
+The BMS adaptor manipulates another layer of wrapper APIs on top of those exported by the libcsv to organise existing CSV files and extract desirable records out of them. This extra layer is introduced in the hope to extract the high-level logic to handle CSV files from the low-level, application-specific details.
 
 The csv_state_t is the descriptor of the CSV parser, aside from the core CSV parser structure and the buffer accommodating the content read from a CSV file, it contains a list of CSV file descriptors, a list of desirable CSV records descriptors, the inner state machine variables and an operation table pointing to application-specific functions to handle a particular type of CSV file.
 
@@ -51,9 +51,11 @@ The csv_file_t is the descriptor of a CSV file, depicting its file path, size an
 
 The csv_record_t is the descriptor of a particular desirable record in the CSV file. BMS generates more number of records than needed therefore only those needed desire to be read out. In order to ensure the CSV layer application-neutral, each record descriptor only has a void pointer and the application (e.g., the BMS adaptor) needs to point it to application-specific record descriptor (such as bms_mtr_t).
 
-Since the BMS adaptor runs at a different pace than when BMS exports CSV files, at each round of execution (especially the first one) the adaptor's worker thread is likely to find a number of CSV files generated already in the specified folder, it invokes relevant wrapper API to create descriptors for each CSV files and handle them in sequential order. Then the processed CSV files are either renamed to another directory for debug purpose or deleted permanently. All file descriptors are removed as well before the end of each round of execution to avoid potential inconsistency when CSV files are removed outside of the BMS adaptor.
+Since the BMS adaptor runs at a different pace than when BMS exports CSV files, at each round of execution (especially the first one) the adaptor's worker thread is likely to find a number of CSV files generated already in the specified folder (at different moment, see more comments below), it invokes relevant wrapper API to create descriptors for each CSV files and handle them in sequential order. Then the processed CSV files are either renamed to another directory for debug purpose or deleted permanently. All file descriptors are removed as well before the end of each round of execution to avoid potential inconsistency when CSV files are removed outside of the BMS adaptor.
 
 The definition of CSV record descriptor varies for different applications, so does the callbacks invoked by libcsv whenever it encounters the end of each record and each field. It is the application's responsibility to provide its own specific record descriptor along with relevant callbacks to read desirable data out from one specific type of CSV file.
+
+Last but not least, it's important to practise cautions not to copy around or touch CSV files before they are processed by the adaptor, since both cp and touch commands will update all three timestamp information in a file's inode structure, so if more than one CSV files are copied into the folder where the adaptor's worker thread is working on, they will be updated with the same last modification timestamp regardless of the fact that they were generated at different moment. Consequently, the worker thread's logic to organise and process CSV files according to their last modification timestamp will fail.
 
 
 --4-- Inotify Usage
@@ -186,12 +188,12 @@ A sane CSV file should NOT contain the first 6 lines of irrelevant information.
 
 8.2 No comma separated
 
-Each CSV record consists of 7 fields, although they are declared to be in "CSV" files in the first place, as a matter of fact, there is no comma characters at all between fields
+Each CSV record consists of 7 fields, although they are declared to be in "CSV" files in the first place, as a matter of fact, there is no comma characters at all between fields.
 
 
 8.3 Leading NULL byte
 
-Much worse than the first two garbage, each meaningful byte in a field is prefixed by a leading byte of all zero as below:
+Much worse than the first two garbage, each meaningful byte in a field in current CSV files is prefixed by a leading byte of all zero as illustrated below:
 
 	0000160: 4300 6800 7700 2700 4300 6800 5300 7400  C.h.w.'.C.h.S.t.
 	0000170: 3100 2700 4300 6800 3000 3100 2700 4300  1.'.C.h.0.1.'.C.

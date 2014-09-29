@@ -102,7 +102,7 @@ void csv_destroy_csv(csv_state_t *csv)
 }
 
 /*
- * Allocate and intialise a CSV file's descriptor
+ * Allocate and intialise a CSV wrapper's descriptor
  *
  * Return the address of the new descriptor on success,
  * NULL otherwise
