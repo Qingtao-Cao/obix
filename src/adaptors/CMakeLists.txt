@@ -8,6 +8,14 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../client)
 
 set (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 
+#
+# libcsv-devel, libcurl-devel and libmodbus-devel are required for
+# the adaptors directory to compile properly, so cmake should die if
+# they cannot be found.
+set(CSV_FIND_REQUIRED yes)
+set(CURL_FIND_REQUIRED yes)
+set(MODBUS_FIND_REQUIRED yes)
+
 include(FindMODBUS)
 IF (MODBUS_FOUND)
 	INCLUDE_DIRECTORIES(${MODBUS_INCLUDE_DIR})
