@@ -36,20 +36,6 @@
 #undef DEBUG_CURL
 #endif
 
-/*
- * On some old version releases (e.g., Fedora 18) below two
- * macros are not defined in linux/list.h
- */
-#ifndef list_last_entry
-#define list_last_entry(ptr, type, member)	\
-		list_entry((ptr)->prev, type, member)
-#endif
-
-#ifndef list_next_entry
-#define list_next_entry(pos, member)	\
-		list_entry((pos)->member.next, typeof(*(pos)), member)
-#endif
-
 #define REQUEST_HTTP_PUT 0
 #define REQUEST_HTTP_POST 1
 

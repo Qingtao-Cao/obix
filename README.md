@@ -261,7 +261,9 @@ Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders
 
 * On Fedora oBIX Server logs could be observed by journalctl:
 
-		$ journalctl -f /usr/bin/obix-fcgi
+		$ journalctl -f /usr/bin/obix-fcgi -o cat
+
+The "-o cat" option helps highlight the actual message by suppressing meta data such as a timestamp.
 
 * Once lighttpd is started, use the following command to check the status of the oBIX Server:
 

@@ -578,8 +578,9 @@ static obix_hist_file_t *hist_create_file(obix_hist_dev_t *dev,
 	INIT_LIST_HEAD(&file->list);
 
 	if (!(file->date = xml_get_child_val(abstract, OBIX_OBJ_DATE, HIST_ABS_DATE))) {
-		log_error("Failed to get value of elem with tag %s, name %s",
-					OBIX_OBJ_DATE, HIST_ABS_DATE);
+		log_error("Failed to get val from node with tag %s, name %s within "
+				  "below abstract:\n%s", OBIX_OBJ_DATE, HIST_ABS_DATE,
+				  xml_dump_node(abstract));
 		goto failed;
 	}
 
@@ -917,12 +918,10 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 	}
 
 	if (!(dev->node = create_devnode(dev->devhref))) {
-		log_error("Failed to register a XML node for %s", dev->devhref);
 		goto failed;
 	}
 
 	if (!(dev->index = create_indexnode(dev->indexpath, dev->node))) {
-		log_error("Failed to register a XML node for %s", dev->indexpath);
 		goto failed;
 	}
 
