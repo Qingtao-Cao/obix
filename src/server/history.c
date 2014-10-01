@@ -167,12 +167,6 @@ obix_hist_t *_history;
 static const char *HIST_RECORD_SEPARATOR = "\r\n";
 
 /*
- * XP Predicate to match every single abstract of a history raw data file
- * in an index file
- */
-static const char *XP_HIST_RECORDS = "./obj[@is='obix:HistoryFileAbstract']";
-
-/*
  * The index file will be created upon the reception of
  * the get request with a unique device id that this history
  * facility is created for.
@@ -687,9 +681,8 @@ static obix_hist_file_t *create_file_helper(obix_hist_dev_t *dev,
 	return hist_create_file(dev, node, 1);
 }
 
-static void hist_create_file_wrapper(xmlNode *node, void *arg1, void *arg2)
+static void hist_create_file_wrapper(xmlNode *node, obix_hist_dev_t *dev)
 {
-	obix_hist_dev_t *dev = (obix_hist_dev_t *)arg1;
 	obix_hist_file_t *file;
 
 	if (!(file = hist_create_file(dev, node, 0))) {
@@ -698,8 +691,8 @@ static void hist_create_file_wrapper(xmlNode *node, void *arg1, void *arg2)
 		return;
 	}
 
-	*((long *)arg2) += xml_get_child_long(file->abstract, OBIX_OBJ_INT,
-										  HIST_ABS_COUNT);
+	dev->count += xml_get_child_long(file->abstract, OBIX_OBJ_INT,
+									 HIST_ABS_COUNT);
 }
 
 /*
@@ -872,6 +865,8 @@ static int get_href_helper(const char *token, void *arg1, void *arg2)
 static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 										const char *indexpath)
 {
+	xmlNode *node;
+	xmlChar *is_attr = NULL;
 	obix_hist_dev_t *dev;
 	char *href = NULL;
 	int ret;
@@ -930,8 +925,27 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 	 * altogether, create descriptors for each log file which cache
 	 * pointers to their abstract contract in the global DOM tree.
 	 */
-	xml_xpath_for_each_item(dev->index, XP_HIST_RECORDS,
-							hist_create_file_wrapper, dev, &dev->count);
+	for (node = dev->index->children; node; node = node->next) {
+		if (node->type != XML_ELEMENT_NODE) {
+			continue;
+		}
+
+		if (is_attr) {
+			xmlFree(is_attr);
+		}
+
+		if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ) != 0 ||
+			!(is_attr = xmlGetProp(node, BAD_CAST OBIX_ATTR_IS)) ||
+			xmlStrcmp(is_attr, BAD_CAST OBIX_CONTRACT_HIST_FILE_ABS) != 0) {
+			continue;
+		}
+
+		hist_create_file_wrapper(node, dev);
+	}
+
+	if (is_attr) {
+		xmlFree(is_attr);
+	}
 
 	pthread_mutex_lock(&_history->mutex);
 	list_add_tail(&dev->list, &_history->devices);

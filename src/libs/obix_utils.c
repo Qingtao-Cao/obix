@@ -67,6 +67,7 @@ const char *HIST_TS_INIT = "1970-01-01T0:0:0";
 const char *OBIX_CONTRACT_OP_READ = "obix:Read";
 const char *OBIX_CONTRACT_OP_WRITE = "obix:Write";
 const char *OBIX_CONTRACT_OP_INVOKE = "obix:Invoke";
+const char *OBIX_CONTRACT_HIST_FILE_ABS = "obix:HistoryFileAbstract";
 
 /*
  * oBIX contracts used by the client side
