@@ -183,7 +183,7 @@ void obix_server_exit(void)
 {
 	obix_hist_dispose();
 	obix_watch_dispose();
-	xmldb_dispose();
+	obix_xmldb_dispose();
 
 	log_debug("oBIX server has been shutdown properly");
 }
@@ -192,14 +192,15 @@ int obix_server_init(const xml_config_t *config)
 {
 	int threads;
 
-	if (obix_xmldb_init(config->resdir) < 0) {
-		log_error("Failed to initialise the global XML DOM tree");
-		goto failed;
-	}
-
 	if ((threads = xml_config_get_int(config, XP_POLL_THREAD_COUNT)) < 0) {
 		log_error("Failed to get %s settings", XP_POLL_THREAD_COUNT);
-		goto failed;
+		return -1;
+	}
+
+	/* Initialise the global DOM tree before any other facilities */
+	if (obix_xmldb_init(config->resdir) < 0) {
+		log_error("Failed to initialise the global XML DOM tree");
+		return -1;
 	}
 
 	if (obix_watch_init(threads) < 0) {
@@ -209,13 +210,16 @@ int obix_server_init(const xml_config_t *config)
 
 	if (obix_hist_init(config->resdir) < 0) {
 		log_error("Failed to initialize the history subsystem");
-		goto failed;
+		goto hist_failed;
 	}
 
 	return 0;
 
+hist_failed:
+	obix_watch_dispose();
+
 failed:
-	obix_server_exit();
+	obix_xmldb_dispose();
 	return -1;
 }
 

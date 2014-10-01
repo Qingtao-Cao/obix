@@ -115,11 +115,7 @@ char *xmlDebugDumpNode(const xmlNode *node);
 #endif
 
 int obix_xmldb_init(const char *resdir);
-
-/**
- * Stops work of the storage and releases all resources.
- */
-void xmldb_dispose();
+void obix_xmldb_dispose(void);
 
 /**
  * Inserts the provided node pointed to by @a node into the XML storage database.
