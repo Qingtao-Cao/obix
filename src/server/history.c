@@ -1711,95 +1711,68 @@ void obix_hist_dispose(void)
 	_history = NULL;
 }
 
+static int hist_create_dev_wrapper(const char *parent_dir, const char *subdir,
+								   void *arg)	/* ignored */
+{
+	obix_hist_dev_t *dev;
+	char *indexpath;
+	int ret = 0;
+
+	if (link_pathname(&indexpath, parent_dir, subdir,
+					  INDEX_FILENAME, INDEX_FILENAME_SUFFIX) < 0) {
+		log_error("Failed to allocate index file name for %s", subdir);
+		return -1;
+	}
+
+	dev = hist_create_dev(subdir, indexpath);
+	free(indexpath);
+
+	if (!dev) {
+		log_error("Failed to setup history facility for %s", subdir);
+		ret = -1;
+	}
+
+	return ret;
+}
+
 int obix_hist_init(const char *resdir)
 {
-	struct stat statbuf;
-	struct dirent *dirp;
-	DIR *dp;
-	char *dev_id, *indexpath;
-	obix_hist_dev_t *dev;
+	int ret;
 
 	if (_history) {
 		log_error("History facility already initialized");
 		return -1;
 	}
 
-	/*
-	 * Firstly, allocate and initialize a obix_hist descriptor
-	 */
-	if ((_history = (obix_hist_t *)malloc(sizeof(obix_hist_t))) == NULL) {
+	if (!(_history = (obix_hist_t *)malloc(sizeof(obix_hist_t)))) {
 		log_error("Failed to alloc a history descriptor");
 		return -1;
 	}
 	memset(_history, 0, sizeof(obix_hist_t));
 
-	pthread_mutex_init(&_history->mutex, NULL);
-
 	if (link_pathname(&_history->dir, resdir, HISTORIES_DIR, NULL, NULL) < 0) {
 		log_error("Failed to init history: not enough memory");
-		goto link_pathname_failed;
-	}
-
-	if (lstat(_history->dir, &statbuf) < 0) {
-		log_error("lstat on %s failed", _history->dir);
-		goto lstat_failed;
-	}
-
-	if (S_ISDIR(statbuf.st_mode) == 0) {
-		log_error("%s is not a dir", _history->dir);
-		goto lstat_failed;
+		free(_history);
+		_history = NULL;
+		return -1;
 	}
 
 	_history->op = &obix_hist_operations;
 	INIT_LIST_HEAD(&_history->devices);
+	pthread_mutex_init(&_history->mutex, NULL);
 
-	/*
-	 * Secondly, set up devices' history facilities in each subdir
-	 */
-	 if (!(dp = opendir(_history->dir))) {
-		log_error("Failed to open %s", _history->dir);
-		goto lstat_failed;
+	if ((ret = for_each_file_name(_history->dir,
+								  NULL, NULL,	/* all possible names */
+								  hist_create_dev_wrapper,
+								  NULL)) < 0) {
+		log_error("Failed to setup history facilities from %s",
+				  _history->dir);
+		obix_hist_dispose();
+	} else {
+		log_debug("History facility initialized!");
 	}
 
-	while ((dirp = readdir(dp))) {
-		dev_id = dirp->d_name;
-		if (strcmp(dev_id, ".") == 0 || strcmp(dev_id, "..") == 0) {
-			continue;		/* Skip dot and dot-dot */
-		}
-
-		if (link_pathname(&indexpath, _history->dir, dev_id,
-						  INDEX_FILENAME, INDEX_FILENAME_SUFFIX) < 0) {
-			log_error("Failed to allocate index file name for %s", dev_id);
-			closedir(dp);
-			obix_hist_dispose();
-			return -1;
-		}
-
-		dev = hist_create_dev(dev_id, indexpath);
-		free(indexpath);
-
-		if (!dev) {
-			log_error("Failed to setup history facility for %s", dev_id);
-			closedir(dp);
-			obix_hist_dispose();
-			return -1;
-		}
-	}
-
-	closedir(dp);
-	log_debug("History facility initialized!");
-
-	return 0;
-
-lstat_failed:
-	free(_history->dir);
-
-link_pathname_failed:
-	pthread_mutex_destroy(&_history->mutex);
-	free(_history);
-	_history = NULL;
-
-	return -1;
+	return ret;
 }
 
 /*
