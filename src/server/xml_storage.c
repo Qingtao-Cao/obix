@@ -1447,7 +1447,7 @@ root_node_failed:
 	xmlFreeNode(newRootNode);
 
 failed:
-	xmldb_dispose();
+	obix_xmldb_dispose();
 	return -1;
 }
 
@@ -1459,7 +1459,7 @@ failed:
  * this cleanup function is likely to be invoked again somewhere
  * in when bringing down oBIX server due to errors
  */
-void xmldb_dispose()
+void obix_xmldb_dispose(void)
 {
 	if (__xmldb_fatal_error) {
 		xmlFreeNode(__xmldb_fatal_error);

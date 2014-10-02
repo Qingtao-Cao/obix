@@ -94,6 +94,7 @@ extern const char *OBIX_CONTRACT_OP_WRITE;
 extern const char *OBIX_CONTRACT_OP_INVOKE;
 extern const char *OBIX_CONTRACT_HIST_AIN;
 extern const char *OBIX_CONTRACT_HIST_FLT;
+extern const char *OBIX_CONTRACT_HIST_FILE_ABS;
 extern const char *OBIX_CONTRACT_BATCH_IN;
 
 extern const char *HIST_OP_APPEND;
