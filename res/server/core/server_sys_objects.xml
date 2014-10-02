@@ -72,8 +72,16 @@
 	<!--
 		Template for the history facility for one device
 
-		All history raw data files are invisible since no DOM trees generated
-		and registered by default
+		All history raw data files are not accessible since no XML nodes created
+		for any raw data at all
+
+		NOTE: the index list of a history facility is dynamically created and added
+		into the history facillity node when it is created at oBIX server's start-up
+		or when requested by oBIX client, whereas automatically created	history nodes
+		won't have such index list
+
+		NOTE: a history facility node may have other history facility nodes as its
+		children
 	-->
 	<obj href="hist-dev-stub" is="obix:HistoryDevLobby">
 		<op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut">

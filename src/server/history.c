@@ -82,6 +82,19 @@ typedef struct obix_hist_dev {
 	/* device's unique ID on obix server */
 	char *dev_id;
 
+	/*
+	 * The strlen of the facility name
+	 *
+	 * NOTE: all facilities are organised in an ascending order
+	 * based on the length of their name in the hope that the parent
+	 * facilities are always inserted before their children, so
+	 * that at cleanup the list can be traversed in a reverse manner
+	 * to have the children facilities destroyed before their parent
+	 * to avoid double free of the children facilities nodes in the
+	 * global DOM tree
+	 */
+	int namelen;
+
 	/* /obix/historyService/histories/dev_id/ */
 	char *devhref;
 
@@ -867,7 +880,7 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 {
 	xmlNode *node;
 	xmlChar *is_attr = NULL;
-	obix_hist_dev_t *dev;
+	obix_hist_dev_t *dev, *n;
 	char *href = NULL;
 	int ret;
 
@@ -892,6 +905,7 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 		log_error("Failed to allocate string for %s", dev_id);
 		goto failed;
 	}
+	dev->namelen = strlen(dev->dev_id);
 
 	if (!(dev->indexpath = strdup(indexpath))) {
 		log_error("Failed to allocate string for %s", indexpath);
@@ -948,7 +962,25 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 	}
 
 	pthread_mutex_lock(&_history->mutex);
-	list_add_tail(&dev->list, &_history->devices);
+	list_for_each_entry(n, &_history->devices, list) {
+		/*
+		 * Considering that tons of history facilities names are
+		 * of the same length, if the name of the newly created
+		 * has a same length as the current one in the list,
+		 * insert the new one before it so as to finish the loop
+		 * quickly
+		 */
+		if (n->namelen < dev->namelen) {
+			continue;
+		}
+
+		__list_add(&dev->list, n->list.prev, &n->list);
+		break;
+	}
+
+	if (&n->list == &_history->devices)	{	/* empty list */
+		list_add_tail(&dev->list, &_history->devices);
+	}
 	pthread_mutex_unlock(&_history->mutex);
 
 	return dev;
@@ -1697,7 +1729,16 @@ void obix_hist_dispose(void)
 	}
 
 	pthread_mutex_lock(&_history->mutex);
-	list_for_each_entry_safe(dev, n, &_history->devices, list) {
+	/*
+	 * IMPORTANT!
+	 * If any history facilities are parent to others, they are assured
+	 * to be created before any of their children. Therefore on exit
+	 * any children facilities should be disposed before their parent
+	 * so as to avoid double-free
+	 *
+	 * To this end, the queue is traversed in a REVERSE order
+	 */
+	list_for_each_entry_safe_reverse(dev, n, &_history->devices, list) {
 		list_del(&dev->list);
 		hist_destroy_dev(dev);
 	}
