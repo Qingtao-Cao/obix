@@ -48,6 +48,8 @@ static const char *INDEX_FILENAME = "index";
 static const char *INDEX_FILENAME_SUFFIX = ".xml";
 static const char *OBIX_HISTORIES_DIR = "/var/lib/obix/histories";
 
+#define XML_PARSE_OPTIONS	(XML_PARSE_NONET | XML_PARSE_NOBLANKS)
+
 static void test_cb(xmlNode *node, void *arg1, void *arg2)
 {
 	char *date, *count, *start, *end;
@@ -115,11 +117,7 @@ static int read_index(const char *parent_dir, const char *dir, void *arg)
 	 * However, the XML document created by xmlParseFile() seems to be ok
 	 * to give away its root subtree
 	 */
-#if 1
-	if (!(doc = xmlReadFile(path, NULL, 0/* XML_PARSE_NOBLANKS | XML_PARSE_NONET */))) {
-#else
-	if (!(doc = xmlParseFile(path))) {
-#endif
+	if (!(doc = xmlReadFile(path, NULL, XML_PARSE_OPTIONS))) {
 		printf("Failed to setup XML DOM tree from %s\n", path);
 		goto failed;
 	}
@@ -134,10 +132,19 @@ static int read_index(const char *parent_dir, const char *dir, void *arg)
 		goto failed2;
 	}
 
-	/* De-couple the root subtree from its document */
-	xmlUnlinkNode(root);
-
+	/*
+	 * Re-parent the root node of the parsed document to the new document
+	 */
 	xmlDocSetRootElement(new, root);
+
+	/*
+	 * Have the new document manipulate the same dictionary used by the
+	 * parsed document now that its root subtree has been reparented to it
+	 *
+	 * NOTE: the reference count on the dictionary should be bumped
+	 */
+	new->dict = doc->dict;
+	xmlDictReference(new->dict);
 
 	new_root = xmlDocGetRootElement(new);
 
