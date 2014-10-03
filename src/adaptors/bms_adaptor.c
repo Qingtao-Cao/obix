@@ -694,16 +694,16 @@ static void get_mtr_reading(bms_mtr_t *mtr, void *val)
 
 	switch (mtr->type) {
 	case MTR_TYPE_FLOAT:
-		*(float *)val += mtr->value.f;
+        	memcpy(val, (void *) &mtr->value.f, sizeof(float));
 		break;
 	case MTR_TYPE_UINT16:
-		*(uint16_t *)val += mtr->value.u16;
+        	memcpy(val, (void *) &mtr->value.u16, sizeof(uint16_t));
 		break;
 	case MTR_TYPE_UINT32:
-		*(uint32_t *)val += mtr->value.u32;
+        	memcpy(val, (void *) &mtr->value.u32, sizeof(uint32_t));
 		break;
 	case MTR_TYPE_BOOL:
-		*(LVL_MTR *)val += mtr->value.b;
+        	memcpy(val, (void *) &mtr->value.b, sizeof(LVL_MTR));
 		break;
 	default:
 		/*
