@@ -246,7 +246,7 @@ static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 		return NULL;
 	}
 
-	xmlCtxtUseOptions(parserContext, XML_PARSE_NONET);
+	xmlCtxtUseOptions(parserContext, XML_PARSE_NONET | XML_PARSE_NOBLANKS);
 
 	while ((bytesRead = FCGX_GetStr(chunk, chunkSize, request->in)) > 0) {
 		xmlParseChunk(parserContext, chunk, bytesRead, 0); /* Non-terminating */
