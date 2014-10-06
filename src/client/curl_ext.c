@@ -23,9 +23,9 @@
 #include <string.h>
 #include <unistd.h>			/* sysconf */
 #include <errno.h>
-#include <libxml/parser.h>
 #include "log_utils.h"
 #include "curl_ext.h"
+#include "obix_utils.h"
 
 /*
  * DEBUG_CURL is defined in CMAKE_C_FLAGS_DEBUG, however,
@@ -776,7 +776,8 @@ static int parseXmlInput(CURL_EXT *h, xmlDoc **doc)
 		return -1;
 	}
 
-	if (!(*doc = xmlParseMemory(data, size))) {
+	if (!(*doc = xmlReadMemory(data, size, NULL, NULL,
+							   XML_PARSE_OPTIONS_COMMON))) {
 		log_error("Server response is not an XML document:\n%s",
 				  h->inputBuffer);
 		return -1;

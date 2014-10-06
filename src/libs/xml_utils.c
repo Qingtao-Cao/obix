@@ -562,7 +562,9 @@ int xml_is_valid_doc(const char *data, const char *contract)
 	xmlChar *is_attr = NULL;
 	int ret = 1;		/* Success */
 
-	if (!(doc = xmlParseMemory(data, strlen(data)))) {
+	if (!(doc = xmlReadMemory(data, strlen(data),
+							  NULL, NULL,
+							  XML_PARSE_OPTIONS_COMMON))) {
 		log_error("The provided data is not a valid XML file: %s", data);
 		return 0;
 	}
