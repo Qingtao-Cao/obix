@@ -254,7 +254,7 @@ static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 	}
 
 	/* No XML_PARSE_NODICT applied, see comments above */
-	xmlCtxtUseOptions(parserContext, XML_PARSE_NONET | XML_PARSE_NOBLANKS);
+	xmlCtxtUseOptions(parserContext, XML_PARSE_OPTIONS_COMMON);
 
 	while ((bytesRead = FCGX_GetStr(chunk, chunkSize, request->in)) > 0) {
 		xmlParseChunk(parserContext, chunk, bytesRead, 0); /* Non-terminating */

@@ -1158,8 +1158,13 @@ static int xmldb_node_writable(xmlNode *node, int max_depth)
 
 /**
  * Reparent children of the "from" node to the "to" node.
- * However, if a child node in the "from" subtree is a null
- * object, have its peer in the "to" subtree deleted.
+ *
+ * Extra copy of the child node in the "from" tree is performed
+ * when necessary.
+ *
+ * If a child node in the "from" tree is a null object, have its
+ * peer in the "to" tree deleted. Otherwise it is skipped over
+ * if its peer exists in the first place.
  *
  * Return the number of impacted children on success, < 0
  * on error.
@@ -1272,7 +1277,12 @@ static int xmldb_load_files_helper(const char *dir, const char *file, void *arg)
 		return -1;
 	}
 
-	if (!(doc = xmlParseFile(path))) {
+	/*
+	 * No parser dictionary is used when oBIX server configuration files
+	 * are parsed and then inserted into the global DOM tree
+	 */
+	if (!(doc = xmlReadFile(path, NULL,
+							XML_PARSE_OPTIONS_COMMON | XML_PARSE_NODICT))) {
 		log_error("Unable to parse XML document %s", path);
 		goto failed;
 	}

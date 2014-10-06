@@ -778,7 +778,12 @@ static xmlNode *create_indexnode(const char *path, xmlNode *parent)
 		return NULL;
 	}
 
-	if (!(doc = xmlParseFile(path))) {
+	/*
+	 * No parser dictionary is used when history index files
+	 * are parsed and then inserted into the global DOM tree
+	 */
+	if (!(doc = xmlReadFile(path, NULL,
+							XML_PARSE_OPTIONS_COMMON | XML_PARSE_NODICT))) {
 		log_error("Failed to setup XML DOM tree for %s", path);
 		return NULL;
 	}
