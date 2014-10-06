@@ -1164,9 +1164,10 @@ static int xmldb_node_writable(xmlNode *node, int max_depth)
  * Return the number of impacted children on success, < 0
  * on error.
  */
-static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
+static int xmldb_reparent_children(xmlNode *from, xmlNode *to,
+								   int dict_used)
 {
-	xmlNode *child, *sibling, *peer;
+	xmlNode *child, *sibling, *peer, *copy;
 	xmlChar *name, *href;
 	int count = 0;
 
@@ -1176,7 +1177,7 @@ static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
 
 	/*
 	 * An extra sibling pointer is a must-have since child->next
-	 * will be changed once re-parented!
+	 * will be changed once the child node is re-parented!
 	 */
 	for (child = from->children, sibling = ((child) ? child->next : NULL);
 		 child;
@@ -1227,28 +1228,27 @@ static int xmldb_reparent_children(xmlNode *from, xmlNode *to)
 		 * Reparent the child node if it is not a null object and
 		 * its peer does not exist
 		 *
-		 * NOTE:
-		 * Skip checking if the target node is writable or not provided
-		 * that more nodes are added, which is very helpful to recover
-		 * from an inadvertent deletion of a sub node of a non-writable
-		 * device contract
-		 *
-		 * TODO:
-		 * Once the signOff handler has been implemented, no need to
-		 * make such exception.
+		 * TODO: remove such feature once the signOff handler is
+		 * supported, which will also enforce access control of
+		 * the oBIX server
 		 */
 		if (!peer && xml_is_null(child) == 0) {
 			/*
-			 * Detach the current children from the from node so that
-			 * deleting the input document that contains the from node
-			 * won't impact its descendants that have been reparented
-			 * to the global DOM tree.
-			 *
-			 * Also, set any descendants' href relative so as to ensure
-			 * href consistency in the global DOM tree.
+			 * NOTE: when a XML parser dictionary is used, the child in
+			 * the "from" tree is copied before inserted into the global
+			 * DOM tree to ensure its integrity from any thread-specific
+			 * parser dictionary
 			 */
-			if (xmldb_add_child(to, child, 1, 1) == NULL) {
-				xmlFreeNode(child);
+			if (dict_used == 1) {
+				if (!(copy = xml_copy(child, XML_COPY_EXCLUDE_COMMENTS))) {
+					return -1;
+				}
+			} else {	/* no dictionary used, from tree is standalone */
+				copy = child;
+			}
+
+			if (xmldb_add_child(to, copy, 1, 1) == NULL) {
+				xmlFreeNode(copy);
 				return -1;
 			}
 			count++;
@@ -1291,7 +1291,7 @@ static int xmldb_load_files_helper(const char *dir, const char *file, void *arg)
 
 	xmldb_delete_comment(root);
 
-	/**
+	/*
 	 * If the root node of the current XML document already exists
 	 * in the DOM tree and is not a reference, re-parent all its
 	 * children to that node.
@@ -1302,7 +1302,7 @@ static int xmldb_load_files_helper(const char *dir, const char *file, void *arg)
 	 */
 	if ((duplicated = xmldb_get_node(href)) != NULL &&
 		(xmlStrcmp(duplicated->name, BAD_CAST OBIX_OBJ_REF)) != 0) {
-		if (xmldb_reparent_children(root, duplicated) < 0) {
+		if (xmldb_reparent_children(root, duplicated, 0) < 0) {
 			log_error("Failed to re-parent children of the root node "
 					  "loaded from %s into existing node", href);
 			goto failed;
@@ -1494,7 +1494,7 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 								  xmlNode **updatedNode)
 {
 	xmldb_errcode_t result;
-	xmlNode *node, *copy, *parent;
+	xmlNode *node, *parent;
 	xmlChar *newValue = NULL, *oldValue = NULL;
 	char *href_src, *href_dst, *href_copy;
 	int ret, changed = 0;
@@ -1629,24 +1629,10 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
 	/*
 	 * Reparent any children from the input subtree to the target node
 	 *
-	 * NOTE:
-	 * In theory, input node should be directly passed in as
-	 * the first parameter since its children will be unlinked and
-	 * then reparented to the target node.
-	 *
-	 * However, unfortunately, xmlUnlinkNode alone is not sufficient
-	 * to cut off the connections between the input node and its
-	 * children, after the input node is deleted (along with its owner
-	 * document), the tags of its children in the global DOM tree will
-	 * be removed as well.
-	 *
-	 * A workaround is to make a copy of the input node
+	 * NOTE, the parser internal dictionary is used by default when
+	 * parsing the input document
 	 */
-	copy = xml_copy(input, XML_COPY_EXCLUDE_COMMENTS);
-	ret = xmldb_reparent_children(copy, node);
-	xmlFreeNode(copy);	/* Only needed when the input is copied */
-
-	if (ret < 0) {
+	if ((ret = xmldb_reparent_children(input, node, 1)) < 0) {
 		result = ERR_UPDATE_NODE_REPARENT;
 		goto failed;
 	}

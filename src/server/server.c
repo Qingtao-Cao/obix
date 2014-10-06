@@ -592,8 +592,6 @@ failed:
 /**
  * Default handler, which sends error message telling that this operation
  * is not supported.
- *
- * @see obix_server_postHandler
  */
 xmlNode *handlerError(obix_request_t *request, xmlNode *input)
 {
@@ -608,8 +606,6 @@ xmlNode *handlerError(obix_request_t *request, xmlNode *input)
 
 /**
  * Handles signUp operation. Adds new device data to the server.
- *
- * @see obix_server_postHandler
  */
 xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 {
