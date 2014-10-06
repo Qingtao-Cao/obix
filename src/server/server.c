@@ -277,8 +277,8 @@ xmlNode *obix_server_read(obix_request_t *request, const char *overrideUri)
 		goto failed;
 	}
 
-	if (!(copy = xml_copy(storageNode,
-						  XML_COPY_EXCLUDE_HIDDEN | XML_COPY_EXCLUDE_META)) ||
+	if (!(copy = xmldb_copy_node(storageNode,
+						XML_COPY_EXCLUDE_HIDDEN | XML_COPY_EXCLUDE_META)) ||
 		!xmlSetProp(copy, BAD_CAST OBIX_ATTR_HREF, href)) {
 		ret = ERR_NO_MEM;
 		goto failed;
@@ -637,17 +637,27 @@ xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 		goto out;
 	}
 
-	if (!(inputCopy = xml_copy(input, XML_COPY_EXCLUDE_COMMENTS))) {
-		ret = ERR_NO_MEM;
-		goto copy_failed;
-	}
-
 	/*
 	 * Remove the "writable" attribute so that a device contract
 	 * cannot be deleted through a normal write request, but via
 	 * the signOff request
 	 */
-	xmlUnsetProp(inputCopy, BAD_CAST OBIX_ATTR_WRITABLE);
+	xmlUnsetProp(input, BAD_CAST OBIX_ATTR_WRITABLE);
+
+	/*
+	 * An extra copy of the input node can be avoided for the signUp
+	 * handler. However, both read and write handlers would benefit
+	 * from an extra copy of the node read from or written into the
+	 * global DOM tree so as to remove meta or hidden content before
+	 * returning back to clients.
+	 *
+	 * To conform with the behaviour of the read and write operations,
+	 * the copy is preserved here.
+	 */
+	if (!(inputCopy = xml_copy(input, XML_COPY_EXCLUDE_COMMENTS))) {
+		ret = ERR_NO_MEM;
+		goto copy_failed;
+	}
 
 	/*
 	 * Always enforce sanity checks for all contracts registered regardless
@@ -681,7 +691,6 @@ out:
 		xmldb_set_relative_href(pos);
 	}
 
-	xmlUnsetProp(input, BAD_CAST OBIX_ATTR_WRITABLE);
 	return input;
 
 put_failed:
