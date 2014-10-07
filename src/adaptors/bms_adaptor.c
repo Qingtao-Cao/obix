@@ -2065,6 +2065,8 @@ static int bms_append_history_bms(obix_bms_t *dev)
 		return OBIX_ERR_INVALID_ARGUMENT;
 	}
 
+	btank_copy = dtank_copy = NULL;
+
 	/* Update bulk tanks in the template */
 	xml_remove_children(btanks);
 	list_for_each_entry(n, &dev->btanks, list) {
