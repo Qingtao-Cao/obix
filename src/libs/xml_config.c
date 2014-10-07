@@ -214,7 +214,8 @@ xml_config_t *xml_config_create(const char *dir, const char *file)
 		}
 	}
 
-	if (!(config->doc = xmlParseFile(config->file)) ||
+	if (!(config->doc = xmlReadFile(config->file, NULL,
+									XML_PARSE_OPTIONS_COMMON)) ||
 		!(config->xpc = xmlXPathNewContext(config->doc))) {
 		log_error("Failed to setup XPath for %s", config->file);
 		goto failed;

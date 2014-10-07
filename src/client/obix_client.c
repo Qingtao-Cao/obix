@@ -933,8 +933,10 @@ Batch *obix_batch_create(const int conn_id)
 	INIT_LIST_HEAD(&batch->cmds);
 	batch->conn = conn;
 
-	if (!(batch->in = xmlParseMemory(OBIX_BATCH_IN_DOC,
-									 strlen(OBIX_BATCH_IN_DOC)))) {
+	if (!(batch->in = xmlReadMemory(OBIX_BATCH_IN_DOC,
+									strlen(OBIX_BATCH_IN_DOC),
+									NULL, NULL,
+									XML_PARSE_OPTIONS_COMMON))) {
 		log_error("Failed to create a batch.in document");
 		obix_batch_destroy(batch);
 		batch = NULL;

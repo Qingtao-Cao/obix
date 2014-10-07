@@ -227,6 +227,13 @@ failed:
  *				or NULL if no valid XML document could be understood from the client.
  * @remark		This is an allocating function.  It's up to the caller to free the memory
  *				returned from this function with calls to xmlFree().
+ *
+ * NOTE: By default a XML parser context manipulates its internal
+ * dictionary to cache up strings in a parsed document for sake of
+ * performance. However, if part of the parsed document is added
+ * into the global DOM tree, e.g., in signUp handler, they should
+ * be copied so as to ensure the global DOM tree independent from
+ * any thread-specific XML parser dictionary
  */
 static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 {
@@ -246,7 +253,8 @@ static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 		return NULL;
 	}
 
-	xmlCtxtUseOptions(parserContext, XML_PARSE_NONET | XML_PARSE_NOBLANKS);
+	/* No XML_PARSE_NODICT applied, see comments above */
+	xmlCtxtUseOptions(parserContext, XML_PARSE_OPTIONS_COMMON);
 
 	while ((bytesRead = FCGX_GetStr(chunk, chunkSize, request->in)) > 0) {
 		xmlParseChunk(parserContext, chunk, bytesRead, 0); /* Non-terminating */

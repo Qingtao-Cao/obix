@@ -40,7 +40,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <libxml/parser.h>
 #include "obix_utils.h"
 #include "hash.h"
 
@@ -93,7 +92,6 @@ int main(int argc, char *argv[])
 	xmlNode *root, *child;
 	xmlChar *href;
 	obix_dev_t *new, *dev, *n;
-	hash_node_t *node;
 	char *file;
 	int size, i;
 
@@ -115,7 +113,7 @@ int main(int argc, char *argv[])
 
 	xml_parser_init();
 
-	if (!(doc = xmlParseFile(file))) {
+	if (!(doc = xmlReadFile(file, NULL, XML_PARSE_OPTIONS_COMMON))) {
 		printf("Failed to parse XML file %s", file);
 		goto failed;
 	}
@@ -150,11 +148,14 @@ int main(int argc, char *argv[])
 	}
 
 	for (i = 0; i < devtab->size; i++) {
-		printf("#%d, %d collision items:\n", i, devtab->table[i].count);
+		printf("#%d, %d items:\n", i, devtab->table[i].count);
+#if 0
+		hash_node_t *node;
 		list_for_each_entry(node, &(devtab->table[i].head), list) {
 			printf("%s\n", ((obix_dev_t *)(node->item))->href);
 		}
 		printf("\n");
+#endif
 	}
 
 	/* Fall through */
