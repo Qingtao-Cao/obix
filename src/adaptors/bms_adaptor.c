@@ -694,17 +694,17 @@ static void get_mtr_reading(bms_mtr_t *mtr, void *val)
 
 	switch (mtr->type) {
 	case MTR_TYPE_FLOAT:
-		*(float *)val += mtr->value.f;
-		break;
+        memcpy(val, (void *) &mtr->value.f, sizeof(float));
+        break;
 	case MTR_TYPE_UINT16:
-		*(uint16_t *)val += mtr->value.u16;
-		break;
+        memcpy(val, (void *) &mtr->value.u16, sizeof(uint16_t));
+        break;
 	case MTR_TYPE_UINT32:
-		*(uint32_t *)val += mtr->value.u32;
-		break;
+        memcpy(val, (void *) &mtr->value.u32, sizeof(uint32_t));
+        break;
 	case MTR_TYPE_BOOL:
-		*(LVL_MTR *)val += mtr->value.b;
-		break;
+        memcpy(val, (void *) &mtr->value.b, sizeof(LVL_MTR));
+        break;
 	default:
 		/*
 		 * The current meter is not needed,
