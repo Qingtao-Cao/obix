@@ -26,7 +26,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>			/* close */
-#include <time.h>			/* time & gmtime_r */
 #include "log_utils.h"
 #include "xml_config.h"
 #include "xml_utils.h"
@@ -97,12 +96,6 @@ static const char *HIST_FLT_CMPT_TEMPLATE =
 
 static const char *HIST_FLT_SUFFIX =
 "</obj>";
-
-/*
- * Timestamps are in "yyyy-mm-ddThh:mm:ss" format which has
- * 19 bytes without the NULL terminator.
- */
-static const char *HIST_REC_TS_FORMAT = "%4d-%.2d-%.2dT%.2d:%.2d:%.2d";
 
 typedef enum {
 	BATCH_CMD_READ = 0,
@@ -569,37 +562,6 @@ int obix_query_history(CURL_EXT *user_handle, const int conn_id,
 	}
 
 	return conn->comm->query_history(user_handle, dev, flt, data, len);
-}
-
-char *obix_get_timestamp(time_t t)
-{
-	char *ts;
-	struct tm tm;
-
-	if (t == 0 && time(&t) < 0) {
-		log_error("Failed to get current timestamp");
-		return NULL;
-	}
-
-	ts = (char *)malloc(HIST_REC_TS_MAX_LEN + 1);
-	if (!ts) {
-		log_error("Failed to allocate memory for timestamp string");
-		return NULL;
-	}
-
-	/*
-	 * Get a broken-down time in terms of UTC time zone, that is, GMT+0
-	 */
-	if (gmtime_r(&t, &tm)) {
-		sprintf(ts, HIST_REC_TS_FORMAT,
-				tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
-				tm.tm_hour, tm.tm_min, tm.tm_sec);
-	} else {
-		free(ts);
-		ts = NULL;
-	}
-
-	return ts;
 }
 
 static int obix_get_history_index(CURL_EXT *user_handle, const int conn_id,

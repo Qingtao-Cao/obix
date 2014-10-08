@@ -2413,7 +2413,7 @@ static void bms_updater_task(void *arg)
 		 * Compare each existing CSV file's timestamp with the timestamp
 		 * of the last handled CSV file
 		 */
-		if (!(ts = obix_get_timestamp(file->mtime)) ||
+		if (!(ts = get_utc_timestamp(file->mtime)) ||
 			timestamp_compare(ts, bms->mtime_ts, &res_d, &res_t) < 0) {
 			log_error("Failed to compare timestamp for %s", file->path);
 			break;

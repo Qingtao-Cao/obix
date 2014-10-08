@@ -22,6 +22,9 @@
 #ifndef OBIX_UTILS_H_
 #define OBIX_UTILS_H_
 
+#include <sys/types.h>			/* getpid */
+#include <unistd.h>				/* getpid */
+#include <time.h>				/* struct timespec */
 #include <libxml/tree.h>
 #include <libxml/parser.h>
 
@@ -199,6 +202,8 @@ typedef enum {
 
 int obix_reltime_to_long(const char *str, long *duration);
 char *obix_reltime_from_long(long millis, RELTIME_FORMAT format);
+
+char *get_utc_timestamp(time_t t);
 
 /*
  * NOTE: No assignment should ever be passed in the macro, or

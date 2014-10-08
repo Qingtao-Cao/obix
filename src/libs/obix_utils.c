@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <math.h>			/* HUGE_VAL */
 #include <float.h>			/* FLT_EPSILON */
+#include <time.h>			/* time & gmtime_r */
 #include "obix_utils.h"
 #include "log_utils.h"
 
@@ -81,6 +82,12 @@ const int OBIX_RELTIME_ZERO_LEN = 4;
 
 const char *OBIX_DEVICE_ROOT = "/obix/deviceRoot/";
 const int OBIX_DEVICE_ROOT_LEN = 17;
+
+/*
+ * Timestamps are in "yyyy-mm-ddThh:mm:ss" format which has
+ * 19 bytes without the NULL terminator.
+ */
+static const char *HIST_REC_TS_FORMAT = "%4d-%.2d-%.2dT%.2d:%.2d:%.2d";
 
 /*
  * Get the TID of the calling thread
@@ -1041,4 +1048,35 @@ char *obix_reltime_from_long(long millis, RELTIME_FORMAT format)
 
 	reltime[pos] = '\0';
 	return reltime;
+}
+
+char *get_utc_timestamp(time_t t)
+{
+	char *ts;
+	struct tm tm;
+
+	if (t == 0 && time(&t) < 0) {
+		log_error("Failed to get current timestamp");
+		return NULL;
+	}
+
+	ts = (char *)malloc(HIST_REC_TS_MAX_LEN + 1);
+	if (!ts) {
+		log_error("Failed to allocate memory for timestamp string");
+		return NULL;
+	}
+
+	/*
+	 * Get a broken-down time in terms of UTC time zone, that is, GMT+0
+	 */
+	if (gmtime_r(&t, &tm)) {
+		sprintf(ts, HIST_REC_TS_FORMAT,
+				tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
+				tm.tm_hour, tm.tm_min, tm.tm_sec);
+	} else {
+		free(ts);
+		ts = NULL;
+	}
+
+	return ts;
 }

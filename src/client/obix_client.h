@@ -353,6 +353,4 @@ int obix_query_history(CURL_EXT *, const int, const char *, const char *, char *
 
 int obix_create_history_ain(char **, const char *, const int, const char **, float *);
 char *obix_create_history_flt(const int, const char *, const char *, const char *, const int);
-
-char *obix_get_timestamp(time_t t);
 #endif

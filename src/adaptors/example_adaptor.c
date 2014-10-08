@@ -553,7 +553,7 @@ void obix_updater_task(void *arg)
 		free(dev->mtime_ts);
 	}
 
-	if (!(dev->mtime_ts = obix_get_timestamp(0))) {
+	if (!(dev->mtime_ts = get_utc_timestamp(0))) {
 		log_error("Failed to get timestamp for current moment");
 		goto failed;
 	}
