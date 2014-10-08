@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <stdlib.h>
+#include <stdio.h>			/* sprintf */
 #include <string.h>
 #include <limits.h>
 #include <errno.h>

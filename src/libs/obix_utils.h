@@ -25,16 +25,6 @@
 #include <sys/types.h>			/* getpid */
 #include <unistd.h>				/* getpid */
 #include <time.h>				/* struct timespec */
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-
-/*
- * Common XML parser options, a XML parser user may OR other options
- *
- * XML_PARSE_NONET - prevent XXE attacks
- * XML_PARSE_NOBLANKS - skip blank content
- */
-#define XML_PARSE_OPTIONS_COMMON	(XML_PARSE_NONET | XML_PARSE_NOBLANKS)
 
 /*
  * Error codes which are returned by library functions

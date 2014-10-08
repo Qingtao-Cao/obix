@@ -19,6 +19,7 @@
  * *****************************************************************************/
 
 #include "obix_utils.h"
+#include "xml_utils.h"
 #include "xml_config.h"
 #include "log_utils.h"
 

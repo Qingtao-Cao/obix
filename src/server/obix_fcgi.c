@@ -25,6 +25,7 @@
 #include "log_utils.h"
 #include "server.h"
 #include "obix_request.h"
+#include "xml_utils.h"
 #include "xml_config.h"
 #include "obix_utils.h"
 #include "xml_utils.h"
