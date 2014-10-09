@@ -317,6 +317,7 @@ static void periodicTask_execute(Task_Thread* thread, Periodic_Task* ptask)
 
     /* Release mutex, because execution may take considerable time */
     pthread_mutex_unlock(&(thread->taskListMutex));
+	/* Never, ever return when it comes to stopTask */
     (ptask->task)(ptask->arg);
     pthread_mutex_lock(&(thread->taskListMutex));
 
@@ -479,18 +480,29 @@ int ptask_schedule(Task_Thread* thread,
                    long period,
                    int executeTimes)
 {
-    if ((executeTimes <= 0) && (executeTimes != EXECUTE_INDEFINITE))
-        return -1;
+	Periodic_Task *ptask;
 
-    pthread_mutex_lock(&(thread->taskListMutex));
-    Periodic_Task* ptask =
-        periodicTask_create(thread, task, arg, period, executeTimes);
+	if ((executeTimes <= 0) && (executeTimes != EXECUTE_INDEFINITE)) {
+		return -1;
+	}
 
-    // task list is updated, notify taskThread
-    pthread_cond_signal(&(thread->taskListUpdated));
-    pthread_mutex_unlock(&(thread->taskListMutex));
+	pthread_mutex_lock(&(thread->taskListMutex));
+	if (!(ptask = periodicTask_create(thread, task, arg, period, executeTimes))) {
+		pthread_mutex_unlock(&(thread->taskListMutex));
+		return -1;
+	}
 
-    return (ptask == NULL) ? -1 : ptask->id;
+	pthread_cond_signal(&(thread->taskListUpdated));
+	pthread_mutex_unlock(&(thread->taskListMutex));
+
+	/*
+	 * Once the mutex is unlocked above, the worker thread may be scheduled
+	 * in before this thread that inserts the stopTask. Consequently the whole
+	 * worker thread along with the entire task list may have been destroyed,
+	 * therefore the task descriptor of the stopTask should not be accessed
+	 * to avoid invalid memory access
+	 */
+	return (task == stopTask) ? 1 : ptask->id;
 }
 
 int ptask_reschedule(Task_Thread* thread,
@@ -653,18 +665,27 @@ Task_Thread* ptask_init()
 
 int ptask_dispose(Task_Thread* thread, int wait)
 {
+	pthread_t saved;
 	int error;
 
 	if (!thread) {
 		return -1;
 	}
 
-	if ((error = ptask_schedule(thread, &stopTask, thread, 0, 1)) <= 0) {
+	/*
+	 * Save a copy of the PID just in case the whole Task_Thread structure
+	 * may have been released by the stopTask, which is the case when the
+	 * worker thread is immediately scheduled once the mutex is unlocked in
+	 * ptask_schedule.
+	 */
+	saved = thread->thread;
+
+	if ((error = ptask_schedule(thread, stopTask, thread, 0, 1)) <= 0) {
 		return error;
 	}
 
-    if (wait == 1) {
-        return pthread_join(thread->thread, NULL);
+	if (wait == 1) {
+		return pthread_join(saved, NULL);
 	}
 
 	return 0;

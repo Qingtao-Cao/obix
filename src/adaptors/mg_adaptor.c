@@ -1481,7 +1481,7 @@ static int mg_register_devices(obix_mg_t *mg)
 {
 	mg_modbus_t *bus;
 	mg_bcm_t *bcm;
-	int ret;
+	int ret = OBIX_SUCCESS;
 
 	list_for_each_entry(bus, &mg->devices, list) {
 		log_debug("Register devices on modbus %s", bus->name);
