@@ -77,7 +77,7 @@ The oBIX Server will respond with the following XML file:
 
 Then the requestor can further manipulate the append and query operations of the history facility created.
 
-In source code obix_getHistory() can be called to this end. The required name of the history facility should have been setup during registration.
+In source code obix_get_history() can be called to this end. The required name of the history facility should have been setup during registration.
 
 
 ## History.Append
@@ -120,7 +120,7 @@ Upon success, the History.Append operation will return:
 * The updated start and end timestamps for the very first record
 * The updated start and end timestamps for the very last record.
 
-In source code, obix_createHistoryAppendIn() can be used to generate the required HistoryAppendIn contract (carrying only one record). After conversion to a XML document it could be passed to obix_appendHistory() to send to oBIX Server.
+In source code, obix_create_history_ain() can be used to generate the required HistoryAppendIn contract, which can be further passed to obix_append_history() to send to oBIX Server.
 
 
 ## History.Query
@@ -169,14 +169,12 @@ HistoryQuery script can have fine control on how to query the desired history re
 		-v Verbose mode
 		-d The href segment of the device, e.g., "/M1/DH1/BCM01/CB01/"
 		-n The number of records desirable
-		-s The start timestamp, as in format "2014-04-25T15:41:48"
-		-e The end timestamp, as in format "2014-04-25T15:41:48"
+		-s The start timestamp, as in format "2014-04-25T15:41:48Z"
+		-e The end timestamp, as in format "2014-04-25T15:41:48Z"
 
-In source code, obix_createHistoryFilter() can be used to generate the required HistoryFilter contract. After conversion to a XML document it can be passed to obix_queryHistory() to query desirable history data from the oBIX Server.
+Note, oBIX specification demands ISO-8601 timezone support. However, current strptime() C API has made some practical compromise regarding the formats supported. Please refer to docs/timezone.md for more information.
 
-As the amount of history data can be as large as several GB, data are stored in a scattered manner by libcurl in memory. Call obix_saveHistoryData() to save them into a permanent file.
-
-Furthermore, obix_getHistoryData() can be used to assemble scattered received data into a consecutive memory region. Be sure to use it only when the amount of data is relatively small.
+In source code, obix_create_history_flt() can be used to generate the required HistoryFilter contract, which can be further passed to obix_query_history() to query desirable history data from the oBIX Server. On success, the caller provided pointer is adjusted pointing to the input buffer of relevant CURL handler which containing the result of the previous history.Query request. Callers should not free this pointer.
 
 
 ## Hierarchy Support
@@ -213,11 +211,9 @@ For this reason any component such as 'name of data centre', 'data all', 'BCM de
 
 ## CURL Timeout Value
 
-The "curl-timeout-history" tag in oBIX adapters / clients configuration files can be manipulated to setup the timeout threshold in relevant CURL handle to access history data. Applications should make use of a reasonable timeout value according to their practical networking latency and workload of data likely sent by the oBIX Server.
+Since a CURL handle is not thread-safe, for multi-thread oBIX applications each thread should utilise its own CURL handle to access the history facility in parallel, whereas single thread oBIX applications can safely fall back on the default one, then the "curl-timeout" and "curl-bulky" tags in the generic oBIX connection configuration file are used to setup its timeout threshold and the quantum size.
 
-For oBIX adapters that only append small amount of records, timeout threshold could be set much smaller than those used by oBIX clients that could query GB amount of history data.
-
-If the "curl-timeout-history" tag is omitted then the timeout threshold would default to zero, which means never timing out. So users could start with 0 timeout to gain a better idea about the time likely consumed in most conditions, then setup a positive value for the sake of stability.
+Regardless of which CURL handle is used, oBIX applications should setup these two settings of a CURL handle sensibly. For instance, if only a relative smaller amount of history data is exchanged with the oBIX server, the timeout threshold should be shorter than when several GB amount of history data are transmitted.
 
 
 ## Stress Test
@@ -227,3 +223,239 @@ The generate_logs.c in the test/ folder can be used to generate a number of hist
 Be sure the hard drive is spacious enough to accommodate all potential log files before running this program. As an example, log files for 12 months will consume 4.3GB.
 
 If generated log files and their indexes are to be merged with the existing history facility, make sure the merged index file is well-formatted and consistent with available log files.
+
+
+## Timezone Support
+
+ISO-9801 timezone definition has been supported by the history subsystem despite some practical limitation that has been imposed by C library strptime() API. Please refer to docs/timezone.md for more details.
+
+Following steps take advantage of relevant test scripts to demonstrate the support of ISO-8601 timezone.
+
+```
+1. Run the standalone oBIX server, and enter <path of obix package>/tests/scripts/ folder;
+
+2. Setup a history facility for the device named "test.test_device":
+
+	$ ./historyGet -d /test/test_device
+	<?xml version="1.0" encoding="UTF-8"?>
+	<str name="test.test_device" href="/obix/historyService/histories/test/test_device/"/>
+
+3. The newly created history facility contains no data at all:
+
+	$ ./historyQuery -d /test/test_device
+	<?xml version="1.0"?>
+	<err is="obix:UnsupportedErr" name="General error contract" href="/obix/historyService/histories/test/test_device/query" displayName="query" display="The device's history facility is empty"/>
+
+4. Append the first history record to the history facility, and verify what has been added:
+
+	$ ./historyAppendSingle -d /test/test_device -s `date +%FT%T%z`
+	<?xml version="1.0" encoding="UTF-8"?>
+	<obj is="obix:HistoryAppendOut">
+	  <int name="numAdded" val="1"/>
+	  <int name="newCount" val="1"/>
+	  <abstime name="newStart" val="2014-10-21T09:48:26+1000"/>
+	  <abstime name="newEnd" val="2014-10-21T09:48:26+1000"/>
+	</obj>
+	
+	$ ./historyQueryAll -d /test/test_device
+	<?xml version="1.0" encoding="UTF-8"?>
+	<obj is="obix:HistoryQueryOut">
+	<int name="count" val="1"/>
+	<abstime name="start" val="2014-10-21T09:48:26+1000"/>
+	<abstime name="end" val="2014-10-21T09:48:26+1000"/>
+	<list name="data" of="obix:HistoryRecord">
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T09:48:26+1000"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	</list>
+	</obj>
+
+5. New history records can be added provided that their timestamp are not earlier than that of the latest one, otherwise an error contract is returned by oBIX server:
+
+	$ ./historyAppendSingle -d /test/test_device -s 2014-10-21T09:48:26+0945
+	<?xml version="1.0" encoding="UTF-8"?>
+	<obj is="obix:HistoryAppendOut">
+	  <int name="numAdded" val="1"/>
+	  <int name="newCount" val="2"/>
+	  <abstime name="newStart" val="2014-10-21T09:48:26+1000"/>
+	  <abstime name="newEnd" val="2014-10-21T09:48:26+0945"/>
+	</obj>
+
+	$ ./historyAppendSingle -d /test/test_device -s 2014-10-21T09:48:26+1015
+	<?xml version="1.0"?>
+	<err is="obix:UnsupportedErr" name="General error contract" href="/obix/historyService/histories/test/test_device/append" displayName="append" display="Data list contains records with TS in the past"/>
+	
+6. Append a new history record on a brand new day:
+
+	$ ./historyAppendSingle -d /test/test_device -s 2014-10-21T12:48:26-1200
+	<?xml version="1.0" encoding="UTF-8"?>
+	<obj is="obix:HistoryAppendOut">
+	  <int name="numAdded" val="1"/>
+	  <int name="newCount" val="3"/>
+	  <abstime name="newStart" val="2014-10-21T09:48:26+1000"/>
+	  <abstime name="newEnd" val="2014-10-21T12:48:26-1200"/>
+	</obj>
+	
+7. Query all existing history records:
+
+	$ ./historyQuery -d /test/test_device 
+	<?xml version="1.0" encoding="UTF-8"?>
+	<obj is="obix:HistoryQueryOut">
+	<int name="count" val="3"/>
+	<abstime name="start" val="2014-10-21T09:48:26+1000"/>
+	<abstime name="end" val="2014-10-21T12:48:26-1200"/>
+	<list name="data" of="obix:HistoryRecord">
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T09:48:26+1000"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T09:48:26+0945"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T12:48:26-1200"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	</list>
+	</obj>
+	
+8. Query history records on specific days:
+
+	$ ./historyQuery -d /test/test_device -e 2014-10-21T00:00:00
+	<?xml version="1.0" encoding="UTF-8"?>
+	<obj is="obix:HistoryQueryOut">
+	<int name="count" val="1"/>
+	<abstime name="start" val="2014-10-21T09:48:26+1000"/>
+	<abstime name="end" val="2014-10-21T09:48:26+1000"/>
+	<list name="data" of="obix:HistoryRecord">
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T09:48:26+1000"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	</list>
+	</obj>
+	
+	$ ./historyQuery -d /test/test_device -s 2014-10-21T00:00:00 -e 2014-10-22T00:00:00+0015
+	<?xml version="1.0" encoding="UTF-8"?>
+	<obj is="obix:HistoryQueryOut">
+	<int name="count" val="1"/>
+	<abstime name="start" val="2014-10-21T09:48:26+0945"/>
+	<abstime name="end" val="2014-10-21T09:48:26+0945"/>
+	<list name="data" of="obix:HistoryRecord">
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T09:48:26+0945"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	</list>
+	</obj>
+	
+	$ ./historyQuery -d /test/test_device -s 2014-10-22T00:00:00 -e 2014-10-23T00:00:00+0015
+	<?xml version="1.0" encoding="UTF-8"?>
+	<obj is="obix:HistoryQueryOut">
+	<int name="count" val="1"/>
+	<abstime name="start" val="2014-10-21T12:48:26-1200"/>
+	<abstime name="end" val="2014-10-21T12:48:26-1200"/>
+	<list name="data" of="obix:HistoryRecord">
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T12:48:26-1200"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	</list>
+	</obj>
+	
+9. Exam history facility's index file:
+
+	$ tree /var/lib/obix/histories/test.test_device/
+	/var/lib/obix/histories/test.test_device/
+	├── 2014-10-20.fragment
+	├── 2014-10-21.fragment
+	├── 2014-10-22.fragment
+	└── index.xml
+	
+	0 directories, 4 files
+	
+	$ cat /var/lib/obix/histories/test.test_device/index.xml 
+	<?xml version="1.0" encoding="UTF-8"?>
+	<list name="index" href="index" of="obix:HistoryFileAbstract">
+	  <obj is="obix:HistoryFileAbstract">
+	    <date name="date" val="2014-10-20"/>
+	    <int name="count" val="1"/>
+	    <abstime name="start" val="2014-10-21T09:48:26+1000"/>
+	    <abstime name="end" val="2014-10-21T09:48:26+1000"/>
+	  </obj>
+	  <obj is="obix:HistoryFileAbstract">
+	    <date name="date" val="2014-10-21"/>
+	    <int name="count" val="1"/>
+	    <abstime name="start" val="2014-10-21T09:48:26+0945"/>
+	    <abstime name="end" val="2014-10-21T09:48:26+0945"/>
+	  </obj>
+	  <obj is="obix:HistoryFileAbstract">
+	    <date name="date" val="2014-10-22"/>
+	    <int name="count" val="1"/>
+	    <abstime name="start" val="2014-10-21T12:48:26-1200"/>
+	    <abstime name="end" val="2014-10-21T12:48:26-1200"/>
+	  </obj>
+	</list>
+
+10. Exam the content of each raw history data files:
+
+	$ cat /var/lib/obix/histories/test.test_device/2014-10-20.fragment 
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T09:48:26+1000"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	
+	$ cat /var/lib/obix/histories/test.test_device/2014-10-21.fragment 
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T09:48:26+0945"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+	
+	$ cat /var/lib/obix/histories/test.test_device/2014-10-22.fragment 
+	<obj is="obix:HistoryRecord">
+	  <abstime name="timestamp" val="2014-10-21T12:48:26-1200"/>
+	  <real name="kWh" val="0.000000"/>
+	  <real name="kW" val="0.000000"/>
+	  <real name="V" val="230.000000"/>
+	  <real name="PF" val="0.900000"/>
+	  <real name="I" val="0.000000"/>
+	</obj>
+```

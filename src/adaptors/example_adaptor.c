@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 #include "obix_client.h"
 #include "log_utils.h"
 #include "ptask.h"
@@ -521,7 +522,7 @@ void obix_updater_task(void *arg)
 {
 	example_dev_t *dev = (example_dev_t *)arg;
 	char *reltime;
-	long time;
+	long t;
 
 	if (flag_exit == 1) {
 		return;
@@ -529,10 +530,10 @@ void obix_updater_task(void *arg)
 
 	pthread_mutex_lock(&dev->mutex);
 	dev->time += dev->updater_period;
-	time = dev->time;
+	t = dev->time;
 	pthread_mutex_unlock(&dev->mutex);
 
-	reltime = obix_reltime_from_long(time, RELTIME_DAY);
+	reltime = obix_reltime_from_long(t, RELTIME_DAY);
 
 	/*
 	 * For a simple application that won't race for one
@@ -553,7 +554,7 @@ void obix_updater_task(void *arg)
 		free(dev->mtime_ts);
 	}
 
-	if (!(dev->mtime_ts = get_utc_timestamp(0))) {
+	if (!(dev->mtime_ts = get_utc_timestamp(time(NULL)))) {
 		log_error("Failed to get timestamp for current moment");
 		goto failed;
 	}

@@ -30,6 +30,10 @@
 #include <errno.h>
 #include <math.h>			/* HUGE_VAL */
 #include <float.h>			/* FLT_EPSILON */
+#include <ctype.h>			/* isdigit */
+#define __USE_BSD		1	/* tm_gmtoff */
+#define __USE_MISC		1	/* timegm */
+#define __USE_XOPEN		1	/* strptime */
 #include <time.h>			/* time & gmtime_r */
 #include "obix_utils.h"
 #include "log_utils.h"
@@ -61,7 +65,8 @@ const char *HIST_AIN_TS_UND = "UNSPECIFIED";
 const char *HIST_OP_APPEND = "append";
 const char *HIST_OP_QUERY = "query";
 const char *HIST_INDEX = "index";
-const char *HIST_TS_INIT = "1970-01-01T0:0:0";
+const char *HIST_TS_INIT = "1970-01-01T0:0:0Z";
+const char *HIST_DATE_INIT = "1970-01-01";
 
 /*
  * oBIX contracts used by the server side
@@ -85,10 +90,13 @@ const char *OBIX_DEVICE_ROOT = "/obix/deviceRoot/";
 const int OBIX_DEVICE_ROOT_LEN = 17;
 
 /*
- * Timestamps are in "yyyy-mm-ddThh:mm:ss" format which has
- * 19 bytes without the NULL terminator.
+ * Timestamps are in "yyyy-mm-ddThh:mm:ssZ" format which has
+ * 20 bytes without the NULL terminator.
+ *
+ * NOTE: the timestamp strings are in UTC timezone by default
  */
-static const char *HIST_REC_TS_FORMAT = "%4d-%.2d-%.2dT%.2d:%.2d:%.2d";
+static const char *HIST_REC_TS_FORMAT = "%4d-%.2d-%.2dT%.2d:%.2d:%.2dZ";
+static const char *HIST_REC_DATE_FORMAT = "%4d-%.2d-%.2d";
 
 /*
  * Get the TID of the calling thread
@@ -337,59 +345,6 @@ int timespec_compare(const struct timespec *m1, const struct timespec *m2)
 }
 
 /*
- * Get and duplicate the date and time parts from a full timestamp
- * in format of yyyy-mm-ddThh:mm:ss[+-]hh:00, where date the time
- * are separated by "T" and time and timezone are separated by "+/-"
- *
- * Return 0 on success, < 0 otherwise
- *
- * Note,
- * 1. Callers are expected to release the date and time strings
- * after use
- */
-int timestamp_split(const char *ts, char **date, char **time)
-{
-	char *end;
-	int len;
-
-	if (!(end = strstr(ts, "T"))) {
-		return -1;
-	}
-
-	len = end - ts;
-
-	*date = (char *)malloc(len + 1);
-	if (!*date) {
-		return -1;
-	}
-
-	strncpy(*date, ts, len);
-	*(*date + len) = '\0';
-
-	if (time) {
-		ts = end + 1;	/* Skip the "T" character */
-
-		/* In case timezone is omitted */
-		if (!(end = strstr(ts, "-")) && !(end = strstr(ts, "+"))) {
-			end = (char *)(ts + strlen(ts));
-		}
-
-		len = end - ts;
-
-		*time = (char *)malloc(len + 1);
-		if (!*time) {
-			free(*date);
-			return -1;
-		}
-
-		strncpy(*time, ts, len);
-		*(*time + len) = '\0';
-	}
-
-	return 0;
-}
-
-/*
  * Concatenate potential root, parent folder, file name and suffix
  * strings into one. Extra slash will be inserted after folder name
  * if needed
@@ -478,258 +433,6 @@ int link_pathname(char **p, const char *root, const char *parent,
 	buf[len] = '\0';
 
 	*p = buf;
-	return 0;
-}
-
-/*
- * Convert "yyyy-mm-dd" string into numbers of year, month and
- * day respectively, or convert "hh:mm:ss" string into numbers
- * of hour, minute and second respectively.
- *
- * Return 0 on success, -1 otherwise
- */
-static int time_to_long(const char *str, long *x, long *y, long *z, int delimiter)
-{
-	const char *orig = str;
-	char *endptr;
-
-	/* X */
-	errno = 0;
-	*x = strtol(str, &endptr, 10);
-	if ((errno == ERANGE && (*x == LONG_MAX || *x == LONG_MIN)) ||
-		(errno != 0 && *x == 0)) {
-		log_error("Failed to convert X string to value");
-		return -1;
-	}
-
-	if (endptr == str) {
-		log_error("Invalid format: no X contained in string %s", orig);
-		return -1;
-	}
-
-	if (*endptr != delimiter) {
-		log_error("Invalid format: Delimiter \"%d\" instead of other non-digit "
-					"character should be used between X and Y", delimiter);
-		return -1;
-	}
-
-	/* Y */
-	str = endptr + 1;
-	errno = 0;
-	*y = strtol(str, &endptr, 10);
-	if ((errno == ERANGE && (*y == LONG_MAX || *y == LONG_MIN)) ||
-		(errno != 0 && *y == 0)) {
-		log_error("Failed to convert Y string to value");
-		return -1;
-	}
-
-	if (endptr == str) {
-		log_error("Invalid format: no Y contained in string %s", orig);
-		return -1;
-	}
-
-	if (*endptr != delimiter) {
-		log_error("Invalid format: Delimiter \"%d\" instead of other non-digit "
-					"character should be used between X and Y", delimiter);
-		return -1;
-	}
-
-	/* Z */
-	str = endptr + 1;
-	errno = 0;
-	*z = strtol(str, &endptr, 10);
-	if ((errno == ERANGE && (*z == LONG_MAX || *z == LONG_MIN)) ||
-		(errno != 0 && *z == 0)) {
-		log_error("Failed to convert Z string to value");
-		return -1;
-	}
-
-	if (endptr == str) {
-		log_error("Invalid format: no Z contained in string %s", orig);
-		return -1;
-	}
-
-	if (*endptr != '\0') {
-		log_error("Further non-digit characters pending number: %s", endptr);
-		return -1;
-	}
-
-	return 0;
-}
-
-/*
- * Compare two time relevant strings in either "yyyy-mm-dd" or
- * "hh:mm:ss" format
- *
- * Return 0 on success, < 0 otherwise.
- *
- * On success, res will be set as:
- *	-1, if str1 before str2;
- *	0, if str1 is the same as str2;
- *	1, if str1 after str2;
- */
-int time_compare(const char *str1, const char *str2, int *res, int delimiter)
-{
-	long x1, y1, z1;
-	long x2, y2, z2;
-
-	if (time_to_long(str1, &x1, &y1, &z1, delimiter) < 0 ||
-		time_to_long(str2, &x2, &y2, &z2, delimiter) < 0) {
-		log_error("Failed to convert time string to numbers");
-		return -1;
-	}
-
-	if (x1 < x2) {
-		*res = -1;
-	} else if (x1 > x2) {
-		*res = 1;
-	} else {
-		if (y1 < y2) {
-			*res = -1;
-		} else if (y1 > y2) {
-			*res = 1;
-		} else {
-			if (z1 < z2) {
-				*res = -1;
-			} else if (z1 > z2) {
-				*res = 1;
-			} else {
-				*res = 0;
-			}
-		}
-	}
-
-	return 0;
-}
-
-/*
- * Compare two timestamps
- *
- * Return 0 on success, < 0 otherwise
- *
- * On success, res_d will be set as:
- *	-1, if date in ts1 is before that of ts2;
- *	0, if date in ts1 is the same as that of ts2;
- *	1, if date in ts1 is after that of ts2;
- *
- * res_t will be set in a similar manner
- */
-int timestamp_compare(const char *ts1, const char *ts2, int *res_d, int *res_t)
-{
-	char *date1 = NULL, *time1 = NULL;
-	char *date2 = NULL, *time2 = NULL;
-	int ret = -1;
-
-	if (!ts1 || !ts2) {
-		return -1;
-	}
-
-	if (timestamp_split(ts1, &date1, &time1) < 0 ||
-		timestamp_split(ts2, &date2, &time2) < 0) {
-		log_error("Failed to get dates and times from %s and %s", ts1, ts2);
-		goto failed;
-	}
-
-	if (time_compare(date1, date2, res_d, '-') < 0 ||
-		time_compare(time1, time2, res_t, ':') < 0) {
-		log_error("Failed to compare dates or times in %s and %s", ts1, ts2);
-	} else {
-		ret = 0;	/* Success */
-	}
-
-	/* Fall through */
-
-failed:
-	if (date1) {
-		free(date1);
-	}
-
-	if (date2) {
-		free(date2);
-	}
-
-	if (time1) {
-		free(time1);
-	}
-
-	if (time2) {
-		free(time2);
-	}
-
-	return ret;
-}
-
-/*
- * Check if [start, end] has something in common with
- * [oldest, latest]
- *
- * Return 1 when common part exists, < 0 otherwise,
- * in particular:
- *
- *		-2, unable to compare timestamp strings;
- *		-3, the start TS is after the latest TS;
- *		-4, the end TS is before the oldest TS;
- */
-int timestamp_has_common(const char *start, const char *end,
-						 const char *oldest, const char *latest)
-{
-	int res_d, res_t;
-
-	if (timestamp_compare(start, latest, &res_d, &res_t) < 0) {
-		return -2;
-	}
-
-	if (res_d > 0 || (res_d == 0 && res_t > 0)) {
-		return -3;
-	}
-
-	if (timestamp_compare(end, oldest, &res_d, &res_t) < 0) {
-		return -2;
-	}
-
-	if (res_d < 0 || (res_d == 0 && res_t < 0)) {
-		return -4;
-	}
-
-	return 1;
-}
-
-/*
- * Adjust *start and *end to be the common part of
- * [*start, *end] and [oldest, latest]
- *
- * Return 0 on success, -1 otherwise
- *
- * Note,
- * 1. Due to the fact that xml_get_child_val > xmlGetProp
- * will return a copy of the value of relevant attribute,
- * before changing the start and end pointer, the original
- * string pointed to must be released to prevent memory
- * leaks.
- */
-int timestamp_find_common(char **start, char **end,
-						  const char *oldest, const char *latest)
-{
-	int res_d, res_t;
-
-	if (timestamp_compare(*start, oldest, &res_d, &res_t) < 0) {
-		return -1;
-	}
-
-	if (res_d < 0 || (res_d == 0 && res_t < 0)) {
-		free(*start);
-		*start = strdup(oldest);
-	}
-
-	if (timestamp_compare(*end, latest, &res_d, &res_t) < 0) {
-		return -1;
-	}
-
-	if (res_d > 0 || (res_d == 0 && res_t > 0)) {
-		free(*end);
-		*end = strdup(latest);
-	}
-
 	return 0;
 }
 
@@ -1056,13 +759,16 @@ char *get_utc_timestamp(time_t t)
 	char *ts;
 	struct tm tm;
 
-	if (t == 0 && time(&t) < 0) {
-		log_error("Failed to get current timestamp");
+	if (t < 0) {
 		return NULL;
 	}
 
-	ts = (char *)malloc(HIST_REC_TS_MAX_LEN + 1);
-	if (!ts) {
+	/* Short-cut if the given calender time is zero */
+	if (t == 0) {
+		return strdup(HIST_TS_INIT);
+	}
+
+	if (!(ts = (char *)malloc(HIST_REC_TS_MAX_LEN + 1))) {
 		log_error("Failed to allocate memory for timestamp string");
 		return NULL;
 	}
@@ -1080,4 +786,552 @@ char *get_utc_timestamp(time_t t)
 	}
 
 	return ts;
+}
+
+char *get_utc_date(time_t t)
+{
+	char *date;
+	struct tm tm;
+
+	if (t < 0) {
+		return NULL;
+	}
+
+	/* Short-cut if the given calender time is zero */
+	if (t == 0) {
+		return strdup(HIST_DATE_INIT);
+	}
+
+	if (!(date = (char *)malloc(HIST_REC_DATE_MAX_LEN + 1))) {
+		log_error("Failed to allocate memory for timestamp string");
+		return NULL;
+	}
+
+	/*
+	 * Get a broken-down time in terms of UTC time zone, that is, GMT+0
+	 */
+	if (gmtime_r(&t, &tm)) {
+		sprintf(date, HIST_REC_DATE_FORMAT,
+				tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday);
+	} else {
+		free(date);
+		date = NULL;
+	}
+
+	return date;
+}
+
+/*
+ * Split a timestamp string in ISO-8601 format such as %FT%T%z
+ * into sub strings of date, time and timezone
+ */
+int timestamp_split(const char *ts, char **date, char **time, char **tz)
+{
+	char *end;
+	int len, no_tz = 0;
+
+	/* Get date */
+	if (!(end = strstr(ts, "T"))) {
+		return -1;
+	}
+
+	len = end - ts;
+
+	if (!(*date = (char *)malloc(len + 1))) {
+		return -1;
+	}
+
+	strncpy(*date, ts, len);
+	*(*date + len) = '\0';
+
+	/* Get time */
+	ts = end + 1;	/* Skip the "T" character */
+	if (*ts == '\0') {
+		free(*date);
+		return -1;
+	}
+
+	/*
+	 * If timezone is not available, then it will be treated
+	 * in UTC by default
+	 */
+	if (!(end = strstr(ts, "Z")) &&
+		!(end = strstr(ts, "-")) &&
+		!(end = strstr(ts, "+"))) {
+		end = (char *)(ts + strlen(ts));
+		no_tz = 1;
+	}
+
+	len = end - ts;
+
+	if (!(*time = (char *)malloc(len + 1))) {
+		free(*date);
+		return -1;
+	}
+
+	strncpy(*time, ts, len);
+	*(*time + len) = '\0';
+
+	/* Get timezone */
+	if (no_tz == 1) {
+		*tz = NULL;
+		return 0;
+	}
+
+	if (*end == 'Z') {
+		*tz = strdup("Z");
+		return 0;
+	}
+
+	ts = end + 1;	/* Skip the "+/-" character */
+	if (*ts == '\0') {
+		free(*date);
+		free(*time);
+		return -1;
+	}
+
+	end = (char *)(ts + strlen(ts));
+
+	len = end - ts;
+
+	if (!(*tz = (char *)malloc(len + 1))) {
+		free(*date);
+		free(*time);
+		return -1;
+	}
+
+	strncpy(*tz, ts, len);
+	*(*tz + len) = '\0';
+
+	return 0;
+}
+
+/*
+ * Convert "yyyy-mm-dd" string into numbers of year, month and
+ * day respectively, or convert "hh:mm:ss" string into numbers
+ * of hour, minute and second respectively.
+ *
+ * Return 0 on success, -1 otherwise
+ */
+static int time_to_long(const char *str, long *x, long *y, long *z, int delimiter)
+{
+	const char *orig = str;
+	char *endptr;
+
+	if (!str) {
+		return -1;
+	}
+
+	/* X */
+	errno = 0;
+	*x = strtol(str, &endptr, 10);
+	if ((errno == ERANGE && (*x == LONG_MAX || *x == LONG_MIN)) ||
+		(errno != 0 && *x == 0)) {
+		log_error("Failed to convert X string to value");
+		return -1;
+	}
+
+	if (endptr == str) {
+		log_error("Invalid format: no X contained in string %s", orig);
+		return -1;
+	}
+
+	if (*endptr != delimiter) {
+		log_error("Invalid format: Delimiter \"%d\" instead of other non-digit "
+					"character should be used between X and Y", delimiter);
+		return -1;
+	}
+
+	/* Y */
+	str = endptr + 1;
+	errno = 0;
+	*y = strtol(str, &endptr, 10);
+	if ((errno == ERANGE && (*y == LONG_MAX || *y == LONG_MIN)) ||
+		(errno != 0 && *y == 0)) {
+		log_error("Failed to convert Y string to value");
+		return -1;
+	}
+
+	if (endptr == str) {
+		log_error("Invalid format: no Y contained in string %s", orig);
+		return -1;
+	}
+
+	if (*endptr != delimiter) {
+		log_error("Invalid format: Delimiter \"%d\" instead of other non-digit "
+					"character should be used between X and Y", delimiter);
+		return -1;
+	}
+
+	/* Z */
+	str = endptr + 1;
+	errno = 0;
+	*z = strtol(str, &endptr, 10);
+	if ((errno == ERANGE && (*z == LONG_MAX || *z == LONG_MIN)) ||
+		(errno != 0 && *z == 0)) {
+		log_error("Failed to convert Z string to value");
+		return -1;
+	}
+
+	if (endptr == str) {
+		log_error("Invalid format: no Z contained in string %s", orig);
+		return -1;
+	}
+
+	if (*endptr != '\0') {
+		log_error("Further non-digit characters pending number: %s", endptr);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int timezone_is_valid(const char *tz)
+{
+	char val[3];
+	int len, i, hour;
+
+	/*
+	 * The timezone designator could be a single 'Z' letter which
+	 * stands for UTC timezone. If no timezone designator is available
+	 * it will be treated as in UTC timezone
+	 */
+	if (!tz || strcmp(tz, "Z") == 0) {
+		return 1;
+	}
+
+	len = strlen(tz);
+
+	/*
+	 * Please refer to docs/timezone.md file for the discussion of
+	 * what kind of timezone formats are supported
+	 */
+	for (i = 0; i < len; i++) {
+		if (isdigit(*(tz + i)) == 0){
+			return 0;
+		}
+	}
+
+	/* In "hh" format */
+	if (len == 2) {
+		return (atoi(tz) <= 12) ? 1 : 0;
+	}
+
+	/* In "hhmm" format */
+	if (len == 4) {
+		strncpy(val, tz, 2);
+		val[2] = '\0';
+
+		hour = atoi(val);
+
+		strncpy(val, tz+2, 2);
+		val[2] = '\0';
+
+		if (hour < 12) {
+			/* 15 minutes difference from an integral timezone is permitted */
+			return (atoi(val) % 15 == 0) ? 1 : 0;
+		} else if (hour == 12) {
+			/* the "mm" part must be zero */
+			return (atoi(val) == 0) ? 1: 0;
+		}
+	}
+
+	/* All the rest format other than "hh" or "hhmm" are regarded as invalid */
+	return 0;
+}
+
+int timestamp_is_valid(const char *ts)
+{
+	char *date, *time, *tz;
+	long x, y, z;
+	int ret = 0;
+
+	if (!ts) {
+		return 0;
+	}
+
+	date = time = tz = NULL;
+
+	/* Wrong format */
+	if (timestamp_split(ts, &date, &time, &tz) < 0) {
+		return 0;
+	}
+
+	/* Sanity checks on date and time */
+	if (time_to_long(date, &x, &y, &z, '-') < 0 ||
+		time_to_long(time, &x, &y, &z, ':') < 0) {
+		goto failed;
+	}
+
+	/* Sanity checks on timezone */
+	ret = timezone_is_valid(tz);
+
+	/* Fall through */
+
+failed:
+	if (date) {
+		free(date);
+	}
+
+	if (time) {
+		free(time);
+	}
+
+	if (tz) {
+		free(tz);
+	}
+
+	return ret;
+}
+
+/*
+ * Convert a timestamp string in ISO-8601 format as in
+ * "%FT%T%z" to calender time in UTC timezone
+ */
+time_t timestamp_to_utc_time(const char *ts)
+{
+	struct tm tm;
+	time_t time;
+
+	if (!ts) {
+		return 0;
+	}
+
+	if (timestamp_is_valid(ts) == 0) {
+		return -1;
+	}
+
+	/* Convert timestampe string into broken-down struct tm */
+	memset(&tm, 0, sizeof(struct tm));
+	strptime(ts, "%FT%T%z", &tm);	/* ignore return value */
+
+	/*
+	 * Apply timezone offset from UTC
+	 *
+	 * NOTE: the timezone offset should be DEDUCTED from the
+	 * second value to rebase to UTC timezone
+	 */
+	tm.tm_sec -= tm.tm_gmtoff;
+	tm.tm_gmtoff = 0;
+
+	/*
+	 * Convert struct tm to calender time
+	 *
+	 * NOTE: unlike mktime(), timegm() will not take into account
+	 * local timezone, which is desirable since the timezone offset
+	 * from GMT in the original timestamp string has been considered.
+	 */
+	if ((time = timegm(&tm)) == -1) {
+		log_error("Failed to convert broken-down struct tm to time_t");
+	}
+
+	return time;
+}
+
+/*
+ * Compare two timestamps that may in different timezone
+ *
+ * Return 0 on success, < 0 otherwise and *res should not be
+ * used.
+ *
+ * On success, res will be set as:
+ *	-1, if ts1 is earlier than ts2;
+ *	0, if ts1 is the same as ts2;
+ *	1, if ts1 is later than ts2;
+ *
+ * Furthermore, if res == 1, the new_day will be set to 1 if ts1
+ * is on a new day than ts2, 0 otherwise.
+ */
+int timestamp_compare(const char *ts1, const char *ts2, int *res, int *new_day)
+{
+	time_t time1, time2;
+	char *day1 = NULL, *day2 = NULL;
+	int ret = -1;
+
+	*res = 0;
+	if (new_day) {
+		*new_day = 0;
+	}
+
+	if (!ts1 || !ts2) {
+		return -1;
+	}
+
+	if ((time1 = timestamp_to_utc_time(ts1)) < 0 ||
+		(time2 = timestamp_to_utc_time(ts2)) < 0) {
+		return -1;
+	}
+
+	if (time1 < time2) {
+		*res = -1;
+	} else if (time1 == time2) {
+		*res = 0;
+	} else {
+		*res = 1;
+
+		/*
+		 * Only compare the date if required and only when ts1 is later
+		 * than ts2. As long as the date strings are different, we can
+		 * safely assume ts1 has a new day later than ts2
+		 */
+		if (new_day) {
+			/* Short-cut if ts2 is the Epoch time */
+			if (time2 == 0) {
+				*new_day = 1;
+			} else {
+				if (!(day1 = get_utc_date(time1)) ||
+					!(day2 = get_utc_date(time2))) {
+					goto failed;
+				}
+
+				*new_day = (strcmp(day1, day2) != 0) ? 1 : 0;
+			}
+		}
+	}
+
+	ret = 0;
+
+	/* Fall through */
+
+failed:
+	if (day1) {
+		free(day1);
+	}
+
+	if (day2) {
+		free(day2);
+	}
+
+	return ret;
+}
+
+/*
+ * Compare two date strings
+ *
+ * Return 0 on success, < 0 otherwise and *res should not be
+ * used.
+ *
+ * On success, res will be set as:
+ *	-1, if date1 is earlier than date2;
+ *	0, if date1 is the same as date2;
+ *	1, if date1 is later than date2;
+ */
+int timestamp_compare_date(const char *date1, const char *date2, int *res)
+{
+	long y1, m1, d1;
+	long y2, m2, d2;
+
+	*res = 0;
+
+	if (!date1 || !date2) {
+		return -1;
+	}
+
+	/*
+	 * Break down date string into year, month and day values
+	 * and also do sanity checks
+	 */
+	if (time_to_long(date1, &y1, &m1, &d1, '-') < 0 ||
+		time_to_long(date2, &y2, &m2, &d2, '-') < 0) {
+		return -1;
+	}
+
+	if (y1 < y2 ||
+		(y1 == y2 && m1 < m2) ||
+		(y1 == y2 && m1 == m2 && d1 < d2)) {
+		*res = -1;
+	} else if (y1 == y2 && m1 == m2 && d1 == d2) {
+		*res = 0;
+	} else {
+		*res = 1;
+	}
+
+	return 0;
+}
+
+/*
+ * Check if [start, end] has something in common with
+ * [oldest, latest]
+ *
+ * Return 1 when common part exists, < 0 otherwise,
+ * in particular:
+ *
+ *		-2, unable to compare timestamp strings;
+ *		-3, the start TS is after the latest TS;
+ *		-4, the end TS is before the oldest TS;
+ */
+int timestamp_has_common(const char *start, const char *end,
+						 const char *oldest, const char *latest)
+{
+	int res;
+
+	if (timestamp_compare(start, latest, &res, NULL) < 0) {
+		return -2;
+	}
+
+	if (res == 1) {
+		return -3;
+	}
+
+	if (timestamp_compare(end, oldest, &res, NULL) < 0) {
+		return -2;
+	}
+
+	if (res == -1) {
+		return -4;
+	}
+
+	return 1;
+}
+
+/*
+ * Adjust *start and *end to be the common part of
+ * [*start, *end] and [oldest, latest]
+ *
+ * Return 0 on success, -1 otherwise
+ *
+ * NOTE: due to the fact that xml_get_child_val > xmlGetProp
+ * will return a copy of the value of relevant attribute,
+ * before changing the start and end pointer, the original
+ * string pointed to must be released to prevent memory
+ * leaks.
+ *
+ * NOTE: callers should have invoked timestamp_has_common()
+ * to ensure there is common part of two timestamp ranges
+ */
+int timestamp_find_common(char **start, char **end,
+						  const char *oldest, const char *latest)
+{
+	int res;
+
+	if (timestamp_compare(*start, oldest, &res, NULL) < 0) {
+		return -1;
+	}
+
+	if (res == -1) {
+		free(*start);
+		*start = strdup(oldest);
+	}
+
+	if (timestamp_compare(*end, latest, &res, NULL) < 0) {
+		return -1;
+	}
+
+	if (res == 1) {
+		free(*end);
+		*end = strdup(latest);
+	}
+
+	return 0;
+}
+
+char *timestamp_get_utc_date(const char *ts)
+{
+	time_t time;
+
+	if ((time = timestamp_to_utc_time(ts)) < 0) {
+		return NULL;
+	}
+
+	return get_utc_date(time);
 }

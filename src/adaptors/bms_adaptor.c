@@ -463,7 +463,11 @@ typedef struct obix_bms {
 	/* Where the processed CSV files should be moved to */
 	char *csv_newdir;
 
-	/* The mtime of a CSV file as in `/usr/bin/date +%FT%T` format */
+	/*
+	 * The mtime of a CSV file and relevant timestamp string
+	 * in `/usr/bin/date +%FT%T%z` format
+	 */
+	time_t mtime;
 	char *mtime_ts;
 
 	/* The list of high voltage switch boards and main switch boards */
@@ -1876,6 +1880,12 @@ static int bms_register_bms(obix_bms_t *bms)
 		goto failed;
 	}
 
+	if ((bms->mtime = timestamp_to_utc_time(bms->mtime_ts)) < 0) {
+		log_error("Failed to get calender time from timestamp string for %s",
+				  bms->history_name);
+		goto failed;
+	}
+
 	log_debug("The latest history TS was %s", bms->mtime_ts);
 
 	for (i = 0; i < BMS_SB_LIST_MAX; i++) {
@@ -2392,7 +2402,6 @@ static void bms_updater_task(void *arg)
 	obix_bms_t *bms = (obix_bms_t *)arg;
 	csv_file_t *file;
 	char *ts = NULL;
-	int res_d, res_t;
 	struct inotify_event *event;
 	char buf[BMS_INOTIFY_BUFLEN]__attribute__((aligned(4)));
 	int len, i;
@@ -2410,16 +2419,16 @@ static void bms_updater_task(void *arg)
 		}
 
 		/*
-		 * Compare each existing CSV file's timestamp with the timestamp
-		 * of the last handled CSV file
+		 * Compare each existing CSV file's timestamp with that of
+		 * the last handled CSV file, if it is earlier or obsolete,
+		 * it is skipped over.
 		 */
-		if (!(ts = get_utc_timestamp(file->mtime)) ||
-			timestamp_compare(ts, bms->mtime_ts, &res_d, &res_t) < 0) {
-			log_error("Failed to compare timestamp for %s", file->path);
+		if (!(ts = get_utc_timestamp(file->mtime))) {
+			log_error("Failed to get TZ string for %s", file->path);
 			break;
 		}
 
-		if (res_d < 0 || (res_d == 0 && res_t <= 0)) {
+		if (file->mtime <= bms->mtime) {
 			log_debug("%s skipped", file->path + strlen(bms->csv_dir));
 			log_debug("its timestamp: %s", ts);
 			log_debug("while last CSV file's timestamp: %s\n", bms->mtime_ts);
@@ -2433,8 +2442,11 @@ static void bms_updater_task(void *arg)
 
 		if (!(bms->mtime_ts = strdup(ts))) {
 			log_error("Failed to duplicate timestamp string of %s", file->path);
+			bms->mtime = 0;
 			break;
 		}
+
+		bms->mtime = file->mtime;
 
 		if (csv_read_file(_csv, file) != OBIX_SUCCESS) {
 			/*
