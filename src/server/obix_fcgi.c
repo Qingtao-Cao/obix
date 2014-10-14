@@ -137,10 +137,17 @@ void obix_fcgi_sendResponse(obix_request_t *request)
 	 * This way, handlers can have a chance to specify another URI as the
 	 * Content-Location, for example, for newly generated history facilities
 	 * or watch objects
+	 *
+	 * NOTE: in case the decoded request_uri is NULL, e.g., when the requested
+	 * uri fails to be read from FCGI channel in the first place or failed to
+	 * allocate a string for the decoded one, then no content-location header
+	 * could ever be provided
 	 */
 	response_uri = (request->response_uri != NULL) ?
 					request->response_uri : request->request_decoded_uri;
-	if (FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION, response_uri) == EOF) {
+	if (response_uri &&
+		FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION,
+					 response_uri) == EOF) {
 		log_error("Failed to write HTTP \"Content-Location\" header");
 		goto failed;
 	}
