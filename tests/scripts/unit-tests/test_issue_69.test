@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+# tests issue #69
+
+source "$1/obix-client-functions.sh"
+
+now=$(date +%s%N)
+device_href="/obix/deviceRoot/TestDevice-$now"
+
+read -r -d '' device_contract <<-EOF
+<obj name="testDevice-$now" href="" is="obix:test-device">
+	<bool href="testBool" val="false" writable="true"/>
+	<int href="testInt" val="0" writable="true"/>
+	<int href="testReadOnly" val="false"/>
+</obj>
+EOF
+
+OBIX_DOC=$(curl -XPOST --data "$device_contract" "$OBIX_TEST_URL/signUp")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -eq 1 ] || exit 1
+
+exit 0
