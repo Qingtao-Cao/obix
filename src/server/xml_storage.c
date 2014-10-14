@@ -610,10 +610,10 @@ void xmldb_delete_hidden(xmlNode *node)
 /**
  * Create a reference to the new object in the specified lobby.
  */
-xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed)
+xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice,
+						  const xmlChar *deviceHref, int *existed)
 {
 	xmlNode *table, *ref;
-	xmlChar *deviceHref = NULL;
 	xmlChar *deviceName = NULL;
 	xmlChar *deviceDisplayName = NULL;
 	xmlChar *deviceDisplay = NULL;
@@ -626,23 +626,16 @@ xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed)
 		return NULL;
 	}
 
-	if (!(deviceHref = xmlGetProp(newDevice, BAD_CAST OBIX_ATTR_HREF))) {
-		log_error("No %s attribute in the device node", OBIX_ATTR_HREF);
-		return NULL;
-	}
-
 	if ((ref = xml_find_child(table, OBIX_OBJ_REF,
 							  OBIX_ATTR_HREF, (const char *)deviceHref)) != NULL) {
 		log_debug("Ref with href %s already exist", deviceHref);
-		xmlFree(deviceHref);
 		*existed = 1;
 		return ref;
 	}
 
 	if (!(deviceName = xmlGetProp(newDevice, BAD_CAST OBIX_ATTR_NAME))) {
 		log_error("No %s attribute in the device node", OBIX_ATTR_NAME);
-		ref = NULL;
-		goto failed;
+		return NULL;
 	}
 
 	deviceDisplayName = xmlGetProp(newDevice, BAD_CAST OBIX_ATTR_DISPLAY_NAME);
@@ -651,7 +644,7 @@ xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed)
 
 	if (!(ref = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_REF, NULL))) {
 		log_error("Failed to allocate a device ref node.");
-		goto new_node_failed;
+		goto failed;
 	}
 
 	if (xmlSetProp(ref, BAD_CAST OBIX_ATTR_HREF, deviceHref) == NULL ||
@@ -668,7 +661,7 @@ xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed)
 		log_error("Failed to set attributes on the device reference node");
 		xmlFreeNode(ref);
 		ref = NULL;
-		goto new_node_failed;
+		goto failed;
 	}
 
 	if (xmldb_add_child(table, ref, 0, 0) == NULL) {
@@ -685,7 +678,7 @@ xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed)
 
 	/* Fall through */
 
-new_node_failed:
+failed:
 	if (deviceIs) {
 		xmlFree(deviceIs);
 	}
@@ -699,9 +692,6 @@ new_node_failed:
 	}
 
 	xmlFree(deviceName);
-
-failed:
-	xmlFree(deviceHref);
 
 	return ref;
 }
@@ -1032,8 +1022,10 @@ xmldb_errcode_t xmldb_put_node(xmlNode *node, xmldb_dom_action_t action)
 	int ret;
 	xmldb_stub_type_t type = STUB_NORMAL;
 
-	if (!(href = xmlGetProp(node, BAD_CAST OBIX_ATTR_HREF))) {
-		return ERR_PUT_NODE_NO_HREF;
+	if (!(href = xmlGetProp(node, BAD_CAST OBIX_ATTR_HREF)) ||
+		xml_href_is_valid(href) == 0) {
+		ret = ERR_PUT_NODE_NO_HREF;
+		goto failed;
 	}
 
 	if (!(parentHref = xmlStrdup(href)) ||
@@ -1084,7 +1076,10 @@ failed:
 		xmlFree(parentHref);
 	}
 
-	xmlFree(href);
+	if (href) {
+		xmlFree(href);
+	}
+
 	return ret;
 }
 

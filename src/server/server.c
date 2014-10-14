@@ -71,6 +71,8 @@ static const int POST_HANDLERS_COUNT = 12;
 
 enum {
 	ERR_NO_INPUT = 1,	/* Leave 0 as success */
+	ERR_NO_HREF,
+	ERR_INVALID_HREF,
 	ERR_NO_SUCH_URI,
 	ERR_NO_URI_FETCHED,
 	ERR_NO_OPERATION,
@@ -88,7 +90,15 @@ enum {
 static err_msg_t server_err_msg[] = {
 	[ERR_NO_INPUT] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No input available from oBIX clients"
+		.msgs = "Provided input is invalid: no device contract at all"
+	},
+	[ERR_NO_HREF] = {
+		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
+		.msgs = "Provided input is invalid: no href attribute"
+	},
+	[ERR_INVALID_HREF] = {
+		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
+		.msgs = "Provided input is invalid: invalid device href location"
 	},
 	[ERR_NO_SUCH_URI] = {
 		.type = OBIX_CONTRACT_ERR_BAD_URI,
@@ -146,7 +156,7 @@ static err_msg_t server_err_msg[] = {
 	},
 	[ERR_XMLDB_ERR_OFFSET + ERR_PUT_NODE_NO_HREF] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No href in the provided node"
+		.msgs = "No or invalid href in the provided node"
 	},
 	[ERR_XMLDB_ERR_OFFSET + ERR_PUT_NODE_NO_PARENT_URI] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
@@ -610,7 +620,7 @@ xmlNode *handlerError(obix_request_t *request, xmlNode *input)
 xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 {
 	xmlNode *inputCopy, *ref, *node, *pos;
-	xmlChar *href;
+	xmlChar *href = NULL;
 	int ret, existed = 0;
 	xmldb_dom_action_t action;
 
@@ -619,7 +629,20 @@ xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 		goto failed;
 	}
 
-	if (!(ref = xmldb_create_ref(OBIX_DEVICE_LOBBY_URI, input, &existed))) {
+	if (!(href = xmlGetProp(input, BAD_CAST OBIX_ATTR_HREF))) {
+		ret = ERR_NO_HREF;
+		goto failed;
+	}
+
+	if (xml_href_is_valid(href) == 0 ||
+		xmlStrncmp(href, BAD_CAST OBIX_DEVICE_ROOT,
+				   OBIX_DEVICE_ROOT_LEN) != 0) {
+		ret = ERR_INVALID_HREF;
+		goto failed;
+	}
+
+	if (!(ref = xmldb_create_ref(OBIX_DEVICE_LOBBY_URI, input,
+								 href, &existed))) {
 		ret = ERR_NO_REF;
 		goto failed;
 	}
@@ -674,6 +697,8 @@ xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 		goto put_failed;
 	}
 
+	/* Fall through */
+
 out:
 	/*
 	 * The input document have had any absolute href set to relative
@@ -691,6 +716,10 @@ out:
 		xmldb_set_relative_href(pos);
 	}
 
+	if (href) {
+		xmlFree(href);
+	}
+
 	return input;
 
 put_failed:
@@ -700,10 +729,8 @@ copy_failed:
 	xmldb_delete_node(ref, 0);
 
 failed:
-	href = xmlGetProp(input, BAD_CAST OBIX_ATTR_HREF);
-
-	log_error("SignUp %s : %s", ((href) ? (char *)href :
-					"(No Href in Device Contract)"), server_err_msg[ret].msgs);
+	log_error("SignUp \"%s\" : %s", ((href) ? (char *)href :
+					"(No Href got from Device Contract)"), server_err_msg[ret].msgs);
 
 	node = obix_server_generate_error(request->request_decoded_uri,
 									  server_err_msg[ret].type,
