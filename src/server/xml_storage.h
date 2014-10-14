@@ -172,7 +172,8 @@ xmlNode *xmldb_copy_sys(const char *sys);
  */
 xmlChar *xmldb_node_path(xmlNode *node);
 
-xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice, int *existed);
+xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice,
+						  const xmlChar *deviceHref, int *existed);
 
 xmlNode *xmldb_add_child(xmlNode *parent, xmlNode *node, int unlink, int relative);
 

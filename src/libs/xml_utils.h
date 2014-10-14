@@ -155,4 +155,16 @@ void xml_remove_children(xmlNode *parent);
 int xml_is_valid_doc(const char *, const char *);
 #endif
 
+/*
+ * Return 1 if the given href is valid, 0 otherwise including
+ * the following cases:
+ *  . empty string;
+ *  . a single "/";
+ *  . containing any "." (".." inclusive) in any position;
+ *  . starting with any whitespace characters, but they are allowed
+ *	  in the middle;
+ *  . containing more than one consecutive slashes in any position.
+ */
+int xml_href_is_valid(xmlChar *);
+
 #endif	/* _XML_UTILS_H_ */

@@ -21,13 +21,11 @@
 
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
+#include <ctype.h>		/* isblank */
+#include <string.h>		/* strlen */
 #include "xml_utils.h"
 #include "obix_utils.h"
 #include "log_utils.h"
-
-#ifdef DEBUG
-#include <string.h>		/* strlen */
-#endif
 
 const char *XML_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n";
 const char *XML_VERSION = "1.0";
@@ -588,3 +586,46 @@ int xml_is_valid_doc(const char *data, const char *contract)
 }
 #endif
 
+int xml_href_is_valid(xmlChar *href)
+{
+	int len, i;
+
+	if (!href) {
+		return 0;
+	}
+
+	/* Empty string, or a single slash */
+	if ((len = strlen((char *)href)) == 0 ||
+		(len == 1 && *href == '/')) {
+		return 0;
+	}
+
+	/*
+	 * Start with any whitespace characters, which will make
+	 * oBIX server create node with href containing just
+	 * whitespace characters
+	 *
+	 * NOTE: whitespace characters such as spaces or even tabs
+	 * are allowed in the middle of a href
+	 */
+	if (isspace(*href) != 0) {
+		return 0;
+	}
+
+	/*
+	 * dirname and basename both regard "." or ".."
+	 * as empty string. To live with them, no dot allowed
+	 * anywhere
+	 */
+	for (i = 0; i < len; i++) {
+		if (*(href + i) == '.') {
+			return 0;
+		}
+	}
+
+	if (strstr((char *)href, "//") != NULL) {
+		return 0;
+	}
+
+	return 1;	/* valid */
+}
