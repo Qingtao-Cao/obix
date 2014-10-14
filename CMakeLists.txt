@@ -149,5 +149,11 @@ ENABLE_TESTING()
 ADD_TEST("Dependencies" ${CMAKE_TESTS_DIR}/dependencies.sh)
 ADD_TEST("Setup"        ${CMAKE_TESTS_DIR}/setup.sh)
 ADD_TEST("Server_Start" ${CMAKE_TESTS_DIR}/server.sh start)
-ADD_TEST("SignUp"       ${CMAKE_TESTS_DIR}/signUp ${CMAKE_TESTS_DIR}/)
+
+file(GLOB files "${CMAKE_TESTS_DIR}/unit-tests/*.test")
+foreach(file ${files})
+	execute_process(COMMAND "basename" "${file}" OUTPUT_VARIABLE file_name)
+	add_test("${file_name}" "${file}" "${CMAKE_TESTS_DIR}")
+endforeach()
+
 ADD_TEST("Server_Stop"  ${CMAKE_TESTS_DIR}/server.sh stop)

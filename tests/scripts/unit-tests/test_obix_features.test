@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+source "$1/obix-client-functions.sh"
+
+OBIX_DOC=$(curl "$OBIX_TEST_URL")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+exit 0

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+source "$1/obix-client-functions.sh"
+
+OBIX_DOC=$(curl "$OBIX_TEST_URL")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+doc_root_count=$(xmllint --xpath 'count(/obj/op[@name="signUp" and @in="obix:obj" and @out="obix:obj"])' - <<< "$OBIX_DOC")
+
+[ "$doc_root_count" -eq 1 ] || exit 1
+
+exit 0

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+source "$1/obix-client-functions.sh"
+
+OBIX_DOC=$(curl -XPOST --data "" "$OBIX_TEST_URL/watchService/make")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+watch_is=$(xmllint --xpath 'string(/obj[@href]/@is)' -<<< "$OBIX_DOC")
+watch_in=$(xmllint --xpath 'string(/obj[@href]/op[@name="add"]/@in)' -<<< "$OBIX_DOC")
+watch_out=$(xmllint --xpath 'string(/obj[@href]/op[@name="add"]/@out)' -<<< "$OBIX_DOC")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+[[ "$watch_is" =~ obix:Watch.* ]] || exit 1
+[ "$watch_in" == "obix:WatchIn" ] || exit 1
+[ "$watch_out" == "obix:WatchOut" ] || exit 1
+
+exit 0

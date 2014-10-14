@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-#set -x
+set -x
+
+OBIX_TEST_URL_BASE="http://localhost:4242"
+OBIX_TEST_URL="$OBIX_TEST_URL_BASE/obix"
 
 ##
 #Valid oBIX object v1.1 as per wd-06 (pg. 16)
@@ -12,14 +15,21 @@ OBIX_XPATH_COUNT_ERR_CONTRACT_ROOT="count(/err)"
 OBIX_XPATH_COUNT_UNKNOWN_ELEMENTS="count(//*[not($OBIX_XPATH_SELF_VALID_OBJECTS)])"
 OBIX_XPATH_COUNT_VALID_ROOT="count(/$OBIX_XPATH_VALID_OBJECTS)"
 
+function obix_tag_name()
+{
+	[ -n "$2" ] && return 1;
+
+	eval "$1=$(xmllint --xpath '/name()' <<< \"$2\")"
+}
+
 function obix_xpath_eval()
 {
 		local v
 
 		if [ ! -n "$2" ]; then 
-				v=$(xmllint --xpath "$1" --format -)
+				v=$(xmllint --xpath "$1" -)
 		else
-				v=$(xmllint --xpath "$1" --format - <<< "$2")
+				v=$(xmllint --xpath "$1" - <<< "$2")
 		fi
 
 		[ $? == 0 ] || return 0
@@ -40,9 +50,9 @@ function obix_is_err_contract()
 {
 		obix_xpath_eval $OBIX_XPATH_COUNT_ERR_CONTRACT_ROOT "$1"
 		
-		[ "$?" == 1 ] && return 0;
+		[ "$?" == 1 ] && return 1;
 
-		return 1;
+		return 0;
 }
 
 function obix_has_unknown_elements()
@@ -65,7 +75,7 @@ function obix_valid_root()
 		return 1;
 }
 
-export -f obix_has_unknown_elements
-export -f obix_is_err_contract
-export -f obix_has_value
-export -f obix_valid_root
+# export -f obix_has_unknown_elements
+# export -f obix_is_err_contract
+# export -f obix_has_value
+# export -f obix_valid_root

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+source "$1/obix-client-functions.sh"
+
+test_bool_value="false"
+now=$(date +%s%N)
+device_href="/obix/deviceRoot/TestDevice-$now"
+
+# The same device contract
+read -r -d '' device_contract <<-EOF
+<obj name="testDevice-$now" href="$device_href" is="obix:test-device">
+	<bool href="testBool" val="false" writable="true"/>
+	<int href="testInt" val="0" writable="true"/>
+	<int href="testReadOnly" val="0"/>
+</obj>
+EOF
+
+#invoke signup
+OBIX_DOC=$(curl -XPOST --data "$device_contract" "$OBIX_TEST_URL/signUp")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+# Retrieve test device once again
+OBIX_DOC=$(curl "$OBIX_TEST_URL/deviceRoot/TestDevice-$now")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+device_root_count=$(xmllint --xpath 'count(/obj[@is="obix:test-device"])' -<<< "$OBIX_DOC")
+[ "$device_root_count" -ne 1 ] && exit 1
+
+#invoke an obix write to a read-only contract which should invoke an error
+OBIX_DOC=$(curl -XPUT --data "<int val='1'/>" "$OBIX_TEST_URL/deviceRoot/TestDevice-$now/testReadOnly")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+#fail assert if the response is not an error contract
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -eq 1 ] || exit 1
+
+exit 0
