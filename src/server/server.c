@@ -634,7 +634,7 @@ xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 		goto failed;
 	}
 
-	if (xml_href_is_valid(href) == 0 ||
+	if (xml_is_valid_href(href) == 0 ||
 		xmlStrncmp(href, BAD_CAST OBIX_DEVICE_ROOT,
 				   OBIX_DEVICE_ROOT_LEN) != 0) {
 		ret = ERR_INVALID_HREF;

@@ -574,7 +574,7 @@ int xml_is_valid_doc(const char *data, const char *contract)
 	}
 
 	if ((href = xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF)) != NULL &&
-		xml_href_is_valid(href) == 0) {
+		xml_is_valid_href(href) == 0) {
 		log_error("The provided XML document has invalid href in its "
 				  "root node: %s", data);
 		goto failed;
@@ -606,7 +606,7 @@ failed:
 }
 #endif
 
-int xml_href_is_valid(xmlChar *href)
+int xml_is_valid_href(xmlChar *href)
 {
 	int len, i;
 

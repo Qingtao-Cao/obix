@@ -165,6 +165,6 @@ int xml_is_valid_doc(const char *, const char *);
  *	  in the middle;
  *  . containing more than one consecutive slashes in any position.
  */
-int xml_href_is_valid(xmlChar *);
+int xml_is_valid_href(xmlChar *);
 
 #endif	/* _XML_UTILS_H_ */

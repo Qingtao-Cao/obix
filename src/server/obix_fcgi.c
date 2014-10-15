@@ -299,7 +299,7 @@ static void obix_handle_request(obix_request_t *request)
 
 	if (!(request->request_uri = FCGX_GetParam(FCGI_REQUEST_URI,
 											   fcgiRequest->envp)) ||
-		xml_href_is_valid((xmlChar *)request->request_uri) == 0) {
+		xml_is_valid_href((xmlChar *)request->request_uri) == 0) {
 		log_error("Invalid URI in current request: %s", request->request_uri);
 		obix_server_handleError(request, "Invalid URI");
 		return;
