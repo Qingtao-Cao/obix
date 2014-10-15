@@ -27,6 +27,7 @@
 #include "obix_request.h"
 #include "xml_config.h"
 #include "obix_utils.h"
+#include "xml_utils.h"
 
 #undef DEBUG_CACHE
 
@@ -298,9 +299,8 @@ static void obix_handle_request(obix_request_t *request)
 
 	if (!(request->request_uri = FCGX_GetParam(FCGI_REQUEST_URI,
 											   fcgiRequest->envp)) ||
-		slash_preceded(request->request_uri) == 0 ||
-		slash_preceded(request->request_uri + 1) == 1) {	/* double slashes */
-		log_error("Invalid %s in current request", FCGI_REQUEST_URI);
+		xml_href_is_valid((xmlChar *)request->request_uri) == 0) {
+		log_error("Invalid URI in current request: %s", request->request_uri);
 		obix_server_handleError(request, "Invalid URI");
 		return;
 	}
