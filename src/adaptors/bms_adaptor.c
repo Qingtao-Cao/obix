@@ -694,17 +694,17 @@ static void get_mtr_reading(bms_mtr_t *mtr, void *val)
 
 	switch (mtr->type) {
 	case MTR_TYPE_FLOAT:
-		memcpy(val, (void *) &mtr->value.f, sizeof(float));
-        break;
+		memcpy(val, (void *)&mtr->value.f, sizeof(float));
+		break;
 	case MTR_TYPE_UINT16:
-		memcpy(val, (void *) &mtr->value.u16, sizeof(uint16_t));
-        break;
+		memcpy(val, (void *)&mtr->value.u16, sizeof(uint16_t));
+		break;
 	case MTR_TYPE_UINT32:
-		memcpy(val, (void *) &mtr->value.u32, sizeof(uint32_t));
-        break;
+		memcpy(val, (void *)&mtr->value.u32, sizeof(uint32_t));
+		break;
 	case MTR_TYPE_BOOL:
-		memcpy(val, (void *) &mtr->value.b, sizeof(LVL_MTR));
-        break;
+		memcpy(val, (void *)&mtr->value.b, sizeof(LVL_MTR));
+		break;
 	default:
 		/*
 		 * The current meter is not needed,
@@ -726,6 +726,7 @@ static void get_msb_fdr_kwh(bms_mtr_t *mtr, const int max, float *val)
 {
 	int i;
 	uint16_t u16;
+	float r1 = 0;
 
 	assert(val);
 
@@ -738,8 +739,10 @@ static void get_msb_fdr_kwh(bms_mtr_t *mtr, const int max, float *val)
 		*val += u16;
 	}
 
+	get_mtr_reading(mtr, &r1);
+
 	*val *= MSB_FDR_KWH_MODULUS;
-	get_mtr_reading(mtr, val);
+	*val += r1;
 }
 
 static int for_each_msb_fdr(bms_sb_t *sb, fdr_cb_t cb, void *arg)

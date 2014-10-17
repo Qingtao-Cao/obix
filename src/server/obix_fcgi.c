@@ -297,9 +297,10 @@ static void obix_handle_request(obix_request_t *request)
 	xmlDoc *doc = NULL;
 	const char *requestType;
 
-	if (!(request->request_uri = FCGX_GetParam(FCGI_REQUEST_URI,
-											   fcgiRequest->envp)) ||
-		xml_is_valid_href((xmlChar *)request->request_uri) == 0) {
+	if (!(request->request_uri =
+			FCGX_GetParam(FCGI_REQUEST_URI, fcgiRequest->envp)) ||
+		slash_preceded(request->request_uri) == 0 ||			/* not started with slash */
+		slash_preceded(request->request_uri + 1) == 1) {        /* double slashes */
 		log_error("Invalid URI in current request: %s", request->request_uri);
 		obix_server_handleError(request, "Invalid URI");
 		return;
