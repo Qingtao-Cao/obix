@@ -177,6 +177,10 @@ obix_hist_t *_history;
 #define OBIX_CONTRACT_HIST_ABS	"HistoryFileAbstract"
 #define OBIX_CONTRACT_HIST_AOUT	"HistoryAppendOut"
 
+/*
+ * Append "\r\n" at the end of a history record so that
+ * "</obj>\r\n" can be used as the boundary of it
+ */
 static const char *HIST_RECORD_SEPARATOR = "\r\n";
 
 /*
@@ -1229,8 +1233,13 @@ out:
  * record and timestamp tag have to be crystal-clearly defined, which should
  * be in accordance with those provided in HistoryAppendIn contract and the
  * outcome of xml_dump_node(called by write_logfile).
+ *
+ * NOTE: "\r\n" is appended for a history record before writing into the
+ * raw history data file thus "</obj>\r\n" can be used as the boundary of it.
+ * Another prerequisite is it is not used anywhere inside of a history record,
+ * which is true in current implementation.
  */
-static const char *RECORD_START = "<obj ";
+static const char *RECORD_START = "<obj is=\"obix:HistoryRecord\">";
 static const char *RECORD_END = "</obj>\r\n";
 static const char *TS_VAL_START = "<abstime name=\"timestamp\" val=\"";
 static const char *TS_VAL_END = "\"";
