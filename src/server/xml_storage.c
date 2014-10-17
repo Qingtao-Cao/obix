@@ -1023,7 +1023,7 @@ xmldb_errcode_t xmldb_put_node(xmlNode *node, xmldb_dom_action_t action)
 	xmldb_stub_type_t type = STUB_NORMAL;
 
 	if (!(href = xmlGetProp(node, BAD_CAST OBIX_ATTR_HREF)) ||
-		xml_href_is_valid(href) == 0) {
+		xml_is_valid_href(href) == 0) {
 		ret = ERR_PUT_NODE_NO_HREF;
 		goto failed;
 	}

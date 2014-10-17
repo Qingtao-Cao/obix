@@ -27,6 +27,7 @@
 #include "obix_request.h"
 #include "xml_config.h"
 #include "obix_utils.h"
+#include "xml_utils.h"
 
 #undef DEBUG_CACHE
 
@@ -137,10 +138,17 @@ void obix_fcgi_sendResponse(obix_request_t *request)
 	 * This way, handlers can have a chance to specify another URI as the
 	 * Content-Location, for example, for newly generated history facilities
 	 * or watch objects
+	 *
+	 * NOTE: in case the decoded request_uri is NULL, e.g., when the requested
+	 * uri fails to be read from FCGI channel in the first place or failed to
+	 * allocate a string for the decoded one, then no content-location header
+	 * could ever be provided
 	 */
 	response_uri = (request->response_uri != NULL) ?
 					request->response_uri : request->request_decoded_uri;
-	if (FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION, response_uri) == EOF) {
+	if (response_uri &&
+		FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION,
+					 response_uri) == EOF) {
 		log_error("Failed to write HTTP \"Content-Location\" header");
 		goto failed;
 	}
@@ -291,9 +299,8 @@ static void obix_handle_request(obix_request_t *request)
 
 	if (!(request->request_uri = FCGX_GetParam(FCGI_REQUEST_URI,
 											   fcgiRequest->envp)) ||
-		slash_preceded(request->request_uri) == 0 ||
-		slash_preceded(request->request_uri + 1) == 1) {	/* double slashes */
-		log_error("Invalid %s in current request", FCGI_REQUEST_URI);
+		xml_is_valid_href((xmlChar *)request->request_uri) == 0) {
+		log_error("Invalid URI in current request: %s", request->request_uri);
 		obix_server_handleError(request, "Invalid URI");
 		return;
 	}

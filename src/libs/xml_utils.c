@@ -558,23 +558,43 @@ int xml_is_valid_doc(const char *data, const char *contract)
 	xmlDoc *doc = NULL;
 	xmlNode *root;
 	xmlChar *is_attr = NULL;
-	int ret = 1;		/* Success */
+	xmlChar *href = NULL;
+	int ret = 0;
 
 	if (!(doc = xmlReadMemory(data, strlen(data),
 							  NULL, NULL,
 							  XML_PARSE_OPTIONS_COMMON))) {
-		log_error("The provided data is not a valid XML file: %s", data);
+		log_error("The provided data is not a valid XML document: %s", data);
 		return 0;
 	}
 
-	if (contract) {
-		if (!(root = xmlDocGetRootElement(doc)) ||
-			!(is_attr = xmlGetProp(root, BAD_CAST OBIX_ATTR_IS)) ||
-			xmlStrcmp(is_attr, BAD_CAST contract) != 0) {
-			log_error("The provided data contains an illegal contract: %s "
-					  "(Required %s)", is_attr, contract);
-			ret = 0;
-		}
+	if (!(root = xmlDocGetRootElement(doc))) {
+		log_error("The provided XML document has no root node: %s", data);
+		goto failed;
+	}
+
+	if ((href = xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF)) != NULL &&
+		xml_is_valid_href(href) == 0) {
+		log_error("The provided XML document has invalid href in its "
+				  "root node: %s", data);
+		goto failed;
+	}
+
+	if (contract &&
+		(!(is_attr = xmlGetProp(root, BAD_CAST OBIX_ATTR_IS)) ||
+		 xmlStrcmp(is_attr, BAD_CAST contract) != 0)) {
+		log_error("The provided data contains an illegal contract: %s "
+				  "(Required %s)", is_attr, contract);
+		goto failed;
+	}
+
+	ret = 1;	/* Success */
+
+	/* Fall through */
+
+failed:
+	if (href) {
+		xmlFree(href);
 	}
 
 	if (is_attr) {
@@ -586,7 +606,7 @@ int xml_is_valid_doc(const char *data, const char *contract)
 }
 #endif
 
-int xml_href_is_valid(xmlChar *href)
+int xml_is_valid_href(xmlChar *href)
 {
 	int len, i;
 
