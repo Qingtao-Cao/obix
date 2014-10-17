@@ -492,8 +492,8 @@ char *xml_dump_node(const xmlNode *node)
 	 * level == 0, since it is undesirable to add extra indenting
 	 * for the closing </obj> for each record;
 	 *
-	 * format == 1, so that "\r\n" will be applied after each
-	 * child of the current record
+	 * format == 1, providing node indenting when xmlKeepBlanksDefault(0)
+	 * has been called
 	 */
 	data = xmlNodeDump(buffer, NULL, (xmlNode *)node, 0, 1) > 0 ?
 					   xml_buffer_detach(buffer) : NULL;
