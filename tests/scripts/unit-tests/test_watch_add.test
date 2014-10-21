@@ -20,43 +20,36 @@
 #
 ##############################################################################
 
-# Unit test: test_device_signup.test
+# Unit test: test_watch_add.test
 #
-# Tests the creation of a sample device with a few small value types as children.
-# Direct children are strategically typed: one writable boolean, one writable
-# integer, and one readonly integer.
+# Tests the creation of a device, a watch object, and adding a URI of the test
+# device to the created watch object.
 #
 # Steps:
 #
-# 1) Create a watch object by invoking a POST with the contents of the device XML
-#	 to /obix/signUp
+# 1) Create test device with a unique URI
+# 2) Create a watch object
+# 3) Add a URI in the test device to the watch object
 #
 # At each step, output is validated.
 
+
 source "$1/obix-client-functions.sh"
 
-now=$(date +%s%N)
-device_href="/obix/deviceRoot/TestDevice-$now"
-
-read -r -d '' device_contract <<-EOF
-<obj name="testDevice-$now" href="$device_href" is="obix:test-device">
-	<bool href="testBool" val="false" writable="true"/>
-	<int href="testInt" val="0" writable="true"/>
-	<int href="testReadOnly" val="0"/>
-</obj>
-EOF
-
-OBIX_DOC=$(curl -XPOST --data "$device_contract" "$OBIX_TEST_URL/signUp")
+OBIX_DOC=$(curl -XPOST --data "" "$OBIX_TEST_URL/watchService/make")
 
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
-OBIX_DOC=$(curl "$OBIX_TEST_URL/deviceRoot/TestDevice-$now")
+watch_is=$(xmllint --xpath 'string(/obj[@href]/@is)' -<<< "$OBIX_DOC")
+watch_in=$(xmllint --xpath 'string(/obj[@href]/op[@name="add"]/@in)' -<<< "$OBIX_DOC")
+watch_out=$(xmllint --xpath 'string(/obj[@href]/op[@name="add"]/@out)' -<<< "$OBIX_DOC")
 
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
-device_root_count=$(xmllint --xpath 'count(/obj[@is="obix:test-device"])' -<<< "$OBIX_DOC")
-[ "$device_root_count" -ne 1 ] && exit 1
+[[ "$watch_is" =~ obix:Watch.* ]] || exit 1
+[ "$watch_in" == "obix:WatchIn" ] || exit 1
+[ "$watch_out" == "obix:WatchOut" ] || exit 1
 
 exit 0
