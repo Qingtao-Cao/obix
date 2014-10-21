@@ -204,7 +204,7 @@ static int obix_fcgi_init(xml_config_t *config)
 {
 	int ret;
 
-	obix_request_set_listener(&obix_fcgi_sendResponse);
+	obix_request_set_listener(obix_fcgi_sendResponse);
 
 	if ((ret = FCGX_Init()) != 0) {
 		log_error("Failed to initialize FCGI channel: %d", ret);
