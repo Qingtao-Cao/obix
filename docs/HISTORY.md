@@ -172,6 +172,8 @@ HistoryQuery script can have fine control on how to query the desired history re
 		-s The start timestamp, as in format "2014-04-25T15:41:48Z"
 		-e The end timestamp, as in format "2014-04-25T15:41:48Z"
 
+Except the "-d" option, any of "-n", "-s" and "-e" options are not mandatory. If absent, relevant handler will fall back on all existing records and the timestamp of the first and the last records respectively. Furthermore, "-n 0" can be used to get the timestamp of the first and the last records explicitly.
+
 Note, oBIX specification demands ISO-8601 timezone support. However, current strptime() C API has made some practical compromise regarding the formats supported. Please refer to docs/timezone.md for more information.
 
 In source code, obix_create_history_flt() can be used to generate the required HistoryFilter contract, which can be further passed to obix_query_history() to query desirable history data from the oBIX Server. On success, the caller provided pointer is adjusted pointing to the input buffer of relevant CURL handler which containing the result of the previous history.Query request. Callers should not free this pointer.

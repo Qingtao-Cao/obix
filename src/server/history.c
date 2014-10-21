@@ -1412,7 +1412,7 @@ failed:
 static int hist_query_dev_helper(obix_request_t *request,
 								 obix_hist_dev_t *dev, xmlNode *input)
 {
-	long limit;
+	long limit;									/* the number of records wanted */
 	char *start = NULL, *end = NULL;			/* start/end TS specified in input  */
 	char *d_oldest = NULL, *d_latest = NULL;	/* oldest/latest ts for the device */
 	char *f_oldest = NULL, *f_latest = NULL;	/* oldest/latest ts for a log file */
@@ -1463,7 +1463,19 @@ static int hist_query_dev_helper(obix_request_t *request,
 		}
 	}
 
-	limit = xml_get_child_long(input, OBIX_OBJ_INT, FILTER_LIMIT);
+	if ((limit = xml_get_child_long(input, OBIX_OBJ_INT, FILTER_LIMIT)) == 0) {
+		/*
+		 * If the number of records wanted equals to zero, then return
+		 * the timestamps for the very first and last records of the
+		 * current device
+		 */
+		goto no_matching_data;
+	}
+
+	/*
+	 * If not specified or explicity set as a negative value, then
+	 * fetch all available records for the current device
+	 */
 	n = (limit < 0 || limit > dev->count) ? dev->count : limit;
 
 	res = timestamp_has_common(start, end, d_oldest, d_latest);
