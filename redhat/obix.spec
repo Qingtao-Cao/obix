@@ -2,7 +2,7 @@
 
 Name:           obix
 Version:        1.2
-Release:        0.1.%{checkout}%{?dist}
+Release:        0.2.%{checkout}%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
@@ -56,6 +56,14 @@ Requires:       %{name}%{?_isa} = %{version}-%{release}
 %description    doc
 The %{name}-doc package contains documentation for
 %{name}.
+
+%package        adaptors
+Summary:        Adaptors for %{name}
+
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+
+%description    adaptors
+Adaptors for %{name}
 
 %prep
 %setup -q
@@ -112,11 +120,12 @@ exit 0
 
 %files devel
 %{_includedir}/obix
-%{_libdir}/libobix.so
-
+%{_libdir}/libobix-client.so
+%{_libdir}/libobix-common.so
 
 %files libs
-%{_libdir}/libobix.so.*
+%{_libdir}/libobix-client.so.*
+%{_libdir}/libobix-common.so.*
 
 
 %files doc 
@@ -125,8 +134,22 @@ exit 0
 %doc docs/WATCH.md  
 %doc docs/XML_DB_MANAGEMENT.md
 
+%files adaptors
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/bms_adaptor_devices_config.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/bms_adaptor_history_template.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/example_adaptor_devices_config.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/example_adaptor_history_template.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/generic_server_config.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/mg_adaptor_devices_config.xml
+%{_bindir}/bms_adaptor
+%{_bindir}/example_adaptor
+%{_bindir}/mg_adaptor
+
 
 %changelog
+* Wed Oct 22 2014 paul.gampe@nextdc.com - 1.2-0.2.20140925git3aea53c61e
+- include adaptors in this spec file
+
 * Thu Sep 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.1.20140925git3aea53c61e
 - Updated for pre-release 1.2
 
