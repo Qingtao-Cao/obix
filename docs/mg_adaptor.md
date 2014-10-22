@@ -35,9 +35,9 @@ Last but not least, the administrator can press Ctrl-C which will emit SIGINT si
 
 The MGATE adaptor needs two configuration files and can be started by the following command:
 
-	$ <path-of-installation>/bin/mg_adaptor
-			<path-of-installation>/etc/obix-adaptors/mg_adaptor_devices_config.xml
-			<path-of-installation>/etc/obix-adaptors/mg_adaptor_config.xml
+	$ <PREFIX>/usr/bin/mg_adaptor
+			<PREFIX>/etc/obix/res/adaptors/mg_adaptor_devices_config.xml
+			<PREFIX>/etc/obix/res/adaptors/generic_server_config.xml
 
 Both above configuration files help extract and separate hardware configurables and settings away from the mechanism implemented by binaries, so that binaries are hardware-neutral and only these configuration files need to be edited when MOXA boxes are configured differently.
 
@@ -48,17 +48,19 @@ The second configuration file captures the connection settings with the oBIX ser
 
 --3-- Hierarchy Organisations
 
-The oBIX contracts for BCM and CB devices and history facilities for each CB devices are all organised in a hierarchy structure. In particular, the "device_root" and "history_lobby" settings in the MGATE adaptor's device configuration file specify where all BCM and CB contracts are registered and where history facilities of all CB devices are placed within "/obix/historyService/histories/" lobby:
+The oBIX contracts for BCM and CB devices and history facilities for each CB devices are all organised in a hierarchy structure. In particular, the "device_href" and "history_lobby" settings in the MGATE adaptor's device configuration file specify where all BCM and CB contracts are registered and where history facilities of all CB devices are placed within "/obix/historyService/histories/" lobby:
 
 	<controller_address>
 		......
-		<str name="device_root" val="/obix/deviceRoot/"/>
-		<str name="history_lobby" val="/M1/DH1/"/>
+		<history_lobby val="/M1/DH1/"/>
 	</controller_address>
 
-In above example, all devices will be registered to "/obix/deviceRoot/" while history facilities created under "/obix/historyService/histories/M1/DH1/", where "M1" and "DH1" stands for the names of data centre and data hall respectively.
+	<obj name="4A-1A">
+		<int name="slave_id" val="1"/>
+		<str name="device_href" val="/M1/DH1/A/"/>
+	</obj>
 
-Accordingly, take a BCM named by "4A-1A" for example, its oBIX contract may look like below:
+In above example, all devices will have their history facilities created under "/obix/historyService/histories/M1/DH1/", where "M1" and "DH1" stands for the names of data centre and data hall respectively, and the BCM named "4A-1A" will have device contract for itself and all its CBs on-board created under "/obix/deviceRoot/M1/DH1/A/". As a result, its oBIX contract looks like below:
 
 	<obj name="4A-1A" href="/obix/deviceRoot/4A-1A" is="nextdc:VerisBCM">
 		<int name="SlaveID" href="SlaveID" val="1"/>

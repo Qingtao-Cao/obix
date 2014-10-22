@@ -27,10 +27,10 @@ The BMS exports the meter readings of input and output feeders on HVSBs and MSBs
 
 The BMS adaptor uses three configuration files and can be started by the following command:
 
-	$ cd <path-of-installation>/bin/bms_adaptor
-			<path-of-installation>/etc/obix-adaptors/bms_adaptor_devices_config.xml
-			<path-of-installation>/etc/obix-adaptors/bms_adaptor_config.xml
-			<path-of-installation>/etc/obix-adaptors/bms_adaptor_history_template.xml
+	$ cd <PREFIX>/usr/bin/bms_adaptor
+			<PREFIX>/etc/obix/res/adaptors/bms_adaptor_devices_config.xml
+			<PREFIX>/etc/obix/res/adaptors/generic_server_config.xml
+			<PREFIX>/etc/obix/res/adaptors/bms_adaptor_history_template.xml
 
 All three configuration files help extract and separate hardware connections and configurables away from the mechanism implemented by binaries, so that binaries are BMS-neutral and only these configuration files need to be tailored for different data centres without requiring to re-compile the software.
 
