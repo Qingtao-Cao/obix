@@ -346,7 +346,7 @@ static void example_unregister_dev(example_dev_t *dev)
 
 static int example_register_dev(example_dev_t *dev)
 {
-	char *data;
+	char *data, *start_ts, *end_ts;
 	int ret;
 
 	if (!xmlSetProp(dev->contract, BAD_CAST OBIX_ATTR_NAME,
@@ -374,6 +374,12 @@ static int example_register_dev(example_dev_t *dev)
 	if (ret != OBIX_SUCCESS) {
 		log_error("Failed to get history facility for Device %s",
 				  dev->history_name);
+	} else if (obix_get_history_ts(NULL, OBIX_CONNECTION_ID, dev->history_name,
+								   &start_ts, &end_ts) == OBIX_SUCCESS) {
+		log_debug("The timestamp of the first history facility is %s", start_ts);
+		log_debug("The timestamp of the last history facility is %s", end_ts);
+		free(start_ts);
+		free(end_ts);
 	}
 
 	return ret;
@@ -393,7 +399,7 @@ static void example_save_history(example_dev_t *dev)
 	/*
 	 * Query as much data as possible
 	 */
-	if (!(flt = obix_create_history_flt(0, NULL, NULL, NULL, 0))) {
+	if (!(flt = obix_create_history_flt(-1, NULL, NULL, NULL, 0))) {
 		log_error("Failed to create historyFilter contract");
 		goto failed;
 	}

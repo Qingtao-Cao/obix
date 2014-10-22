@@ -1872,8 +1872,8 @@ static int bms_register_bms(obix_bms_t *bms)
 		goto failed;
 	}
 
-	ret = obix_get_history_end_ts(NULL, OBIX_CONNECTION_ID, bms->history_name,
-								  &bms->mtime_ts);
+	ret = obix_get_history_ts(NULL, OBIX_CONNECTION_ID, bms->history_name,
+							  NULL, &bms->mtime_ts);
 	if (ret != OBIX_SUCCESS && !(bms->mtime_ts = strdup(HIST_TS_INIT))) {
 		log_error("Failed to initialise the latest history timestamp of %s",
 				  bms->history_name);

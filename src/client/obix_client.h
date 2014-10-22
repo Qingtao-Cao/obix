@@ -347,7 +347,7 @@ int obix_batch_send(CURL_EXT *, Batch *);
 int obix_batch_remove_command(Batch *, const char *, const char *);
 
 int obix_get_history(CURL_EXT *, const int, const char *);
-int obix_get_history_end_ts(CURL_EXT *, const int, const char *, char **);
+int obix_get_history_ts(CURL_EXT *, const int, const char *, char **, char **);
 int obix_append_history(CURL_EXT *, const int, const char *, const char *);
 int obix_query_history(CURL_EXT *, const int, const char *, const char *, char **, int *);
 
