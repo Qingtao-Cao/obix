@@ -29,6 +29,7 @@ If (all or part of) the provided timezone could not be properly interpreted an e
 Last but not least, please refer to the following link regarding the implementation of strptime():
 	https://github.com/andikleen/glibc/blob/master/time/strptime_l.c
 
+
 ## Test Case
 
 The src/tools/ts2utc.c program extracts the core timestamp manipulation code and can be used for test purpose. Basically it checks the sanity of the given timestamp and rebase it to UTC timezone. Even though the sanity check fails the rebase will be carried out so that users can see how C library strptime() API may have ignored unrecognisable timezone designator.
@@ -143,5 +144,79 @@ Some examples are illustrated below.
 	Input timestamp: 2014-10-21T12:48:26-1215, remnant: (null), errno: Success
 	Calender time in UTC (GMT+0) timezone: 1413895706
 	New timestampe: 2014-10-21T12:48:26Z
+
+```
+
+## Robustness of C APIs
+
+It's worthwhile to mention that timestamp_is_valid() can only sanity check if a timestamp string is in "%FT%T%z" format and can't further validate if a specific field contains a meaningful value, for example, whether the minute value is larger than 61 or whether February has 28 or 29 days.
+
+Moreover, it's also interesting to notice how strptime() and timegm() APIs handle invalid values, sometimes they are converted to valid ones but this won't always happen and they are simply treated as all zero or bring about an error code. As a result, history handler may complain that the given record includes a timestamp older than or equal to that of the last one.
+
+Some examples are illustrated below.
+
+```
+1. Invalid day value (up to 31) can be properly fixed according to whether the year is a leap year or not:
+
+	$ ./ts2utc 2012-2-30T20:00:00
+	Input timestamp: 2012-2-30T20:00:00, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: 1330632000
+	New timestampe: 2012-03-01T20:00:00Z
+
+	$ ./ts2utc 2014-2-30T20:00:00
+	Input timestamp: 2014-2-30T20:00:00, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: 1393790400
+	New timestampe: 2014-03-02T20:00:00Z
+
+2. Support up to 61 in the second field (leap second):
+
+	$  ./ts2utc 2012-2-29T13:59:60
+	Input timestamp: 2012-2-29T13:59:60, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: 1330524000
+	New timestampe: 2012-02-29T14:00:00Z
+
+	$  ./ts2utc 2012-2-29T13:59:61
+	Input timestamp: 2012-2-29T13:59:61, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: 1330524001
+	New timestampe: 2012-02-29T14:00:01Z
+
+3. Other invalid values in "%T" part are simply treated as all zero:
+
+	$ ./ts2utc 2012-2-29T13:00:62
+	Input timestamp: 2012-2-29T13:00:62, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: 1330473600
+	New timestampe: 2012-02-29T00:00:00Z
+
+	$ ./ts2utc 2012-2-29T13:60:00
+	Input timestamp: 2012-2-29T13:60:00, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: 1330473600
+	New timestampe: 2012-02-29T00:00:00Z
+
+	$ ./ts2utc 2012-2-29T24:59:61
+	Input timestamp: 2012-2-29T24:59:61, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: 1330473600
+	New timestampe: 2012-02-29T00:00:00Z
+
+4. Invalid values in "%F" part simply result in error code:
+
+	$ ./ts2utc 2014-2-32T20:00:00
+	Input timestamp: 2014-2-32T20:00:00, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: -2209075200
+	Failed to convert calender time to timestamp string
+
+	$ ./ts2utc 2014-13-31T20:00:00
+	Input timestamp: 2014-13-31T20:00:00, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: -2209075200
+	Failed to convert calender time to timestamp string
+
+	$ ./ts2utc 1969-2-28T20:00:00
+	Input timestamp: 1969-2-28T20:00:00, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: -26452800
+	Failed to convert calender time to timestamp string
+
+	$ ./ts2utc 10000-2-28T20:00:00
+	Input timestamp: 10000-2-28T20:00:00, remnant: (null), errno: Success
+	Calender time in UTC (GMT+0) timezone: -2209075200
+	Failed to convert calender time to timestamp string
 
 ```

@@ -1040,6 +1040,16 @@ static int timezone_is_valid(const char *tz)
 	return 0;
 }
 
+/*
+ * Sanity check if the timestamp string is in "%FT%T%z" format
+ *
+ * NOTE: This function can't tell if a specific component in
+ * the timestamp string contains meaningful values, for example,
+ * whether the seconds value is larger than 61, or the minute
+ * value is larger than 60 etc. Moreover, C library strptime()
+ * and timegm() APIs may tolerate invalid values in the "%F" part
+ * more than in the "%T" part. See timezone.md for further details
+ */
 int timestamp_is_valid(const char *ts)
 {
 	char *date, *time, *tz;
