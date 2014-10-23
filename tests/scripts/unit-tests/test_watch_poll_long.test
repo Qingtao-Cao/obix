@@ -77,7 +77,6 @@ EOF
 # $test_watch_poll_long_file_name
 async_poll_changes()
 {
-	sleep 1
 	ASYNC_OBIX_DOC=$(curl -XPOST --data "" "$OBIX_TEST_URL_BASE$watch_href""pollChanges")
 
 	obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && return 1
@@ -115,6 +114,7 @@ async_poll_changes &
 async_poll_changes_pid=$!
 
 #invoke a write to a watched object
+sleep 2
 OBIX_DOC=$(curl -XPUT --data "<bool val='true'/>" "$OBIX_TEST_URL_BASE$device_href""/testBool")
 
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
