@@ -261,11 +261,12 @@ static err_msg_t hist_err_msg[] = {
 	},
 	[ERR_NO_WRITTEN] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No records written, probably due to no records or TS issue"
+		.msgs = "No records written, probably due to no records "
+				"or timestamp issue"
 	},
 	[ERR_NO_LATEST_TS] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Failed to get the end TS from the latest log file"
+		.msgs = "Failed to get the end timestamp from the latest log file"
 	},
 	[ERR_NO_DATA] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
@@ -278,7 +279,8 @@ static err_msg_t hist_err_msg[] = {
 	},
 	[ERR_OBSOLETE_TS] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "Data list contains records with TS in the past"
+		.msgs = "Data list contains records with timestamp older than or "
+				"equal to that of the last record"
 	},
 	[ERR_CREATE_LOGFILE] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
@@ -1098,16 +1100,16 @@ static int hist_append_dev_helper(obix_hist_dev_t *dev, xmlNode *input)
 		}
 
 		/*
-		 * Records are allowable to coincide with the latest ts
-		 * Otherwise (res <= 0) should be used instead
+		 * Newly added history records MUST not include a timestamp
+		 * older than or equal to the latest one
 		 */
-		if (res < 0) {
+		if (res <= 0) {
 			ret = ERR_OBSOLETE_TS * -1;
 			continue;
 		}
 
 		/* Create a new log file for the new date */
-		if (res > 0 && new_day == 1) {
+		if (new_day == 1) {
 			if (count > 0) {
 				add_abs_count(file, count);
 				count = 0;		/* Reset counter for the new log file */
@@ -1126,13 +1128,11 @@ static int hist_append_dev_helper(obix_hist_dev_t *dev, xmlNode *input)
 
 		update_value(file->abstract, OBIX_OBJ_ABSTIME, HIST_ABS_END, ts);
 
-		/* Update latest_ts when necessary */
-		if (res == 1) {
-			free(latest_ts);
-			if (!(latest_ts = strdup(ts))) {
-				ret = ERR_NO_MEM * -1;
-				goto failed;
-			}
+		/* Update latest_ts */
+		free(latest_ts);
+		if (!(latest_ts = strdup(ts))) {
+			ret = ERR_NO_MEM * -1;
+			goto failed;
 		}
 
 		count++;

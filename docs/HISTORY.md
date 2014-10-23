@@ -82,9 +82,9 @@ In source code obix_get_history() can be called to this end. The required name o
 
 ## History.Append
 
-The History.Append operation appends the raw history records to the end of the latest history log file and update the end timestamp and count value in relevant abstract, provided that the timestamp of history records are not earlier than the timestamp of the very last record in the very last log file. Otherwise, the record will simply be ignored by oBIX Server.
+The History.Append operation appends the raw history records to the end of the latest history log file and update the end timestamp and count value in relevant abstract, provided that the timestamp of history records are not older than or equal to that of the very last record in the last log file. Otherwise, the record will simply be ignored by oBIX Server.
 
-If the input of the History.Append operation contains some records with an invalid timestamp but at least one valid record, the History.Append operation tries to absorb as many valid records as possible. Only if all records have an  invalid timestamp will oBIX Server return an error message.
+If the input of the History.Append operation contains some records with an invalid timestamp but at least one valid record, the History.Append operation tries to absorb as many valid records as possible. Only if all records have an invalid timestamp will oBIX Server return an error message.
 
 If records are on a later, different date than the last log file, a new log file will be created.
 
