@@ -1,13 +1,16 @@
-%define checkout 20140925git3aea53c61e
+%define checkout 20141023git43807d3
 
 Name:           obix
 Version:        1.2
-Release:        0.2.%{checkout}%{?dist}
+Release:        0.3.%{checkout}%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
 URL:            https://github.com/ONEDC/obix
-Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz#/obix-%{version}.tar.gz
+# Upstream
+#Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz#/obix-%{version}.tar.gz
+# Local
+Source0:        obix-%{version}-%{checkout}.tar.gz
 
 BuildRequires:  fcgi-devel
 BuildRequires:  kernel-devel
@@ -61,6 +64,14 @@ The %{name}-doc package contains documentation for
 Summary:        Adaptors for %{name}
 
 Requires:       %{name}%{?_isa} = %{version}-%{release}
+
+Buildrequires:  libcsv-devel
+Buildrequires:  libcurl-devel
+Buildrequires:  libmodbus-devel
+
+Requires:       libcsv
+Requires:       libcurl
+Requires:       libmodbus
 
 %description    adaptors
 Adaptors for %{name}
@@ -147,6 +158,9 @@ exit 0
 
 
 %changelog
+* Thu Oct 23 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.3.20141023git43807d3
+- Updated for pre-release 1.2
+
 * Wed Oct 22 2014 paul.gampe@nextdc.com - 1.2-0.2.20140925git3aea53c61e
 - include adaptors in this spec file
 
