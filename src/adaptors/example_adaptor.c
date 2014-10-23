@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 #include "obix_client.h"
 #include "log_utils.h"
 #include "ptask.h"
@@ -345,7 +346,7 @@ static void example_unregister_dev(example_dev_t *dev)
 
 static int example_register_dev(example_dev_t *dev)
 {
-	char *data;
+	char *data, *start_ts, *end_ts;
 	int ret;
 
 	if (!xmlSetProp(dev->contract, BAD_CAST OBIX_ATTR_NAME,
@@ -373,6 +374,12 @@ static int example_register_dev(example_dev_t *dev)
 	if (ret != OBIX_SUCCESS) {
 		log_error("Failed to get history facility for Device %s",
 				  dev->history_name);
+	} else if (obix_get_history_ts(NULL, OBIX_CONNECTION_ID, dev->history_name,
+								   &start_ts, &end_ts) == OBIX_SUCCESS) {
+		log_debug("The timestamp of the first history facility is %s", start_ts);
+		log_debug("The timestamp of the last history facility is %s", end_ts);
+		free(start_ts);
+		free(end_ts);
 	}
 
 	return ret;
@@ -392,7 +399,7 @@ static void example_save_history(example_dev_t *dev)
 	/*
 	 * Query as much data as possible
 	 */
-	if (!(flt = obix_create_history_flt(0, NULL, NULL, NULL, 0))) {
+	if (!(flt = obix_create_history_flt(-1, NULL, NULL, NULL, 0))) {
 		log_error("Failed to create historyFilter contract");
 		goto failed;
 	}
@@ -521,7 +528,7 @@ void obix_updater_task(void *arg)
 {
 	example_dev_t *dev = (example_dev_t *)arg;
 	char *reltime;
-	long time;
+	long t;
 
 	if (flag_exit == 1) {
 		return;
@@ -529,10 +536,10 @@ void obix_updater_task(void *arg)
 
 	pthread_mutex_lock(&dev->mutex);
 	dev->time += dev->updater_period;
-	time = dev->time;
+	t = dev->time;
 	pthread_mutex_unlock(&dev->mutex);
 
-	reltime = obix_reltime_from_long(time, RELTIME_DAY);
+	reltime = obix_reltime_from_long(t, RELTIME_DAY);
 
 	/*
 	 * For a simple application that won't race for one
@@ -553,7 +560,7 @@ void obix_updater_task(void *arg)
 		free(dev->mtime_ts);
 	}
 
-	if (!(dev->mtime_ts = obix_get_timestamp(0))) {
+	if (!(dev->mtime_ts = get_utc_timestamp(time(NULL)))) {
 		log_error("Failed to get timestamp for current moment");
 		goto failed;
 	}

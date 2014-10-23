@@ -26,7 +26,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>			/* close */
-#include <time.h>			/* time & gmtime_r */
 #include "log_utils.h"
 #include "xml_config.h"
 #include "xml_utils.h"
@@ -97,12 +96,6 @@ static const char *HIST_FLT_CMPT_TEMPLATE =
 
 static const char *HIST_FLT_SUFFIX =
 "</obj>";
-
-/*
- * Timestamps are in "yyyy-mm-ddThh:mm:ss" format which has
- * 19 bytes without the NULL terminator.
- */
-static const char *HIST_REC_TS_FORMAT = "%4d-%.2d-%.2dT%.2d:%.2d:%.2d";
 
 typedef enum {
 	BATCH_CMD_READ = 0,
@@ -571,37 +564,12 @@ int obix_query_history(CURL_EXT *user_handle, const int conn_id,
 	return conn->comm->query_history(user_handle, dev, flt, data, len);
 }
 
-char *obix_get_timestamp(time_t t)
-{
-	char *ts;
-	struct tm tm;
-
-	if (t == 0 && time(&t) < 0) {
-		log_error("Failed to get current timestamp");
-		return NULL;
-	}
-
-	ts = (char *)malloc(HIST_REC_TS_MAX_LEN + 1);
-	if (!ts) {
-		log_error("Failed to allocate memory for timestamp string");
-		return NULL;
-	}
-
-	/*
-	 * Get a broken-down time in terms of UTC time zone, that is, GMT+0
-	 */
-	if (gmtime_r(&t, &tm)) {
-		sprintf(ts, HIST_REC_TS_FORMAT,
-				tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
-				tm.tm_hour, tm.tm_min, tm.tm_sec);
-	} else {
-		free(ts);
-		ts = NULL;
-	}
-
-	return ts;
-}
-
+#if 0
+/*
+ * Not used yet
+ *
+ * The the full content of the index file of a specific history facility
+ */
 static int obix_get_history_index(CURL_EXT *user_handle, const int conn_id,
 								  const char *name, xmlDoc **doc)
 {
@@ -633,61 +601,69 @@ static int obix_get_history_index(CURL_EXT *user_handle, const int conn_id,
 
 	return ret;
 }
+#endif
 
-int obix_get_history_end_ts(CURL_EXT *user_handle, const int conn_id,
-							const char *name, char **ts)
+/*
+ * Get the timestamp for the first and the last history record of
+ * a history facility, a special historyQuery request with "-n 0"
+ * is taken advantage to this end
+ *
+ * NOTE: for newly created history facility that contains no data
+ * at all, currently the oBIX server returns an error contract
+ * for the historyQuery request
+ */
+int obix_get_history_ts(CURL_EXT *user_handle, const int conn_id,
+						const char *name, char **start_ts, char **end_ts)
 {
 	xmlDoc *doc = NULL;
-	xmlNode *node, *root;
-	int ret;
+	xmlNode *root;
+	char *flt, *data;
+	int size, ret;
 
-	*ts = NULL;
+	if (start_ts) {
+		*start_ts = NULL;
+	}
 
-	if ((ret = obix_get_history_index(user_handle, conn_id, name,
-									  &doc)) != OBIX_SUCCESS) {
-		log_error("Failed to get history index for Device %s on Connection %d",
-				  name, conn_id);
+	if (end_ts) {
+		*end_ts = NULL;
+	}
+
+	if (!(flt = obix_create_history_flt(0, NULL, NULL, NULL, 0))) {
+		return OBIX_ERR_NO_MEMORY;
+	}
+
+	if ((ret = obix_query_history(user_handle, conn_id, name, flt,
+								  &data, &size)) != OBIX_SUCCESS) {
 		goto failed;
 	}
 
-	if (!(root = xmlDocGetRootElement(doc)) ||
+	if (!(doc = xmlReadMemory(data, size, NULL, NULL,
+							  XML_PARSE_OPTIONS_COMMON)) ||
+		!(root = xmlDocGetRootElement(doc)) ||
 		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
-		log_error("Failed to get history index for Device %s on Connection %d",
-				  name, conn_id);
 		ret = OBIX_ERR_SERVER_ERROR;
 		goto failed;
 	}
 
-	for (node = root->children; node; node = node->next) {
-		if (node->type != XML_ELEMENT_NODE) {
-			continue;
-		}
-
-		/* until reaching the node of the last abstract */
-		if (node->next != NULL && node->next->type == XML_ELEMENT_NODE) {
-			continue;
-		}
-
-		if (!(*ts = xml_get_child_val(node, OBIX_OBJ_ABSTIME, HIST_ABS_END))) {
-			log_error("Failed to get the end history timestamp for Device %s ",
-					  "on Connection %d", name, conn_id);
-			ret = OBIX_ERR_SERVER_ERROR;
-		} else {
-			ret = OBIX_SUCCESS;
-		}
-
-		break;
+	if (start_ts && !(*start_ts = xml_get_child_val(root, OBIX_OBJ_ABSTIME,
+													HIST_ABS_START))) {
+		ret = OBIX_ERR_NO_MEMORY;
+		goto failed;
 	}
 
-	if (!node) {
-		log_warning("Empty history index for Device %s on Connection %d",
-					name, conn_id);
-		ret = OBIX_ERR_INVALID_STATE;
+	if (end_ts && !(*end_ts = xml_get_child_val(root, OBIX_OBJ_ABSTIME,
+												HIST_ABS_END))) {
+		ret = OBIX_ERR_NO_MEMORY;
+		if (start_ts) {
+			free(start_ts);
+		}
 	}
 
 	/* Fall through */
 
 failed:
+	free(flt);
+
 	if (doc) {
 		xmlFreeDoc(doc);
 	}
@@ -1175,11 +1151,13 @@ char *obix_create_history_flt(const int limit, const char *start, const char *en
 	len = strlen(HIST_FLT_PREFIX) + strlen(HIST_FLT_SUFFIX);
 
 	/*
-	 * Zero means to get as many history records as possible, in this
-	 * case the "limit" sub-element could be safely ignored and oBIX
-	 * server will default to the number of all available records
+	 * If limit < 0 then all available history records will be queried,
+	 * in which case the "limit" sub node could be safely ignored
+	 *
+	 * If limit == 0, then the timestamp for the first and the last
+	 * record will be returned
 	 */
-	if (limit > 0) {
+	if (limit >= 0) {
 		len += strlen(HIST_FLT_LIMIT_TEMPLATE) + HIST_FLT_VAL_MAX_BITS - 2;
 	}
 

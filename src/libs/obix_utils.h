@@ -22,16 +22,9 @@
 #ifndef OBIX_UTILS_H_
 #define OBIX_UTILS_H_
 
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-
-/*
- * Common XML parser options, a XML parser user may OR other options
- *
- * XML_PARSE_NONET - prevent XXE attacks
- * XML_PARSE_NOBLANKS - skip blank content
- */
-#define XML_PARSE_OPTIONS_COMMON	(XML_PARSE_NONET | XML_PARSE_NOBLANKS)
+#include <sys/types.h>			/* getpid */
+#include <unistd.h>				/* getpid */
+#include <time.h>				/* struct timespec */
 
 /*
  * Error codes which are returned by library functions
@@ -53,8 +46,6 @@ typedef enum {
 #define OBIX_CONTRACT_ERR_UNSUPPORTED	"obix:UnsupportedErr"
 #define OBIX_CONTRACT_ERR_PERMISSION	"obix:PermissionErr"
 #define OBIX_CONTRACT_ERR_SERVER		"obix:ServerErr"
-
-#define HIST_REC_TS_MAX_LEN				19
 
 #define OBIX_OBJ				"obj"
 #define OBIX_OBJ_REF			"ref"
@@ -113,6 +104,7 @@ extern const char *HIST_REC_TS;
 extern const char *HIST_AIN_DATA;
 extern const char *HIST_AIN_TS_UND;
 extern const char *HIST_TS_INIT;
+extern const char *HIST_DATE_INIT;
 
 extern const char *STR_DELIMITER_SLASH;
 extern const char *STR_DELIMITER_DOT;
@@ -146,6 +138,13 @@ extern const int OBIX_DEVICE_ROOT_LEN;
 
 #define UINT32_MAX_BITS		10
 
+/*
+ * Timestamps are in "yyyy-mm-ddThh:mm:ssZ" format which has
+ * 20 bytes without the NULL terminator.
+ */
+#define HIST_REC_TS_MAX_LEN				20
+#define HIST_REC_DATE_MAX_LEN			10
+
 int str_to_long(const char *str, long *val);
 int str_to_float(const char *str, float *val);
 
@@ -172,9 +171,9 @@ int str_is_identical(const char *str1, const char *str2);
 
 int link_pathname(char **, const char *, const char *, const char *, const char *);
 
-int timestamp_split(const char *, char **, char **);
+int timestamp_compare(const char *ts1, const char *ts2, int *res, int *new_day);
 
-int timestamp_compare(const char *ts1, const char *ts2, int *res_d, int *res_t);
+int timestamp_compare_date(const char *, const char *, int *);
 
 int timestamp_has_common(const char *start, const char *end,
 						 const char *oldest, const char *latest);
@@ -182,7 +181,13 @@ int timestamp_has_common(const char *start, const char *end,
 int timestamp_find_common(char **start, char **end,
 						  const char *oldest, const char *latest);
 
-int time_compare(const char *str1, const char *str2, int *res, int delimiter);
+char *timestamp_get_utc_date(const char *ts);
+
+time_t timestamp_to_utc_time(const char *ts);
+
+char *get_utc_timestamp(time_t t);
+
+char *get_utc_date(time_t t);
 
 /*
  * The string format of obix:reltime contract
@@ -206,5 +211,7 @@ char *obix_reltime_from_long(long millis, RELTIME_FORMAT format);
  */
 #define min(a, b)	(((a) <= (b)) ? (a) : (b))
 #define max(a, b)	(((a) >= (b)) ? (a) : (b))
+
+int timestamp_is_valid(const char *ts);
 
 #endif /* OBIX_UTILS_H_ */

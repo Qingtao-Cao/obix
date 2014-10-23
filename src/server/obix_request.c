@@ -42,7 +42,9 @@ void obix_request_set_listener(obix_request_listener listener)
 
 void obix_request_send_response(obix_request_t *request)
 {
-	(*_request_listener)(request);
+	if (_request_listener) {
+		_request_listener(request);
+	}
 }
 
 /**

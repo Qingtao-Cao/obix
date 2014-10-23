@@ -1814,7 +1814,7 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 		free(bcm->mtime_ts);
 	}
 
-	if (!(bcm->mtime_ts = obix_get_timestamp(bcm->mtime))) {
+	if (!(bcm->mtime_ts = get_utc_timestamp(bcm->mtime))) {
 		log_warning("Failed to convert mtime into timestamp");
 	}
 }

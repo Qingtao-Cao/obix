@@ -23,6 +23,15 @@
 #define _XML_UTILS_H_
 
 #include <libxml/tree.h>
+#include <libxml/parser.h>
+
+/*
+ * Common XML parser options, a XML parser user may OR other options
+ *
+ * XML_PARSE_NONET - prevent XXE attacks
+ * XML_PARSE_NOBLANKS - skip blank content
+ */
+#define XML_PARSE_OPTIONS_COMMON	(XML_PARSE_NONET | XML_PARSE_NOBLANKS)
 
 extern const char *XML_HEADER;
 extern const char *XML_VERSION;

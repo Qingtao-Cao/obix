@@ -261,11 +261,12 @@ static err_msg_t hist_err_msg[] = {
 	},
 	[ERR_NO_WRITTEN] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No records written, probably due to no records or TS issue"
+		.msgs = "No records written, probably due to no records "
+				"or timestamp issue"
 	},
 	[ERR_NO_LATEST_TS] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Failed to get the end TS from the latest log file"
+		.msgs = "Failed to get the end timestamp from the latest log file"
 	},
 	[ERR_NO_DATA] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
@@ -273,11 +274,13 @@ static err_msg_t hist_err_msg[] = {
 	},
 	[ERR_COMPARE_TS] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Failed to compare timestamps"
+		.msgs = "Failed to compare timestamps. Malformed? "
+				"use ts2utc testcase to check timestamp sanity"
 	},
 	[ERR_OBSOLETE_TS] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "Data list contains records with TS in the past"
+		.msgs = "Data list contains records with timestamp older than or "
+				"equal to that of the last record"
 	},
 	[ERR_CREATE_LOGFILE] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
@@ -357,7 +360,7 @@ static int __file_add_sorted(obix_hist_file_t *new, obix_hist_dev_t *dev)
 	obix_hist_file_t *file;
 
 	list_for_each_entry(file, &dev->files, list) {
-		if (time_compare(new->date, file->date, &res, '-') < 0) {
+		if (timestamp_compare_date(new->date, file->date, &res) < 0) {
 			log_error("Failed to compare date strings %s vs %s",
 						new->date, file->date);
 			return -1;
@@ -664,38 +667,51 @@ static xmlNode *create_absnode(obix_hist_dev_t *dev, const char *date,
 }
 
 /**
- * Create a new history log file based on the specified date
- * and setup backend data structures
+ * Create a new history log file and setup relevant backend data
+ * structure based on the specified timestamp of its first record
  *
  * Return address of the relevant file descriptor on success,
  * NULL otherwise
  */
 static obix_hist_file_t *create_file_helper(obix_hist_dev_t *dev,
-											const char *date,
 											const char *ts)
 {
+	obix_hist_file_t *file = NULL;
 	xmlNode *node;
-	char *filepath;
+	char *filepath, *date;
 	int fd;
 
-	if (link_pathname(&filepath, _history->dir, dev->dev_id,
+	if (!(date = timestamp_get_utc_date(ts)) ||
+		link_pathname(&filepath, _history->dir, dev->dev_id,
 					  date, LOG_FILENAME_SUFFIX) < 0) {
-		return NULL;
+		goto failed;
 	}
 
 	errno = 0;
 	fd = creat(filepath, 0644);
-	free(filepath);
 	if (fd < 0 && errno != EEXIST) {
-		return NULL;
+		goto failed;
 	}
 	close(fd);
 
 	if (!(node = create_absnode(dev, date, ts, ts))) {
-		return NULL;
+		goto failed;
 	}
 
-	return hist_create_file(dev, node, 1);
+	file = hist_create_file(dev, node, 1);
+
+	/* Fall through */
+
+failed:
+	if (date) {
+		free(date);
+	}
+
+	if (filepath) {
+		free(filepath);
+	}
+
+	return file;
 }
 
 static void hist_create_file_wrapper(xmlNode *node, obix_hist_dev_t *dev)
@@ -1027,10 +1043,10 @@ static int hist_append_dev_helper(obix_hist_dev_t *dev, xmlNode *input)
 {
 	obix_hist_file_t *file;
 	xmlNode *list, *record;
-	char *ts = NULL, *latest_ts = NULL, *date = NULL;
+	char *ts = NULL, *latest_ts = NULL;
 	int count = 0, all_count = 0;
 	int ret = ERR_NO_WRITTEN * -1;
-	int res_d, res_t;
+	int res, new_day;
 
 	/* Get the latest history log file */
 	pthread_mutex_lock(&dev->mutex);
@@ -1077,34 +1093,29 @@ static int hist_append_dev_helper(obix_hist_dev_t *dev, xmlNode *input)
 			free(ts);
 		}
 
-		if (date) {
-			free(date);
-		}
-
 		if (!(ts = xml_get_child_val(record, OBIX_OBJ_ABSTIME, HIST_REC_TS)) ||
-			timestamp_split(ts, &date, NULL) < 0 ||
-			timestamp_compare(ts, latest_ts, &res_d, &res_t) < 0) {
+			timestamp_compare(ts, latest_ts, &res, &new_day) < 0) {
 			ret = ERR_COMPARE_TS * -1;
 			continue;
 		}
 
 		/*
-		 * Records are allowable to coincide with the latest ts
-		 * Otherwise (res_t <= 0) should be used instead
+		 * Newly added history records MUST not include a timestamp
+		 * older than or equal to the latest one
 		 */
-		if (res_d < 0 || (res_d == 0 && res_t < 0)) {
+		if (res <= 0) {
 			ret = ERR_OBSOLETE_TS * -1;
 			continue;
 		}
 
 		/* Create a new log file for the new date */
-		if (res_d > 0) {
+		if (new_day == 1) {
 			if (count > 0) {
 				add_abs_count(file, count);
 				count = 0;		/* Reset counter for the new log file */
 			}
 
-			if (!(file = create_file_helper(dev, date, ts))) {
+			if (!(file = create_file_helper(dev, ts))) {
 				ret = ERR_CREATE_LOGFILE * -1;
 				goto failed;
 			}
@@ -1117,13 +1128,11 @@ static int hist_append_dev_helper(obix_hist_dev_t *dev, xmlNode *input)
 
 		update_value(file->abstract, OBIX_OBJ_ABSTIME, HIST_ABS_END, ts);
 
-		/* Update latest_ts when necessary */
-		if (res_d != 0 || res_t != 0) {
-			free(latest_ts);
-			if (!(latest_ts = strdup(ts))) {
-				ret = ERR_NO_MEM * -1;
-				goto failed;
-			}
+		/* Update latest_ts */
+		free(latest_ts);
+		if (!(latest_ts = strdup(ts))) {
+			ret = ERR_NO_MEM * -1;
+			goto failed;
 		}
 
 		count++;
@@ -1162,10 +1171,6 @@ failed:
 
 	if (ts) {
 		free(ts);
-	}
-
-	if (date) {
-		free(date);
 	}
 
 	return ret;
@@ -1407,7 +1412,7 @@ failed:
 static int hist_query_dev_helper(obix_request_t *request,
 								 obix_hist_dev_t *dev, xmlNode *input)
 {
-	long limit;
+	long limit;									/* the number of records wanted */
 	char *start = NULL, *end = NULL;			/* start/end TS specified in input  */
 	char *d_oldest = NULL, *d_latest = NULL;	/* oldest/latest ts for the device */
 	char *f_oldest = NULL, *f_latest = NULL;	/* oldest/latest ts for a log file */
@@ -1458,7 +1463,19 @@ static int hist_query_dev_helper(obix_request_t *request,
 		}
 	}
 
-	limit = xml_get_child_long(input, OBIX_OBJ_INT, FILTER_LIMIT);
+	if ((limit = xml_get_child_long(input, OBIX_OBJ_INT, FILTER_LIMIT)) == 0) {
+		/*
+		 * If the number of records wanted equals to zero, then return
+		 * the timestamps for the very first and last records of the
+		 * current device
+		 */
+		goto no_matching_data;
+	}
+
+	/*
+	 * If not specified or explicity set as a negative value, then
+	 * fetch all available records for the current device
+	 */
 	n = (limit < 0 || limit > dev->count) ? dev->count : limit;
 
 	res = timestamp_has_common(start, end, d_oldest, d_latest);

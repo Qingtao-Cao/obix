@@ -26,6 +26,7 @@
 #include "log_utils.h"
 #include "curl_ext.h"
 #include "obix_utils.h"
+#include "xml_utils.h"
 
 /*
  * DEBUG_CURL is defined in CMAKE_C_FLAGS_DEBUG, however,
