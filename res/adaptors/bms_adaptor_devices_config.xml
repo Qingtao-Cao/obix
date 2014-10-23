@@ -63,7 +63,7 @@
 			the adaptor won't necessarily have to rely on extra library to access the
 			file sharing server.
 		-->
-		<csv_dir val="/home/harry/bmsexport/"/>
+		<csv_dir val="/tmp/bmsexport/"/>
 		<csv_prefix val="M1_"/>
 		<csv_suffix val=".ENERGY.csv"/>
 
@@ -78,7 +78,7 @@
 
 			If CSV files are deleted permanently, simply set it as an empty string
 		-->
-		<csv_newdir val="/home/harry/oldcsv/"/>
+		<csv_newdir val="/tmp/oldcsv/"/>
 	</meta>
 
 	<!--
