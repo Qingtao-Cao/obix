@@ -2,7 +2,7 @@
 
 Name:           obix
 Version:        1.2
-Release:        0.2.%{checkout}%{?dist}
+Release:        0.3.%{checkout}%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
@@ -158,7 +158,7 @@ exit 0
 
 
 %changelog
-* Thu Oct 23 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.2.20141023git43807d3
+* Thu Oct 23 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.3.20141023git43807d3
 - Updated for pre-release 1.2
 
 * Wed Oct 22 2014 paul.gampe@nextdc.com - 1.2-0.2.20140925git3aea53c61e
