@@ -550,10 +550,17 @@ void obix_server_reply_object(obix_request_t *request, xmlNode *node)
 	}
 
 	/*
-	 * Reparent the answer node to the newly created temp document
-	 * to generate a response. To this end, the original XML parser
-	 * dictionary should be referenced so that the release of
-	 * the temp document won't touch the dictionary at all
+	 * Reparent the answer node to the newly created temp document to generate
+	 * response. If it comes from the original input document that may have
+	 * used a XML parser dictionary (e.g., returned by the signUp handler),
+	 * the dictionary should be referenced so that the release of the temp
+	 * document won't interfere with it
+	 *
+	 * However, such logic will be bypassed if the node using dictionary is not
+	 * added as the root node of the temp document, e.g., as the child of the
+	 * batchOut contract (which is created from a template and have no relation
+	 * to any document), an extra copy is a must-have to de-associate with the
+	 * dictionary. See comments in obix_batch_add_item
 	 */
 	if (node->doc) {
 		doc->dict = node->doc->dict;

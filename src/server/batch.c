@@ -58,20 +58,44 @@ static err_msg_t batch_err_msg[] = {
 
 static void obix_batch_add_item(xmlNode *batchOut, xmlNode *item)
 {
+	xmlNode *copy = NULL;
+
 	if (!item) {
 		log_error("No item provided to add into BatchIn contract!");
 		return;
 	}
 
-	if (xmldb_add_child(batchOut, item, 1, 0) == NULL) {
+	/*
+	 * The GET, PUT and most POST handlers except the signUp handler return
+	 * a copy of some node in the global DOM tree which does not rely on any
+	 * XML parser dictionary at all. Therefore adding such copy to the batchOut
+	 * contract and further into a temporary document will yield no trouble to
+	 * release them altogether
+	 *
+	 * However, the signUp handler returns directly some nodes from the original
+	 * input document to avoid an extra copy of it, which are added as child of
+	 * the batchOut contract instead of as the root node of the temporary
+	 * document, resulting in incorrect interference with the dictionary when
+	 * they are released
+	 *
+	 * A viable solution is to make a copy so as to de-associate with any
+	 * original dictionary that may have been used before re-parenting to the
+	 * batchOut contract
+	 *
+	 * NOTE, if NO dictionary is used when reading the input document
+	 * in the first place, no copy is ever needed
+	 */
+	copy = (item->doc && item->doc->dict) ? xmlCopyNode(item, 1) : item;
+
+	if (copy && xmldb_add_child(batchOut, copy, 1, 0) == NULL) {
 		log_error("could not add item into the provided BatchOut contract.");
 
 		/*
-		 * The item should be freed manually since it could not be released
+		 * The copy should be freed manually since it could not be released
 		 * along with the batchOut contract if failed to be added into it
 		 * in the first place
 		 */
-		xmlFree(item);
+		xmlFree(copy);
 	}
 }
 
