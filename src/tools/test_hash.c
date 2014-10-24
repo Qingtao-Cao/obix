@@ -24,8 +24,8 @@
  * Build below command:
  *
  *	$ gcc -g -Wall -Werror test_hash.c ../libs/hash.c
- *		  -I../libs/ -I/usr/src/kernels/`uname -r`/include -I/usr/include/libxml2/
- *		  -lxml2 -o test_hash
+ *		  -I../libs/ -I/usr/include/libxml2/
+ *		  -lxml2 -lobix-common -o test_hash
  *
  * Run with following arguments:
  *
@@ -40,19 +40,15 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <libxml/tree.h>
-#include <libxml/parser.h>
+#include "obix_utils.h"
 #include "hash.h"
-
-static const char *DEVICE_LOBBY = "/obix/deviceRoot/";
-static const int DEVICE_LOBBY_LEN = 17;
 
 typedef struct obix_dev {
 	xmlChar *href;
 	struct list_head list;
 } obix_dev_t;
 
-static struct list_head devlist;
+static LIST_HEAD(devlist);
 static hash_table_t *devtab;
 
 unsigned int device_get_hash(const unsigned char *str, const unsigned int size);
@@ -65,8 +61,8 @@ static hash_ops_t device_hash_ops = {
 
 unsigned int device_get_hash(const unsigned char *str, const unsigned int size)
 {
-	if (xmlStrncmp(str, (xmlChar *)DEVICE_LOBBY, DEVICE_LOBBY_LEN) == 0) {
-		str += DEVICE_LOBBY_LEN;
+	if (xmlStrncmp(str, BAD_CAST OBIX_DEVICE_ROOT, OBIX_DEVICE_ROOT_LEN) == 0) {
+		str += OBIX_DEVICE_ROOT_LEN;
 	}
 
 	return hash_bkdr(str, size);
@@ -96,7 +92,6 @@ int main(int argc, char *argv[])
 	xmlNode *root, *child;
 	xmlChar *href;
 	obix_dev_t *new, *dev, *n;
-	hash_node_t *node;
 	char *file;
 	int size, i;
 
@@ -118,7 +113,7 @@ int main(int argc, char *argv[])
 
 	xml_parser_init();
 
-	if (!(doc = xmlParseFile(file))) {
+	if (!(doc = xmlReadFile(file, NULL, XML_PARSE_OPTIONS_COMMON))) {
 		printf("Failed to parse XML file %s", file);
 		goto failed;
 	}
@@ -153,11 +148,14 @@ int main(int argc, char *argv[])
 	}
 
 	for (i = 0; i < devtab->size; i++) {
-		printf("#%d, %d collision items:\n", i, devtab->table[i].count);
+		printf("#%d, %d items:\n", i, devtab->table[i].count);
+#if 0
+		hash_node_t *node;
 		list_for_each_entry(node, &(devtab->table[i].head), list) {
 			printf("%s\n", ((obix_dev_t *)(node->item))->href);
 		}
 		printf("\n");
+#endif
 	}
 
 	/* Fall through */

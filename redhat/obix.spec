@@ -1,11 +1,16 @@
+# %define checkout 20141023git43807d3
+
 Name:           obix
-Version:        1.1.2
-Release:        0%{?dist}
+Version:        1.2
+Release:        1%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
 URL:            https://github.com/ONEDC/obix
+# Upstream
 Source0:        https://github.com/ONEDC/obix/archive/%{version}.tar.gz#/obix-%{version}.tar.gz
+# Local
+#Source0:        obix-%{version}.tar.gz
 
 BuildRequires:  fcgi-devel
 BuildRequires:  kernel-devel
@@ -54,6 +59,22 @@ Requires:       %{name}%{?_isa} = %{version}-%{release}
 %description    doc
 The %{name}-doc package contains documentation for
 %{name}.
+
+%package        adaptors
+Summary:        Adaptors for %{name}
+
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+
+Buildrequires:  libcsv-devel
+Buildrequires:  libcurl-devel
+Buildrequires:  libmodbus-devel
+
+Requires:       libcsv
+Requires:       libcurl
+Requires:       libmodbus
+
+%description    adaptors
+Adaptors for %{name}
 
 %prep
 %setup -q
@@ -106,15 +127,16 @@ exit 0
 %dir %{_sysconfdir}/obix
 
 # lighttpd server needs to write data to this dir
-%attr(0755,obix,lighttpd) %dir %{_sharedstatedir}/obix/histories
+%attr(0775,obix,lighttpd) %dir %{_sharedstatedir}/obix/histories
 
 %files devel
 %{_includedir}/obix
-%{_libdir}/libobix.so
-
+%{_libdir}/libobix-client.so
+%{_libdir}/libobix-common.so
 
 %files libs
-%{_libdir}/libobix.so.*
+%{_libdir}/libobix-client.so.*
+%{_libdir}/libobix-common.so.*
 
 
 %files doc 
@@ -123,8 +145,35 @@ exit 0
 %doc docs/WATCH.md  
 %doc docs/XML_DB_MANAGEMENT.md
 
+%files adaptors
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/bms_adaptor_devices_config.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/bms_adaptor_history_template.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/example_adaptor_devices_config.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/example_adaptor_history_template.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/generic_server_config.xml
+%config(noreplace) %{_sysconfdir}/obix/res/adaptors/mg_adaptor_devices_config.xml
+%{_bindir}/bms_adaptor
+%{_bindir}/example_adaptor
+%{_bindir}/mg_adaptor
+
 
 %changelog
+
+* Fri Oct 24 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-1
+- The 1.2 build
+
+* Fri Oct 24 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.4
+- Initial 1.2 build
+
+* Thu Oct 23 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.3.20141023git43807d3
+- Updated for pre-release 1.2
+
+* Wed Oct 22 2014 paul.gampe@nextdc.com - 1.2-0.2.20140925git3aea53c61e
+- include adaptors in this spec file
+
+* Thu Sep 25 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.1.20140925git3aea53c61e
+- Updated for pre-release 1.2
+
 * Fri Aug 08 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.1.2-0
 - Updated for 1.1.2 release
 

@@ -21,11 +21,16 @@
  * *****************************************************************************/
 
 #include <ctype.h>
-#include <assert.h>
 #include <pthread.h>
 #include "log_utils.h"
 #include "server.h"
 #include "obix_request.h"
+#include "xml_utils.h"
+#include "xml_config.h"
+#include "obix_utils.h"
+#include "xml_utils.h"
+
+#undef DEBUG_CACHE
 
 #ifdef DEBUG_CACHE
 #include "xml_storage.h"
@@ -42,12 +47,6 @@
 #endif
 
 /*
- * Predict to match the val attribute from the thread-count setting,
- * which is the number of server threads spawned for non-polling tasks
- */
-const char *XP_THREAD_COUNT = "/config/thread-count/@val";
-
-/*
  * Parameters contained in FCGI request
  */
 static const char *FCGI_REQUEST_URI = "REQUEST_URI";
@@ -56,43 +55,19 @@ static const char *FCGI_REQUEST_METHOD_GET = "GET";
 static const char *FCGI_REQUEST_METHOD_PUT = "PUT";
 static const char *FCGI_REQUEST_METHOD_POST = "POST";
 
-static int server_threads;
-
-static const char *CONFIG_FILE = "server_config.xml";
+static const char *SERVER_CONFIG_FILE = "server_config.xml";
 
 static const char *HTTP_STATUS_OK =
-	"Status: 200 OK\r\n"
-	"Content-Type: text/xml\r\n";
+"Status: 200 OK\r\n"
+"Content-Type: text/xml\r\n";
 
 static const char *HTTP_CONTENT_LOCATION = "Content-Location: %s\r\n";
 static const char *HTTP_CONTENT_LENGTH = "Content-Length: %lu\r\n";
 static const char *HTTP_HEADER_SEPARATOR = "\r\n";
 
-static void printUsageNotice(char *programName)
-{
-	log_debug("Usage:\n"
-			  " %s [-syslog] [res_dir]\n"
-			  "where  -syslog - Forces to use syslog for logging during\n"
-			  "                 server initialization (before\n"
-			  "                 configuration file is read);\n"
-			  "       res_dir - Address of the folder with server\n"
-			  "                 resources.\n"
-			  "Both these arguments are optional.",
-			  programName);
-}
-
-/**
+/*
  * Decodes a URL-Encoded string.
- *
  * See http://www.w3schools.com/tags/ref_urlencode.asp
- *
- * @param	dst		A pointer to the destination buffer which holds
- *					enough bytes to decode the result, which should
- *					always be strlen(source) + 1 for null terminator
- *					or less.
- * @param	src		A pointer to the string that is to be decoded.
- *
- * @remarks @see http://stackoverflow.com/a/14530993
  */
 static void obix_fcgi_url_decode(char *dst, const char *src)
 {
@@ -132,55 +107,9 @@ static void obix_fcgi_url_decode(char *dst, const char *src)
 	*dst++ = '\0';
 }
 
-/**
- * Parses command line input arguments.
- * @return Parsed path to server's resource folder (obligatory input argument).
- *      @a NULL in case if parsing failed.
- */
-static char *parseArguments(int argc, char **argv)
+static void obix_fcgi_exit(void)
 {
-	int i = 1;
-
-	if (argc > i) {
-		if (argv[i][0] == '-') {
-			// we have some kind of argument first
-			if (strcmp(argv[i], "-syslog") == 0) {
-				log_useSyslog(LOG_USER);
-			} else {
-				log_warning("Unknown argument (ignored): %s", argv[i]);
-				printUsageNotice(argv[0]);
-			}
-
-			// go to next argument if any
-			i++;
-		}
-	}
-
-	// check how many arguments remained
-	if (argc > (i + 1)) {
-		log_warning("Wrong number of arguments provided.");
-		printUsageNotice(argv[0]);
-	}
-
-	if (argc > i) {
-		return argv[i];
-	}
-
-	return NULL;
-}
-
-static void obix_fcgi_loadConfig(xml_config_t *config)
-{
-	assert(config && config->document);
-
-	xml_parse_logging(config);
-
-	server_threads = xml_parse_threads(config, XP_THREAD_COUNT);
-}
-
-static void obix_fcgi_shutdown()
-{
-	obix_server_shutdown();
+	obix_server_exit();
 
 	FCGX_ShutdownPending();
 	FCGX_Finish();
@@ -210,10 +139,17 @@ void obix_fcgi_sendResponse(obix_request_t *request)
 	 * This way, handlers can have a chance to specify another URI as the
 	 * Content-Location, for example, for newly generated history facilities
 	 * or watch objects
+	 *
+	 * NOTE: in case the decoded request_uri is NULL, e.g., when the requested
+	 * uri fails to be read from FCGI channel in the first place or failed to
+	 * allocate a string for the decoded one, then no content-location header
+	 * could ever be provided
 	 */
 	response_uri = (request->response_uri != NULL) ?
 					request->response_uri : request->request_decoded_uri;
-	if (FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION, response_uri) == EOF) {
+	if (response_uri &&
+		FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION,
+					 response_uri) == EOF) {
 		log_error("Failed to write HTTP \"Content-Location\" header");
 		goto failed;
 	}
@@ -266,20 +202,27 @@ failed:
 
 static int obix_fcgi_init(xml_config_t *config)
 {
-	int error;
+	int ret;
 
-	assert(config);
+	obix_request_set_listener(obix_fcgi_sendResponse);
 
-	obix_fcgi_loadConfig(config);
-
-	obix_request_set_listener(&obix_fcgi_sendResponse);
-
-	if ((error = FCGX_Init()) != 0) {
-		log_error("Failed to initialize FCGI channel: %d", error);
+	if ((ret = FCGX_Init()) != 0) {
+		log_error("Failed to initialize FCGI channel: %d", ret);
 		return -1;
 	}
 
-	return obix_server_init(config);
+	if ((ret = obix_server_init(config)) < 0) {
+		log_error("Failed to initialise oBIX server");
+		goto failed;
+	}
+
+	return 0;
+
+failed:
+	FCGX_ShutdownPending();
+	FCGX_Finish();
+
+	return -1;
 }
 
 /**
@@ -293,6 +236,13 @@ static int obix_fcgi_init(xml_config_t *config)
  *				or NULL if no valid XML document could be understood from the client.
  * @remark		This is an allocating function.  It's up to the caller to free the memory
  *				returned from this function with calls to xmlFree().
+ *
+ * NOTE: By default a XML parser context manipulates its internal
+ * dictionary to cache up strings in a parsed document for sake of
+ * performance. However, if part of the parsed document is added
+ * into the global DOM tree, e.g., in signUp handler, they should
+ * be copied so as to ensure the global DOM tree independent from
+ * any thread-specific XML parser dictionary
  */
 static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 {
@@ -312,7 +262,8 @@ static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 		return NULL;
 	}
 
-	xmlCtxtUseOptions(parserContext, XML_PARSE_NONET);
+	/* No XML_PARSE_NODICT applied, see comments above */
+	xmlCtxtUseOptions(parserContext, XML_PARSE_OPTIONS_COMMON);
 
 	while ((bytesRead = FCGX_GetStr(chunk, chunkSize, request->in)) > 0) {
 		xmlParseChunk(parserContext, chunk, bytesRead, 0); /* Non-terminating */
@@ -344,17 +295,20 @@ static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 static void obix_handle_request(obix_request_t *request)
 {
 	FCGX_Request *fcgiRequest = request->request;
-	xmlDoc *inputDoc = NULL;
+	xmlDoc *doc = NULL;
 	const char *requestType;
 
-	if (!(request->request_uri = FCGX_GetParam(FCGI_REQUEST_URI, fcgiRequest->envp)) ||
-		(*request->request_uri != '/')) {
-		log_error("Invalid %s in current request", FCGI_REQUEST_URI);
+	if (!(request->request_uri =
+			FCGX_GetParam(FCGI_REQUEST_URI, fcgiRequest->envp)) ||
+		slash_preceded(request->request_uri) == 0 ||			/* not started with slash */
+		slash_preceded(request->request_uri + 1) == 1) {        /* double slashes */
+		log_error("Invalid URI in current request: %s", request->request_uri);
 		obix_server_handleError(request, "Invalid URI");
 		return;
 	}
 
-	if (!(request->request_decoded_uri = (char *)malloc(strlen(request->request_uri) + 1))) {
+	if (!(request->request_decoded_uri =
+				(char *)malloc(strlen(request->request_uri) + 1))) {
 		log_error("Could not allocate enough memory to decode the input URI");
 		obix_server_handleError(request, "Failed to decode input URI");
 		return;
@@ -362,7 +316,8 @@ static void obix_handle_request(obix_request_t *request)
 
 	obix_fcgi_url_decode(request->request_decoded_uri, request->request_uri);
 
-	if (!(requestType = FCGX_GetParam(FCGI_REQUEST_METHOD, fcgiRequest->envp))) {
+	if (!(requestType = FCGX_GetParam(FCGI_REQUEST_METHOD,
+									  fcgiRequest->envp))) {
 		log_error("Invalid %s in current request", FCGI_REQUEST_METHOD);
 		obix_server_handleError(request, "Missing HTTP verb");
 		return;
@@ -371,16 +326,16 @@ static void obix_handle_request(obix_request_t *request)
 	if (strcmp(requestType, FCGI_REQUEST_METHOD_GET) == 0) {
 		obix_server_handleGET(request);
 	} else if (strcmp(requestType, FCGI_REQUEST_METHOD_PUT) == 0) {
-		inputDoc = obix_fcgi_read(fcgiRequest);
-		obix_server_handlePUT(request, inputDoc);
-		if (inputDoc != NULL) {
-			xmlFreeDoc(inputDoc);
+		doc = obix_fcgi_read(fcgiRequest);
+		obix_server_handlePUT(request, doc);
+		if (doc) {
+			xmlFreeDoc(doc);
 		}
 	} else if (strcmp(requestType, FCGI_REQUEST_METHOD_POST) == 0) {
-		inputDoc = obix_fcgi_read(fcgiRequest);
-		obix_server_handlePOST(request, inputDoc);
-		if (inputDoc != NULL) {
-			xmlFreeDoc(inputDoc);
+		doc = obix_fcgi_read(fcgiRequest);
+		obix_server_handlePOST(request, doc);
+		if (doc) {
+			xmlFreeDoc(doc);
 		}
 	} else {
 		obix_server_handleError(request, "Illegal HTTP verb");
@@ -453,40 +408,45 @@ static void payload(void)
  */
 int main(int argc, char **argv)
 {
-	char *resourceDir = NULL;
-	xml_config_t *config = NULL;
+	xml_config_t *config;
 
-	log_debug("Starting oBIX server...");
+	if (argc != 2) {
+		printf("Usage: %s <resource-dir>\n"
+			   "Where resrouce-dir is the folder containing all oBIX "
+			   "configuration and data files\n", argv[0]);
+	}
 
 	xml_parser_init();
 
-	resourceDir = parseArguments(argc, argv);
-	if (resourceDir == NULL) {
-		log_warning("No resource folder provided. Trying use current directory.\n"
-					"Launch string: \"<path>/obix.fcgi <resource_folder/>\".");
-		resourceDir = "./";
+	if (!(config = xml_config_create(argv[1], SERVER_CONFIG_FILE))) {
+		printf("Failed to create xml_config_t for %s\n", SERVER_CONFIG_FILE);
+		goto failed;
 	}
 
-	config = xml_config_create(resourceDir, CONFIG_FILE);
-	if (config == NULL) {
-		log_error("Could not initialize the XML configuration "
-				  "instance for directory %s.", resourceDir);
-		goto config_failed;
+	/*
+	 * Setup log facility so that log utility APIs
+	 * can be used as early as possible
+	 */
+	if (xml_config_log(config) < 0) {
+		printf("Failed to config server log\n");
+		goto log_failed;
 	}
 
-	if (obix_fcgi_init(config) != 0) {
-		goto init_failed;
+	if (obix_fcgi_init(config) < 0) {
+		log_error("Failed to initialise FCGX");
+		goto log_failed;
 	}
 
 	payload();
 
-init_failed:
-	obix_fcgi_shutdown();
+	obix_fcgi_exit();
+
+	/* Fall through */
+
+log_failed:
 	xml_config_free(config);
 
-config_failed:
-	xmlCleanupParser();
+failed:
+	xml_parser_exit();
 	return -1;
 }
-
-

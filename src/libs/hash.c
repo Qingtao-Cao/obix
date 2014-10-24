@@ -18,7 +18,6 @@
  *
  * *****************************************************************************/
 
-#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "hash.h"
@@ -31,8 +30,6 @@ typedef void (*hash_cb_t)(hash_head_t *head, hash_node_t *node, void *arg);
 
 static void hash_init_head(hash_head_t *head)
 {
-	assert(head);
-
 	INIT_LIST_HEAD(&head->head);
 	head->count = 0;
 	pthread_mutex_init(&head->mutex, NULL);
@@ -41,8 +38,6 @@ static void hash_init_head(hash_head_t *head)
 static void hash_destroy_head(hash_head_t *head)
 {
 	hash_node_t *node, *n;
-
-	assert(head);
 
 	pthread_mutex_lock(&head->mutex);
 	if (head->count > 0) {
@@ -130,7 +125,9 @@ hash_table_t *hash_init_table(unsigned int size, hash_ops_t *op)
 	hash_table_t *tab;
 	int i;
 
-	assert(size > 0 && op);
+	if (size == 0 || !op) {
+		return NULL;
+	}
 
 	if (!(tab = (hash_table_t *)malloc(sizeof(hash_table_t)))) {
 		return NULL;
@@ -158,8 +155,6 @@ void hash_destroy_table(hash_table_t *tab)
 {
 	int i;
 
-	assert(tab);
-
 	if (tab->table) {
 		for (i = 0; i < tab->size; i++) {
 			hash_destroy_head(tab->table + i);
@@ -178,9 +173,7 @@ static void hash_helper(hash_table_t *tab, const unsigned char *key,
 	hash_head_t *head;
 	hash_node_t *node, *n;
 
-	assert(tab && key);
-
-	if (!tab->op || !tab->op->get || !tab->op->cmp) {
+	if (!tab || !key || !tab->op || !tab->op->get || !tab->op->cmp) {
 		return;
 	}
 
@@ -233,9 +226,7 @@ int hash_add(hash_table_t *tab, const unsigned char *key, void *item)
 	hash_head_t *head;
 	hash_node_t *node, *new;
 
-	assert(tab && key && item);
-
-	if (!tab->op || !tab->op->get || !tab->op->cmp) {
+	if (!tab || !key || !item || !tab->op || !tab->op->get || !tab->op->cmp) {
 		return -1;
 	}
 
@@ -276,7 +267,9 @@ unsigned int hash_bkdr(const unsigned char *str, const unsigned int size)
 	unsigned int seed = 31;	/* 31 131 1313 13131 131313 etc */
 	unsigned int hash = 0;
 
-	assert(str && size > 0);
+	if (!str || size == 0) {
+		return 0;
+	}
 
 	while (*str) {
 		hash = hash * seed + (*str++);

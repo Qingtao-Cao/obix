@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+##############################################################################
+# Copyright (c) 2013-2014 Tyler Watson <tyler.watson@nextdc.com>
+#
+# This file is part of oBIX.
+#
+# oBIX is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# oBIX is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+#
+##############################################################################
+
+# Unit test: test_signup_exists.test 
+#
+# Downloads the oBIX base contract at /obix and tests for the presence of the
+# oBIX signUp operation.  If this operation is removed or disabled, then the oBIX 
+# server cannot accept new devices.
+#
+# Steps:
+#
+# 1) Download the oBIX base contract at /obix
+# 2) Test for the presence of an err contract.  In this case, an error contract
+#	 is desirable, and is an indication of the test passing.  All other responses
+# 	 such as HTTP/500, or a valid oBIX response is a fail.
+#
+# At each step, output is validated.
+
+source "$1/obix-client-functions.sh"
+
+OBIX_DOC=$(curl "$OBIX_TEST_URL")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+doc_root_count=$($1/xpath 'count(/obj/op[@name="signUp" and @in="obix:obj" and @out="obix:obj"])' - <<< "$OBIX_DOC")
+
+[ "$doc_root_count" -eq 1 ] || exit 1
+
+exit 0

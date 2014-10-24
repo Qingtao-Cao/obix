@@ -1,0 +1,71 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Copyright (c) 2014 Qingtao Cao [harry.cao@nextdc.com]
+
+	This file is part of obix-adaptors.
+
+	obix-adaptors is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	obix-adaptors is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with obix-adaptors. If not, see <http://www.gnu.org/licenses/>.
+-->
+<config>
+	<!--
+		Configurations irrelevant to the layout of hardware
+	-->
+	<meta>
+		<!-- The name of the device contract -->
+		<name val="Example_Adaptor"/>
+
+		<!--
+			Parameters of the "updater" worker thread, which accesses core data structures
+			and updates relevant device' contracts on the oBIX server and append history
+			record for each of them.
+
+			Set the period as zero so that after start-up the updater thread can be
+			immediately started and will keep running without any latency between each
+			round of execution.
+		-->
+		<updater_period val="1000" unit="msec"/>
+
+		<!--
+			The parent_href specifies where to register the device contract.
+			It MUST exclude "/obix/deviceRoot/" and MUST end with a slash
+
+			There is no limitation on the depth of the name hierarchy, users are
+			free to adopt more complicated names.
+		-->
+		<parent_href val="/test/"/>
+
+		<!--
+			The history_root is where the history facilities for devices
+			represented by the current adaptor program are created
+			under /obix/historyService/histories/. If needed, each device
+			could have its own history_root settings, or use their
+			parent_name for the same purpose.
+		-->
+		<history_root val="/test/"/>
+
+		<history_logfile val="/tmp/history.log"/>
+	</meta>
+
+	<device>
+		<!--
+			The name and href of the device contract are assembled
+			at runtime
+		-->
+		<obj>
+			<reltime name="time" href="time" val="PT0S" writable="true"/>
+			<bool name="reset" href="reset" val="false" writable="true"/>
+			<int name="counter" href="counter" val="0" writable="true"/>
+		</obj>
+	</device>
+</config>

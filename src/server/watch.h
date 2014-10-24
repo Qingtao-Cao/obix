@@ -54,7 +54,7 @@ xmlNode *handlerWatchRemove(obix_request_t *, xmlNode *);
 xmlNode *handlerWatchPollChanges(obix_request_t *, xmlNode *);
 xmlNode *handlerWatchPollRefresh(obix_request_t *, xmlNode *);
 
-int obix_watch_init(xml_config_t *);
+int obix_watch_init(const int);
 void obix_watch_dispose(void);
 
 void xmldb_notify_watches(xmlNode *node, WATCH_EVT evt);

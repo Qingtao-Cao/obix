@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+##############################################################################
+# Copyright (c) 2013-2014 Tyler Watson <tyler.watson@nextdc.com>
+#
+# This file is part of oBIX.
+#
+# oBIX is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# oBIX is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+#
+##############################################################################
+
+# Unit test: test_watch_delete.test 
+#
+# Creates a temporary watch object and then deletes it via an invoke to the
+# created watch object's /delete operation.
+#
+# Steps:
+#
+# 1) Create a new watch object by invoking /obix/watchService/make
+# 2) Delete the watch object by invoking the newly created watch objects
+#	 /delete operation.
+#
+# At each step, output is validated.
+
+source "$1/obix-client-functions.sh"
+
+OBIX_DOC=$(curl -XPOST --data "" "$OBIX_TEST_URL/watchService/make")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+watch_is=$($1/xpath 'string(/obj[@href]/@is)' -<<< "$OBIX_DOC")
+watch_in=$($1/xpath 'string(/obj[@href]/op[@name="add"]/@in)' -<<< "$OBIX_DOC")
+watch_out=$($1/xpath 'string(/obj[@href]/op[@name="add"]/@out)' -<<< "$OBIX_DOC")
+watch_href=$($1/xpath 'string(/obj/@href)' -<<< "$OBIX_DOC")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+[[ "$watch_is" =~ obix:Watch.* ]] || exit 1
+[ "$watch_in" == "obix:WatchIn" ] || exit 1
+[ "$watch_out" == "obix:WatchOut" ] || exit 1
+
+#delete the watch
+
+OBIX_DOC=$(curl -XPOST -data "" "$OBIX_TEST_URL_BASE$watch_href""delete")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+watch_delete_result=$($1/xpath 'count(/obj[@null="true"])' -<<< "$OBIX_DOC")
+[ "$watch_delete_result" -eq 1 ] || exit 1
+
+exit 0

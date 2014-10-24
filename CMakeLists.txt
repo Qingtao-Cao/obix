@@ -146,8 +146,14 @@ ADD_CUSTOM_TARGET(obix-clean
 #
 SET(CMAKE_TESTS_DIR tests/scripts)
 ENABLE_TESTING()
-ADD_TEST(NAME "Dependencies" COMMAND ${CMAKE_TESTS_DIR}/dependencies.sh)
-ADD_TEST(NAME "Setup"        COMMAND ${CMAKE_TESTS_DIR}/setup.sh)
-ADD_TEST(NAME "Server_Start" COMMAND ${CMAKE_TESTS_DIR}/server.sh start)
-ADD_TEST(NAME "SignUp"       COMMAND ${CMAKE_TESTS_DIR}/signUp ${CMAKE_TESTS_DIR}/)
-ADD_TEST(NAME "Server_Stop"  COMMAND ${CMAKE_TESTS_DIR}/server.sh stop)
+ADD_TEST("Dependencies" ${CMAKE_TESTS_DIR}/dependencies.sh)
+ADD_TEST("Setup"        ${CMAKE_TESTS_DIR}/setup.sh)
+ADD_TEST("Server_Start" ${CMAKE_TESTS_DIR}/server.sh start)
+
+file(GLOB files "${CMAKE_TESTS_DIR}/unit-tests/*.test")
+foreach(file ${files})
+	execute_process(COMMAND "basename" "${file}" OUTPUT_VARIABLE file_name)
+	add_test("${file_name}" "${file}" "${CMAKE_TESTS_DIR}")
+endforeach()
+
+ADD_TEST("Server_Stop"  ${CMAKE_TESTS_DIR}/server.sh stop)
