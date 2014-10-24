@@ -60,7 +60,7 @@ OBIX_DOC=$(curl "$OBIX_TEST_URL/deviceRoot/TestDevice-$now")
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
-device_root_count=$(xmllint --xpath 'count(/obj[@is="obix:test-device"])' -<<< "$OBIX_DOC")
+device_root_count=$($1/xpath 'count(/obj[@is="obix:test-device"])' -<<< "$OBIX_DOC")
 [ "$device_root_count" -ne 1 ] && exit 1
 
 #invoke an obix write to the sample device
@@ -69,7 +69,7 @@ OBIX_DOC=$(curl -XPUT --data "<bool val='$test_bool_value'/>" "$OBIX_TEST_URL/de
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
-bool_value=$(xmllint --xpath '/bool/@val' -<<< "$OBIX_DOC")
+bool_value=$($1/xpath '/bool/@val' -<<< "$OBIX_DOC")
 [ "$bool_value" -ne "$test_bool_value" ] && exit 1
 
 exit 0

@@ -40,10 +40,10 @@ OBIX_DOC=$(curl -XPOST --data "" "$OBIX_TEST_URL/watchService/make")
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
-watch_is=$(xmllint --xpath 'string(/obj[@href]/@is)' -<<< "$OBIX_DOC")
-watch_in=$(xmllint --xpath 'string(/obj[@href]/op[@name="add"]/@in)' -<<< "$OBIX_DOC")
-watch_out=$(xmllint --xpath 'string(/obj[@href]/op[@name="add"]/@out)' -<<< "$OBIX_DOC")
-watch_href=$(xmllint --xpath 'string(/obj/@href)' -<<< "$OBIX_DOC")
+watch_is=$($1/xpath 'string(/obj[@href]/@is)' -<<< "$OBIX_DOC")
+watch_in=$($1/xpath 'string(/obj[@href]/op[@name="add"]/@in)' -<<< "$OBIX_DOC")
+watch_out=$($1/xpath 'string(/obj[@href]/op[@name="add"]/@out)' -<<< "$OBIX_DOC")
+watch_href=$($1/xpath 'string(/obj/@href)' -<<< "$OBIX_DOC")
 
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
@@ -59,7 +59,7 @@ OBIX_DOC=$(curl -XPOST -data "" "$OBIX_TEST_URL_BASE$watch_href""delete")
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
-watch_delete_result=$(xmllint --xpath 'count(/obj[@null="true"])' -<<< "$OBIX_DOC")
+watch_delete_result=$($1/xpath 'count(/obj[@null="true"])' -<<< "$OBIX_DOC")
 [ "$watch_delete_result" -eq 1 ] || exit 1
 
 exit 0

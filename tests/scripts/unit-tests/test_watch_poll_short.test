@@ -69,7 +69,7 @@ OBIX_DOC=$(curl -XPOST --data "" "$OBIX_TEST_URL/watchService/make")
 obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
-watch_href=$(xmllint --xpath 'string(/obj[@href]/@href)' -<<< "$OBIX_DOC")
+watch_href=$($1/xpath 'string(/obj[@href]/@href)' -<<< "$OBIX_DOC")
 
 # Invoke watch add
 OBIX_DOC=$(curl -XPOST --data "$watch_in_contract" "$OBIX_TEST_URL_BASE$watch_href""add")
@@ -79,10 +79,10 @@ obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
 # test whether the WatchOut contract features from the server, and it has a bool
 # element that matches the bool href provided in the WatchIn contract above.
-watch_out_count=$(xmllint --xpath "count(/obj[@is='obix:WatchOut'])" -<<< "$OBIX_DOC")
+watch_out_count=$($1/xpath "count(/obj[@is='obix:WatchOut'])" -<<< "$OBIX_DOC")
 [ "$watch_out_count" -eq 1 ] || exit 1
 
-watch_href_count=$(xmllint --xpath "count(/obj[@is='obix:WatchOut']/list/bool[@href='$device_href/testBool'])" -<<< "$OBIX_DOC")
+watch_href_count=$($1/xpath "count(/obj[@is='obix:WatchOut']/list/bool[@href='$device_href/testBool'])" -<<< "$OBIX_DOC")
 [ "$watch_href_count" -eq 1 ] || exit 1
 
 #invoke a write to a watched object
@@ -99,10 +99,10 @@ obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
 
 # test whether the WatchOut contract features from the server, and it has a bool
 # element that matches the bool href provided in the WatchIn contract above.
-watch_out_count=$(xmllint --xpath "count(/obj[@is='obix:WatchOut'])" -<<< "$OBIX_DOC")
+watch_out_count=$($1/xpath "count(/obj[@is='obix:WatchOut'])" -<<< "$OBIX_DOC")
 [ "$watch_out_count" -eq 1 ] || exit 1
 
-watch_href_count=$(xmllint --xpath "count(/obj[@is='obix:WatchOut']/list/bool[@href='$device_href/testBool' and @val='true'])" -<<< "$OBIX_DOC")
+watch_href_count=$($1/xpath "count(/obj[@is='obix:WatchOut']/list/bool[@href='$device_href/testBool' and @val='true'])" -<<< "$OBIX_DOC")
 [ "$watch_href_count" -eq 1 ] || exit 1
 
 exit 0

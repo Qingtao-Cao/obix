@@ -19,7 +19,7 @@ function obix_tag_name()
 {
 	[ -n "$2" ] && return 1;
 
-	eval "$1=$(xmllint --xpath '/name()' <<< \"$2\")"
+	eval "$1=$(tests/scripts/xpath '/name()' <<< \"$2\")"
 }
 
 function obix_xpath_eval()
@@ -27,9 +27,9 @@ function obix_xpath_eval()
 		local v
 
 		if [ ! -n "$2" ]; then 
-				v=$(xmllint --xpath "$1" -)
+				v=$(tests/scripts/xpath "$1" -)
 		else
-				v=$(xmllint --xpath "$1" - <<< "$2")
+				v=$(tests/scripts/xpath "$1" - <<< "$2")
 		fi
 
 		[ $? == 0 ] || return 0
