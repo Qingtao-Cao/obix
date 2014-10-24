@@ -15,14 +15,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
-#include <assert.h>
-#include <libxml/tree.h>	/* xmlNode */
+#include <libxml/tree.h>
 #include <libxml/xpath.h>
-#include "xml_utils.h"		/* xpath_item_cb_t */
+#include <ctype.h>		/* isblank */
+#include <string.h>		/* strlen */
+#include "xml_utils.h"
 #include "obix_utils.h"
 #include "log_utils.h"
 
@@ -231,7 +232,9 @@ void xml_xpath_for_each_item(xmlNode *rootNode, const char *pattern,
 	xmlNode *member;
 	int i;
 
-	assert(rootNode && pattern && cb);	/* parameters are optional */
+	if (!rootNode || !pattern || !cb) {		/* parameters are optional */
+		return;
+	}
 
 	/*
 	 * Create a temporary document for the standalone node
@@ -340,11 +343,9 @@ xmlNode *xml_find_child(const xmlNode *parent, const char *tag,
 	xmlChar *attr_val;
 	int ret;
 
-	if (!parent) {
+	if (!parent || !attrName) {		/* attrVal, tag are optional */
 		return NULL;
 	}
-
-	assert(attrName);	/* attrVal, tag are optional */
 
 	for (node = parent->children; node; node = node->next) {
 		if (node->type != XML_ELEMENT_NODE) {
@@ -381,17 +382,37 @@ xmlNode *xml_find_child(const xmlNode *parent, const char *tag,
  */
 long xml_get_long(xmlNode *node, const char *attrName)
 {
-	xmlChar *attr_val;
+	char *attr_val;
 	long val;
+	int ret;
 
-	if (!(attr_val = xmlGetProp(node, (xmlChar *)attrName))) {
+	if (!(attr_val = (char *)xmlGetProp(node, BAD_CAST attrName))) {
 		return -1;
 	}
 
-	val = str_to_long((const char *)attr_val);
-	xmlFree(attr_val);
+	ret = str_to_long(attr_val, &val);
+	free(attr_val);
 
-    return val;		/* Attribute value or error code */
+    return (ret == 0) ? val : ret;
+}
+
+/**
+ * Get the href attribute of a matching children of the given node
+ * with specific tag and name attribute.
+ *
+ * Note,
+ * 1. Callers should release the returned string once done with it
+ */
+char *xml_get_child_href(const xmlNode *parent, const char *tag,
+						 const char *nameVal)
+{
+	xmlNode *node;
+
+	if (!(node = xml_find_child(parent, tag, OBIX_ATTR_NAME, nameVal))) {
+		return NULL;
+	}
+
+	return (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_HREF);
 }
 
 /**
@@ -423,14 +444,208 @@ long xml_get_child_long(const xmlNode *parent, const char *tag,
 {
 	char *value;
 	long l;
+	int ret;
 
 	if (!(value = xml_get_child_val(parent, tag, nameVal))) {
 		return -1;
 	}
 
-	l = str_to_long(value);
+	ret = str_to_long(value, &l);
 	free(value);
 
-    return l;		/* Attribute value or error code */
+    return (ret == 0) ? l : ret;
 }
 
+/*
+ * Copy the implementation of this function since
+ * it does not exist on libxml2-2.7
+ */
+static char *xml_buffer_detach(xmlBuffer *buf)
+{
+	xmlChar *ret;
+
+	if (!buf || buf->alloc == XML_BUFFER_ALLOC_IMMUTABLE) {
+		return NULL;
+	}
+
+	ret = buf->content;
+	buf->content = NULL;
+	buf->size = buf->use = 0;
+
+	return (char *)ret;
+}
+
+char *xml_dump_node(const xmlNode *node)
+{
+	xmlBuffer *buffer = NULL;
+	char *data;
+
+	if (!node) {
+		return NULL;
+	}
+
+	if (!(buffer = xmlBufferCreate())) {
+		return NULL;
+	}
+
+	/*
+	 * level == 0, since it is undesirable to add extra indenting
+	 * for the closing </obj> for each record;
+	 *
+	 * format == 1, providing node indenting when xmlKeepBlanksDefault(0)
+	 * has been called
+	 */
+	data = xmlNodeDump(buffer, NULL, (xmlNode *)node, 0, 1) > 0 ?
+					   xml_buffer_detach(buffer) : NULL;
+
+	xmlBufferFree(buffer);
+
+	return data;
+}
+
+xmlNode *obix_obj_null(void)
+{
+    xmlNode *node;
+
+	if (!(node = xmlNewNode(NULL, BAD_CAST OBIX_OBJ)) ||
+	    !xmlSetProp(node, BAD_CAST OBIX_ATTR_NULL, BAD_CAST XML_TRUE)) {
+		xmlFreeNode(node);
+		node = NULL;
+	}
+
+    return node;
+}
+
+void xml_delete_node(xmlNode *node)
+{
+	if (!node) {
+		return;
+	}
+
+	/*
+	 * Always unlink the to-be-deleted node
+	 * just in case it belongs to any document
+	 */
+	xmlUnlinkNode(node);
+	xmlFreeNode(node);
+}
+
+/*
+ * Remove all chidlren from a given node
+ */
+void xml_remove_children(xmlNode *parent)
+{
+	xmlNode *child, *sibling;
+
+	if (!parent) {
+		return;
+	}
+
+	for (child = parent->children, sibling = ((child) ? child->next : NULL);
+		 child;
+		 child = sibling, sibling = ((child) ? child->next : NULL)) {
+		if (child->type != XML_ELEMENT_NODE) {
+			continue;		/* only interested in normal nodes */
+		}
+
+		xml_delete_node(child);
+	}
+}
+
+#ifdef DEBUG
+int xml_is_valid_doc(const char *data, const char *contract)
+{
+	xmlDoc *doc = NULL;
+	xmlNode *root;
+	xmlChar *is_attr = NULL;
+	xmlChar *href = NULL;
+	int ret = 0;
+
+	if (!(doc = xmlReadMemory(data, strlen(data),
+							  NULL, NULL,
+							  XML_PARSE_OPTIONS_COMMON))) {
+		log_error("The provided data is not a valid XML document: %s", data);
+		return 0;
+	}
+
+	if (!(root = xmlDocGetRootElement(doc))) {
+		log_error("The provided XML document has no root node: %s", data);
+		goto failed;
+	}
+
+	if ((href = xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF)) != NULL &&
+		xml_is_valid_href(href) == 0) {
+		log_error("The provided XML document has invalid href in its "
+				  "root node: %s", data);
+		goto failed;
+	}
+
+	if (contract &&
+		(!(is_attr = xmlGetProp(root, BAD_CAST OBIX_ATTR_IS)) ||
+		 xmlStrcmp(is_attr, BAD_CAST contract) != 0)) {
+		log_error("The provided data contains an illegal contract: %s "
+				  "(Required %s)", is_attr, contract);
+		goto failed;
+	}
+
+	ret = 1;	/* Success */
+
+	/* Fall through */
+
+failed:
+	if (href) {
+		xmlFree(href);
+	}
+
+	if (is_attr) {
+		xmlFree(is_attr);
+	}
+
+	xmlFreeDoc(doc);
+	return ret;
+}
+#endif
+
+int xml_is_valid_href(xmlChar *href)
+{
+	int len, i;
+
+	if (!href) {
+		return 0;
+	}
+
+	/* Empty string, or a single slash */
+	if ((len = strlen((char *)href)) == 0 ||
+		(len == 1 && *href == '/')) {
+		return 0;
+	}
+
+	/*
+	 * Start with any whitespace characters, which will make
+	 * oBIX server create node with href containing just
+	 * whitespace characters
+	 *
+	 * NOTE: whitespace characters such as spaces or even tabs
+	 * are allowed in the middle of a href
+	 */
+	if (isspace(*href) != 0) {
+		return 0;
+	}
+
+	/*
+	 * dirname and basename both regard "." or ".."
+	 * as empty string. To live with them, no dot allowed
+	 * anywhere
+	 */
+	for (i = 0; i < len; i++) {
+		if (*(href + i) == '.') {
+			return 0;
+		}
+	}
+
+	if (strstr((char *)href, "//") != NULL) {
+		return 0;
+	}
+
+	return 1;	/* valid */
+}

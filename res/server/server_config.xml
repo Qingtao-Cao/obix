@@ -1,46 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    * Copyright (c) 2013-2014 Qingtao Cao <harry.cao@nextdc.com>
-	* Copyright (c) 2009 Andrey Litvinov
-	*
-	* This file is part of oBIX.
-	*
-	* oBIX is free software: you can redistribute it and/or modify
-	* it under the terms of the GNU General Public License as published by
-	* the Free Software Foundation, either version 3 of the License, or
-	* (at your option) any later version.
-	*
-	* oBIX is distributed in the hope that it will be useful,
-	* but WITHOUT ANY WARRANTY; without even the implied warranty of
-	* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	* GNU General Public License for more details.
-	*
-	* You should have received a copy of the GNU General Public License
-	* along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
-	*
+	Copyright (c) 2013-2014 Qingtao Cao <harry.cao@nextdc.com>
+	Copyright (c) 2009 Andrey Litvinov
+
+	This file is part of oBIX.
+
+	oBIX is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	oBIX is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with oBIX. If not, see <http://www.gnu.org/licenses/>
 -->
 <config>  
-
-  <!--
-    The address of the oBIX server. It will appear in all server's responses.
-    DO NOT leave this field as localhost because otherwise all remote clients
-    will receive responses with wrong URI's.
-  -->
-  <server-address val="localhost"/>
-  
-  <!--
-  	 Optional tag, defining maximum number of oBIX server threads for non-poll
-	 tasks that run in parallel.
-  -->
-  <thread-count val="10"/>
-
   <!--
   	 Optional tag, defining maximum number of oBIX server threads for long-poll
 	 tasks that run in parallel. Raise this limitation if constantly run into
 	 warnings thrown by oBIX server that changes may have not been collected in
 	 a timely manner
   -->
-  <poll-thread-count val="10"/>
+  <poll-threads-count val="10"/>
 
   <!--
     Configuration of the logging system. The only obligatory tag is <level> 
@@ -87,8 +72,6 @@
   	     local1.err;local1.warning		-/var/log/obix-error.log
   	  You can read more about syslog configuration at syslog.conf manual page.   
   	-->
-  	<use-syslog facility="local3"/>  	
+  	<facility val="local3"/>  	
   </log>    	
 </config>
-
-

@@ -1,28 +1,27 @@
-# oBIX Server
+# oBIX
 
-Providing oBIX Server implementation for C language
+Providing oBIX Server and client implementation for C language
  
 Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]    
 Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]    
 Copyright (c) 2009 Andrey Litvinov [litvinov.andrey@gmail.com]
  
-oBIX Server is free software licensed under the GPLv3+ License. The text for this license can be found in the COPYING file.
+oBIX is free software licensed under the GPLv3+ License. The text for this license can be found in the COPYING file. Also it's worthwhile to mention that the src/libs/list.h file comes from Linux kernel source tree and thus is under the GPLv2 License.
 
 # 1. Project Overview
 
-oBIX Server is an open source project derived from the C oBIX Tools (CoT) project, an open source project dedicated to the development of embedded Building Automation solutions based on oBIX standard (http://www.obix.org). 
+oBIX is an open source project derived from the C oBIX Tools (CoT) project developed by the original author around 2009, but gets redesigned and rewritten from scratch since 2013. It is dedicated to the development of embedded Building Automation solutions based on oBIX standard (http://www.obix.org). 
 
 The whole project is written in C and has tiny resource requirements. It allows the project to run on embedded Linux platforms, such as OpenWrt (http://openwrt.org).
 
-This package only contains the implementation of oBIX Server. The common library that can be shared among oBIX Server and oBIX client is in a separate package.
+This package contains both the implementation of the oBIX Server and the client side libraries to support further oBIX adaptors development. Existing oBIX adaptors are released in a separate package of ONEDC/obix-adaptors since they are expected to evolve much faster than the oBIX package.
 
-All client software such as libraries and adapter programs are still using old XML parser provided by libupnp whereas the server implementation has adopted the new XML parser from libxml2, they are organised and distributed as separate packages.
 
 ## 1.1 C oBIX Server
  
 C oBIX Server is a stand-alone application intended for storing building automation data from various sources. It is a core for automation systems, providing a unified Web services interface to control connected devices (security sensors, heating / ventilation systems, lights, switches, etc.). 
 
-Devices are connected to the server through oBIX adapters. These adapters are separate applications, which convert device-specific protocol into oBIX messages. The server provides the same oBIX interface for devices (device adapters) and UI management applications. 
+Devices are connected to the server through oBIX adaptors. These adaptors are separate applications, which convert device-specific protocol into oBIX messages. The server provides the same oBIX interface for devices (device adaptors) and UI management applications. 
 
 The main difference between this oBIX Server and other available implementations (such as oFMS http://www.stok.fi/eng/ofms/index.html or oX http://obix-server.sourceforge.net) is it is written in C and can be run on cheap low-resource platforms and more importantly, faster.
 
@@ -43,7 +42,7 @@ The list of things that are NOT yet supported:
  - SOAP binding.
 
 If a feature doesn’t appear in either of the lists above, it is probably not implemented. In addition to standard oBIX functionality, the server has the following additional features:
- - SignUp operation, accessible from the Lobby object. It allows clients (device adapters) to publish new data to the server
+ - SignUp operation, accessible from the Lobby object. It allows clients (device adaptors) to publish new data to the server
  - Device lobby, showing all devices registered to the server
  - Long polling mode for Watch objects. This mode allows clients to reduce the number of poll requests and at the same time, receive immediate updates from the server. Additional information about this feature can be found
   at http://c-obix-tools.googlecode.com/files/long_polling.pdf.
@@ -55,7 +54,6 @@ This project has been created for running on Linux platforms. It was tested on v
 Other Linux distributions for embedded devices were not tested but may possibly be used if all project dependencies are satisfied.
 
 The project has the following libraries or packages dependencies:
- - kernel-devel
  - fcgi-devel
  - libxml2-devel
  - glibc-devel
@@ -82,8 +80,9 @@ Below is a short description of the main files in the package:
 * src/
 
     * docs/ - Further documentation.
-    * libs/ - Source for oBIX library.
-    * server/ - Source for oBIX server.
+	* client/ - Source for oBIX client library
+    * libs/ - Source for oBIX common library shared by both server and client sides.
+    * server/ - Source for oBIX Server.
 	* tools/ - Some useful simple programs to aid in development or testing.
 
 * res/
@@ -148,17 +147,6 @@ To build the obix-server:
 	$ VERBOSE=1 make
 
 This creates an "out-of-source" build with all output, including the obix-fcgi binary and libobix libraries, found in the build directory.
-
-**Building on 2.x kernel**
-
-The 2.x kernel requires an additional kernel headers directory in FindKernelHeaders.cmake.
-Uncomment the KERNELHEADERS_DIR line in src/server/cmake/FindKernelHeaders.cmake and src/libs/cmake/FindKernelHeaders.cmake
-
-```
-# Only needed on 2.x kernels
-#  ${KERNELHEADERS_DIR}/arch/x86/include/asm
-```
-
 
 **Debug build**
 
@@ -233,7 +221,7 @@ This will bring in the dependencies of lighttpd and lighttpd-fastcgi.
 
 To configure a standalone instance:
 
-1. Edit /etc/obix/res/server/server_config.xml file with an XML editor. Update server-address and any other fields if required (default is localhost).
+1. Edit /etc/obix/res/server/server_config.xml file with an XML editor. Update settings if required.
 
 2. The default /etc/obix/res/obix-fcgi.conf links /usr/bin/obix-fcgi to /etc/obix/res/server. Update the paths if you wish to deploy to different locations.
 
@@ -273,7 +261,9 @@ Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders
 
 * On Fedora oBIX Server logs could be observed by journalctl:
 
-		$ journalctl -f /usr/bin/obix-fcgi
+		$ journalctl -f /usr/bin/obix-fcgi -o cat
+
+The "-o cat" option helps highlight the actual message by suppressing meta data such as a timestamp.
 
 * Once lighttpd is started, use the following command to check the status of the oBIX Server:
 

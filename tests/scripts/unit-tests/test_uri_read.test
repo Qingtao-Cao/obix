@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+##############################################################################
+# Copyright (c) 2013-2014 Tyler Watson <tyler.watson@nextdc.com>
+#
+# This file is part of oBIX.
+#
+# oBIX is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# oBIX is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+#
+##############################################################################
+
+# Unit test: test_uri_read.test 
+#
+# Signs up a test device with a unique href, and then tests the ability to read
+# from that device's subnode.
+#
+# Steps:
+#
+# 1) Sign up a test device by posting a sample device contract to /obix/signUp
+# 2) Redownload the device at the same URI
+# 3) Invoke another oBIX read to the testInt subnode on the signed up device.
+#
+# At each step, output is validated.
+
+source "$1/obix-client-functions.sh"
+
+test_int_value=$([ 1 + $[ RANDOM % 999999999 ]])
+now=$(date +%s%N)
+device_href="/obix/deviceRoot/TestDevice-$now"
+
+# The same device contract
+read -r -d '' device_contract <<-EOF
+<obj name="testDevice-$now" href="$device_href" is="obix:test-device">
+	<bool href="testBool" val="false" writable="true"/>
+	<int href="testInt" val="$test_int_value" writable="true"/>
+	<int href="testReadOnly" val="0"/>
+</obj>
+EOF
+
+#invoke signup
+OBIX_DOC=$(curl -XPOST --data "$device_contract" "$OBIX_TEST_URL/signUp")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+# Retrieve test device once again
+OBIX_DOC=$(curl "$OBIX_TEST_URL/deviceRoot/TestDevice-$now")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+device_root_count=$($1/xpath 'count(/obj[@is="obix:test-device"])' -<<< "$OBIX_DOC")
+[ "$device_root_count" -ne 1 ] && exit 1
+
+#invoke an obix write to the sample device
+OBIX_DOC=$(curl "$OBIX_TEST_URL/deviceRoot/TestDevice-$now/testInt")
+
+obix_valid_root "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+obix_is_err_contract "$OBIX_DOC"; [ "$?" -gt 0 ] && exit 1
+
+int_value=$($1/xpath '/int/@val' -<<< "$OBIX_DOC")
+[ "$int_value" -ne "$test_int_value" ] && exit 1
+
+exit 0

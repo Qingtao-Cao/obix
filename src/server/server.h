@@ -24,7 +24,7 @@
 #define OBIX_SERVER_H_
 
 #include <libxml/tree.h>
-#include "libxml_config.h"
+#include "xml_config.h"
 #include "obix_request.h"
 
 /**
@@ -32,12 +32,12 @@
  * @param settings Server's settings loaded from #server_config.xml.
  * @return @a 0 on success; @a -1 on failure.
  */
-int obix_server_init(xml_config_t *context);
+int obix_server_init(const xml_config_t *);
 
 /**
  * Stops request processing engine and releases all allocated memory.
  */
-void obix_server_shutdown();
+void obix_server_exit(void);
 
 
 /**

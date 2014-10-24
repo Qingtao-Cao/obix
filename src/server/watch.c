@@ -34,7 +34,6 @@
  *	  (by manipulating extensible bitmap nodes)
  */
 
-#include <assert.h>
 #include <string.h>
 #include <pthread.h>
 #include <time.h>			/* clock_gettime */
@@ -43,7 +42,6 @@
 #include <libxml/xpath.h>
 #include "obix_request.h"
 #include "xml_storage.h"
-#include "libxml_config.h"
 #include "log_utils.h"
 #include "obix_utils.h"
 #include "server.h"
@@ -271,7 +269,8 @@ enum {
 	ERR_NO_WATCHOUT,
 	ERR_NO_NULLOBJ,
 	ERR_NO_POLLTASK,
-	ERR_NO_MEM
+	ERR_NO_MEM,
+	ERR_NO_INPUT
 };
 
 static err_msg_t watch_err_msg[] = {
@@ -294,6 +293,10 @@ static err_msg_t watch_err_msg[] = {
 	[ERR_NO_MEM] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
 		.msgs = "Failed to allocate a watch object"
+	},
+	[ERR_NO_INPUT] = {
+		.type = OBIX_CONTRACT_ERR_SERVER,
+		.msgs = "Illegal input from client"
 	}
 };
 
@@ -367,7 +370,7 @@ static const char *XP_WATCH_DESCENDANT_OR_SELF =
  * the search should start from the root of this document
  */
 static const char *XP_WATCH_IN =
-"/obj[@is='obix:WatchIn']/list[@names='hrefs']/*";
+"/obj[@is='obix:WatchIn']/list[@name='hrefs']/*";
 
 /*
  * The lease node of the current watch object, as in
@@ -394,13 +397,13 @@ static const char *XP_WATCH_PWI_MIN =
 static const char *XP_WATCH_PWI_MAX =
 "./obj[@name='pollWaitInterval']/reltime[@name='max']";
 
-/*
- * Predict to match the val attribute from the poll-thread-count setting,
- * which is the number of server threads spawned for non-polling tasks
- */
-static const char *XP_POLL_THREAD_COUNT = "/config/poll-thread-count/@val";
-
 static void *poll_thread_task(void *arg);
+
+/*
+ * The default number of polling thread created, fallen
+ * back on if not specified in configuration file
+ */
+static const int DEF_THREAD_COUNT = 10;
 
 /**
  * Find a watch item that monitors the object with the specified
@@ -524,8 +527,6 @@ static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent, WATCH_EVT event)
 	watch_t *watch;
 	watch_item_t *item;
 	long id;
-
-	assert(meta && parent);
 
 	/* Sanity check of a watch meta */
 	if (xmlStrcmp(meta->name, BAD_CAST OBIX_OBJ_META) != 0) {
@@ -676,8 +677,6 @@ static void delete_watch_item(xmlNode *node, void *arg1, void *arg2)
 	watch_item_t *item;
 	char *uri;
 
-	assert(node && watch);
-
 	if (!(uri = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_VAL))) {
 		log_error("The current sub-node of watchIn contract doesn't contain "
 				  "a valid val attribute");
@@ -702,8 +701,6 @@ static watch_item_t *create_watch_item(watch_t *watch, const char *uri)
 {
 	watch_item_t *item;
 	xmlNode *node;
-
-	assert(watch && uri);
 
 	if ((item = get_watch_item_or_parent(watch, uri)) != NULL) {
 		log_debug("watch%d already monitoring %s or its parent",
@@ -783,8 +780,6 @@ static int fill_watch_out(xmlNode *watch_out, watch_item_t *item)
 {
 	xmlNode *node;
 
-	assert(watch_out && item);
-
 	if (!(node = xmldb_copy_node(item->node, XML_COPY_EXCLUDE_META))) {
 		log_error("Failed to copy node at %s into watchOut contract",
 				  item->uri);
@@ -863,7 +858,7 @@ static void get_time_helper(xmlNode *node, void *arg1, void *arg2)
 		return;
 	}
 
-	error = obix_reltime_parseToLong((const char *)val, time);
+	error = obix_reltime_to_long((const char *)val, time);
 	xmlFree(val);
 
 	if (error != 0) {
@@ -955,7 +950,7 @@ static void delete_watch_helper(watch_t *watch)
  * If there is any thread that has started handling Watch.Delete
  * request, have THAT thread delete the watch on behalf of us.
  * Return immediately so that THAT thread could return from
- * ptask_cancel(..., TRUE) as soon as possible. BTW, this watch
+ * ptask_cancel(..., wait = 1) as soon as possible. BTW, this watch
  * have been dequeued by THAT thread already.
  *
  * Note,
@@ -1081,8 +1076,8 @@ static int get_watch_id(const char *uri)
 {
 	int len = strlen(WATCH_URI_PREFIX);
 	char *start;
-
-	assert(uri);
+	int ret;
+	long val;
 
 	if (strncmp(uri, WATCH_URI_PREFIX, len) != 0) {
 		return -1;
@@ -1094,7 +1089,9 @@ static int get_watch_id(const char *uri)
 	}
 	start += strlen(WATCH_ID_PREFIX);
 
-	return str_to_long(start);
+	ret = str_to_long(start, &val);
+
+	return (ret == 0) ? val : ret;
 }
 
 /**
@@ -1157,7 +1154,9 @@ static watch_t *dequeue_watch(const char *uri)
 	watch_t *watch, *n;
 	long id;
 
-	assert(uri);
+	if (!uri) {
+		return NULL;
+	}
 
 	if ((id = get_watch_id(uri)) < 0) {
         log_error("Failed to get watch ID from %s", uri);
@@ -1318,7 +1317,9 @@ static poll_backlog_t *poll_backlog_init(int num)
 	poll_backlog_t *bl;
 	int i;
 
-	assert(num > 0);
+	if (num <= 0) {
+		num = DEF_THREAD_COUNT;
+	}
 
 	if (!(bl = (poll_backlog_t *)malloc(sizeof(poll_backlog_t)))) {
 		log_error("Failed to allocate poll_backlog_t");
@@ -1379,7 +1380,7 @@ static void watch_set_dispose(watch_set_t *set)
 		 */
 		pthread_mutex_unlock(&set->mutex);
 		if (watch->lease_tid) {
-			ptask_cancel(watchset->lease_thread, watch->lease_tid, TRUE);
+			ptask_cancel(watchset->lease_thread, watch->lease_tid, 1);
 		}
 		delete_watch_helper(watch);
 		pthread_mutex_lock(&set->mutex);
@@ -1387,7 +1388,7 @@ static void watch_set_dispose(watch_set_t *set)
 	pthread_mutex_unlock(&set->mutex);
 
 	if (set->lease_thread) {
-		ptask_dispose(set->lease_thread, TRUE);
+		ptask_dispose(set->lease_thread, 1);
 	}
 
 	pthread_mutex_destroy(&set->mutex);
@@ -1460,19 +1461,15 @@ void obix_watch_dispose(void)
  *
  * Return 0 on success, < 0 on failures
  */
-int obix_watch_init(xml_config_t *config)
+int obix_watch_init(const int thread_count)
 {
-	int num;
-
 	if (watchset || backlog) {
 		log_error("The watch subsystem may have been initialized already");
 		return 0;
 	}
 
-	num = xml_parse_threads(config, XP_POLL_THREAD_COUNT);
-
 	if (!(watchset = watch_set_init()) ||
-		!(backlog = poll_backlog_init(num))) {
+		!(backlog = poll_backlog_init(thread_count))) {
 		log_error("Failed to initialized watch subsystem");
 		obix_watch_dispose();
 		return -1;
@@ -1515,10 +1512,11 @@ xmlNode *handlerWatchServiceMake(obix_request_t *request, xmlNode *input)
 	return node;
 
 failed:
-	log_error("%s", watch_err_msg[ret].msgs);
+	log_error("%s : %s", request->request_decoded_uri, watch_err_msg[ret].msgs);
 
-	return obix_server_generate_error(request->request_decoded_uri, watch_err_msg[ret].type,
-				"WatchService", watch_err_msg[ret].msgs);
+	return obix_server_generate_error(request->request_decoded_uri,
+									  watch_err_msg[ret].type,
+									  "WatchService", watch_err_msg[ret].msgs);
 }
 
 /**
@@ -1535,7 +1533,7 @@ xmlNode *handlerWatchDelete(obix_request_t *request, xmlNode *input)
 	if ((watch = dequeue_watch(request->request_decoded_uri)) != NULL) {
 		/* Cancel relevant lease task */
 		if (watch->lease_tid) {
-			ptask_cancel(watchset->lease_thread, watch->lease_tid, TRUE);
+			ptask_cancel(watchset->lease_thread, watch->lease_tid, 1);
 		}
 
 		delete_watch_helper(watch);
@@ -1553,7 +1551,10 @@ static xmlNode *watch_item_helper(obix_request_t *request,
 	xmlNode *watch_out;
 	int ret;
 
-	assert(request && uri && input);
+	if (!request || !uri || !input) {
+		ret = ERR_NO_INPUT;
+		goto out;
+	}
 
 	if (!(watch = get_watch(uri))) {
 		ret = ERR_NO_WATCHOBJ;
@@ -1589,11 +1590,11 @@ failed:
 	put_watch(watch);
 
 out:
-	log_error("%s", watch_err_msg[ret].msgs);
+	log_error("%s : %s", uri, watch_err_msg[ret].msgs);
 
 	return obix_server_generate_error(uri, watch_err_msg[ret].type,
-				((add == 1) ? "Watch.add" : "Watch.remove"),
-				watch_err_msg[ret].msgs);
+									((add == 1) ? "Watch.add" : "Watch.remove"),
+									watch_err_msg[ret].msgs);
 }
 
 xmlNode *handlerWatchAdd(obix_request_t *request, xmlNode *input)
@@ -1615,8 +1616,6 @@ static int create_poll_task(watch_t *watch, long expiry,
 							obix_request_t *request, xmlNode *watch_out)
 {
 	poll_task_t *task, *pos;
-
-	assert(expiry > 0);
 
 	if (!(task = (poll_task_t *)malloc(sizeof(poll_task_t)))) {
 		log_error("Failed to create a poll_task_t");
@@ -1718,8 +1717,9 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 		}
 
 		if (item->count > 1) {
-			log_warning("Polling threads not running fast enough, "
-						"current changes counter %d", item->count);
+			log_warning("No pending pollChanges requests to return changes "
+						"earlier, or polling threads not fast enough.");
+			log_warning("Changes counter %d", item->count);
 		}
 
 		if (include_all == 1 ||	watch->tasks_count <= 1) {
@@ -1748,7 +1748,10 @@ static xmlNode *watch_poll_helper(obix_request_t *request, const char *uri,
 	long wait_min, wait_max, delay = 0;
 	int ret;
 
-	assert(request && uri);
+	if (!request || !uri) {
+		ret = ERR_NO_INPUT;
+		goto out;
+	}
 
 	if (!(watch = get_watch(uri))) {
 		ret = ERR_NO_WATCHOBJ;
@@ -1807,11 +1810,11 @@ failed:
 	put_watch(watch);
 
 out:
-	log_error("%s", watch_err_msg[ret].msgs);
+	log_error("%s : %s", uri, watch_err_msg[ret].msgs);
 
 	return obix_server_generate_error(uri, watch_err_msg[ret].type,
-				((include_all == 1) ? "Watch.refresh" : "Watch.poll"),
-				watch_err_msg[ret].msgs);
+						((include_all == 1) ? "Watch.refresh" : "Watch.poll"),
+						watch_err_msg[ret].msgs);
 }
 
 xmlNode *handlerWatchPollChanges(obix_request_t *request, xmlNode *input)

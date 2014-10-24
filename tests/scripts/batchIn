@@ -1,13 +1,30 @@
 curl -XPOST --data '
 <list is="obix:BatchIn">
-	<uri is="obix:Write" val="/obix/deviceRoot/TestDevice/bool">
-		<bool val="false"/>
-	</uri>
-	<uri is="obix:Write" val="/obix/deviceRoot/TestDevice/bool">
+	<uri is="obix:Read" val="/obix/deviceRoot/example/"/>
+	<uri is="obix:Write" val="/obix/deviceRoot/example/parent/reset">
 		<bool val="true"/>
 	</uri>
-	<uri is="obix:Write" val="/obix/deviceRoot/TestDevice/bool">
-		<bool val="bool"/>
+	<uri is="obix:Invoke" val="/obix/watchService/make"/>
+
+
+	<!--
+		Wrong formats for test purpose
+	-->
+
+	<uri is="obix:read" val="/obix/deviceRoot/example/"/>
+
+	<uri is="obix:Write" val="/obix/deviceRoot/example/parent/reset">
+		<bool val="illegal"/>
+	</uri>
+
+	<uri is="obix:Write" val="/obix/deviceRoot/notexist/reset">
+		<bool val="true"/>
+	</uri>
+
+	<uri val="/obix/deviceRoot/example/"/>
+
+	<uri is="obix:Write">
+		<bool val="true"/>
 	</uri>
 </list>
 ' http://localhost:4242/obix/batch

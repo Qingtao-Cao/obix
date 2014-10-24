@@ -24,7 +24,6 @@
 #include <string.h>
 #include <syslog.h>
 #include "log_utils.h"
-#include "bool.h"
 
 /** @name Logging to @a stdout
  * @{ */
@@ -51,7 +50,7 @@ log_function log_errorHandler = &log_errorPrintf;
 static int _log_level = LOG_LEVEL_DEBUG;
 
 /** Logging mode. */
-static bool _use_syslog = false;
+static int _use_syslog = 0;
 
 /** Logs debug message using printf. */
 static void log_debugPrintf(char* fmt, ...)
@@ -165,28 +164,30 @@ static void setSyslog()
 
 void log_usePrintf()
 {
-    _use_syslog = false;
-    // close syslog connection if it was opened
-    closelog();
-    setPrintf();
+	_use_syslog = 0;
+
+	/* Close syslog if opened */
+	closelog();
+
+	setPrintf();
 }
 
 void log_useSyslog(int facility)
 {
-    _use_syslog = true;
-    openlog(NULL, LOG_NDELAY, facility);
-    setSyslog();
+	_use_syslog = 1;
+
+	openlog(NULL, LOG_NDELAY, facility);
+
+	setSyslog();
 }
 
 void log_setLevel(LOG_LEVEL level)
 {
-    _log_level = level;
-    if (_use_syslog)
-    {
-        setSyslog();
-    }
-    else
-    {
-        setPrintf();
-    }
+	_log_level = level;
+
+	if (_use_syslog == 1) {
+		setSyslog();
+	} else {
+		setPrintf();
+	}
 }

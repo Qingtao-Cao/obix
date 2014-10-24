@@ -1,0 +1,14 @@
+#!/usr/bin/perl
+# Script to emulate the behaviour of xmllint --xpath on RHEL6
+# Paul Gampe <paul.gampe@onedc.com>, 2014
+
+use strict;
+use warnings;
+use XML::LibXML;
+
+my $parser = XML::LibXML->new();
+my $document = $parser->parse_file($ARGV[1]);
+my $count = $document->findvalue($ARGV[0]);
+print "$count\n";
+return 1 if $count == 0;
+exit 0;
