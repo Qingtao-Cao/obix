@@ -2,7 +2,7 @@
 
 Name:           obix
 Version:        1.2
-Release:        0%{?dist}
+Release:        1%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
@@ -127,7 +127,7 @@ exit 0
 %dir %{_sysconfdir}/obix
 
 # lighttpd server needs to write data to this dir
-%attr(0755,obix,lighttpd) %dir %{_sharedstatedir}/obix/histories
+%attr(0775,obix,lighttpd) %dir %{_sharedstatedir}/obix/histories
 
 %files devel
 %{_includedir}/obix
@@ -159,7 +159,10 @@ exit 0
 
 %changelog
 
-* Fri Oct 24 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0
+* Fri Oct 24 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-1
+- The 1.2 build
+
+* Fri Oct 24 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.4
 - Initial 1.2 build
 
 * Thu Oct 23 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-0.3.20141023git43807d3
