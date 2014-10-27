@@ -1,30 +1,31 @@
-curl -XPOST --data '
-<list is="obix:BatchIn">
-	<uri is="obix:Read" val="/obix/deviceRoot/example/"/>
-	<uri is="obix:Write" val="/obix/deviceRoot/example/parent/reset">
-		<bool val="true"/>
-	</uri>
-	<uri is="obix:Invoke" val="/obix/watchService/make"/>
+# !/bin/bash -
 
+##############################################################################
+# Copyright (c) 2013-2014 NEXTDC LTD.
+#
+# This file is part of oBIX.
+#
+# oBIX is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# oBIX is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with oBIX. If not, see <http://www.gnu.org/licenses/>.
+#
+##############################################################################
 
-	<!--
-		Wrong formats for test purpose
-	-->
+# NOTE: the watchDeleteAll script should be invoked before running this script
+# to ensure that no watch objects exist so that the ID of the created watch
+# object will be 0.
+#
+# NOTE: xmllint could be used to sanity check the soundness of the batch_in.xml
+# document if it contains a lot of normal requests. If this input document is
+# malformed, the oBIX server may fail to process all requests in it.
 
-	<uri is="obix:read" val="/obix/deviceRoot/example/"/>
-
-	<uri is="obix:Write" val="/obix/deviceRoot/example/parent/reset">
-		<bool val="illegal"/>
-	</uri>
-
-	<uri is="obix:Write" val="/obix/deviceRoot/notexist/reset">
-		<bool val="true"/>
-	</uri>
-
-	<uri val="/obix/deviceRoot/example/"/>
-
-	<uri is="obix:Write">
-		<bool val="true"/>
-	</uri>
-</list>
-' http://localhost:4242/obix/batch
+curl -XPOST --data '@batch_in.xml' -H "Expect: " http://localhost:4242/obix/batch

@@ -143,8 +143,8 @@ void obix_server_remove_meta(xmlNode *obixObject);
  */
 void obix_server_reply_object(obix_request_t *request, xmlNode *obixObject);
 
-xmlNode *handlerError(obix_request_t *request, xmlNode *input);
-xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input);
+xmlNode *handlerError(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerSignUp(obix_request_t *request, const char *overrideUri, xmlNode *input);
 
 /**
  * Descriptor of an error message and relevant error type

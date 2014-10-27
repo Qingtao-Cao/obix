@@ -49,16 +49,6 @@ const char *OBIX_SYS_ABS_STUB = "/sys/hist-abstract-stub/";
 const char *OBIX_SYS_AOUT_STUB = "/sys/hist-aout-stub/";
 
 /*
- * Lobby to accommodate reference nodes for all signed up devices
- */
-const char *OBIX_DEVICE_LOBBY_URI = "/obix/devices/";
-
-/*
- * Lobby to accommodate all history facilities
- */
-const char *OBIX_HISTORY_LOBBY_URI = "/obix/historyService/histories/";
-
-/*
  * All permanent XML setting files that should be loaded during
  * oBIX server starts-up, which are all at <res>/server/ folder
  * with particular prefix and suffix

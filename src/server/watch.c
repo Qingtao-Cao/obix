@@ -270,7 +270,7 @@ enum {
 	ERR_NO_NULLOBJ,
 	ERR_NO_POLLTASK,
 	ERR_NO_MEM,
-	ERR_NO_INPUT
+	ERR_BAD_INPUT
 };
 
 static err_msg_t watch_err_msg[] = {
@@ -294,9 +294,9 @@ static err_msg_t watch_err_msg[] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
 		.msgs = "Failed to allocate a watch object"
 	},
-	[ERR_NO_INPUT] = {
+	[ERR_BAD_INPUT] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Illegal input from client"
+		.msgs = "Invalid input from client"
 	}
 };
 
@@ -308,8 +308,10 @@ static err_msg_t watch_err_msg[] = {
 
 /* Template of the watch object URI */
 static const char *WATCH_URI_TEMPLATE = "/obix/watchService/%d/watch%d/";
-static const char *WATCH_URI_PREFIX = "/obix/watchService/";
 static const char *WATCH_ID_PREFIX = "watch";
+
+/* The value of the name attribute of the root node of the watchIn contract */
+static const char *WATCH_IN_HREFS = "hrefs";
 
 /*
  * The number of watch objects within one parent folder, used to
@@ -358,19 +360,6 @@ static const char *XP_WATCH_ANCESTOR_OR_SELF =
  */
 static const char *XP_WATCH_DESCENDANT_OR_SELF =
 "./descendant-or-self::*[child::meta[@watch_id]]";
-
-/*
- * Any children contained in this hierarchy:
- *
- *	<obj is="obix:WatchIn">
- *		<list names="hrefs">
- *
- * Note,
- * 1. Since the client will provide a WatchIn document,
- * the search should start from the root of this document
- */
-static const char *XP_WATCH_IN =
-"/obj[@is='obix:WatchIn']/list[@name='hrefs']/*";
 
 /*
  * The lease node of the current watch object, as in
@@ -671,9 +660,8 @@ static void __delete_watch_item(watch_item_t *item)
 /**
  * Delete the specified watch item from the watch object
  */
-static void delete_watch_item(xmlNode *node, void *arg1, void *arg2)
+static void delete_watch_item(xmlNode *node, watch_t *watch)
 {
-	watch_t *watch = (watch_t *)arg1;	/* arg2 is ignored */
 	watch_item_t *item;
 	char *uri;
 
@@ -821,10 +809,9 @@ failed:
  * also fill in the watchOut contract with the content of the monitored
  * object.
  */
-static void create_watch_item_wrapper(xmlNode *node, void *arg1, void *arg2)
+static void create_watch_item_wrapper(xmlNode *node, watch_t *watch,
+									  xmlNode *watch_out)
 {
-	watch_t *watch = (watch_t *)arg1;
-	xmlNode *watch_out = (xmlNode *)arg2;
 	watch_item_t *item;
 	xmlChar *uri;
 
@@ -1074,15 +1061,14 @@ static void reset_lease_time(watch_t *watch)
  */
 static int get_watch_id(const char *uri)
 {
-	int len = strlen(WATCH_URI_PREFIX);
 	char *start;
 	int ret;
 	long val;
 
-	if (strncmp(uri, WATCH_URI_PREFIX, len) != 0) {
+	if (strncmp(uri, OBIX_WATCH_SERVICE, OBIX_WATCH_SERVICE_LEN) != 0) {
 		return -1;
 	}
-	uri += len;
+	uri += OBIX_WATCH_SERVICE_LEN;
 
 	if (!(start = strstr(uri, WATCH_ID_PREFIX))) {
 		return -1;
@@ -1480,11 +1466,15 @@ int obix_watch_init(const int thread_count)
 	return 0;
 }
 
-xmlNode *handlerWatchServiceMake(obix_request_t *request, xmlNode *input)
+xmlNode *handlerWatchServiceMake(obix_request_t *request,
+								 const char *overrideUri, xmlNode *input)
 {
 	xmlNode *node;
 	watch_t *watch;
 	int ret;
+	const char *uri;
+
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
 	if(!(watch = create_watch())) {
 		ret = ERR_NO_MEM;
@@ -1512,10 +1502,9 @@ xmlNode *handlerWatchServiceMake(obix_request_t *request, xmlNode *input)
 	return node;
 
 failed:
-	log_error("%s : %s", request->request_decoded_uri, watch_err_msg[ret].msgs);
+	log_error("%s : %s", uri, watch_err_msg[ret].msgs);
 
-	return obix_server_generate_error(request->request_decoded_uri,
-									  watch_err_msg[ret].type,
+	return obix_server_generate_error(uri, watch_err_msg[ret].type,
 									  "WatchService", watch_err_msg[ret].msgs);
 }
 
@@ -1526,11 +1515,15 @@ failed:
  * 1. Return a Nil object unconditionally, even if the watch
  * object may have been deleted by other deleting thread
  */
-xmlNode *handlerWatchDelete(obix_request_t *request, xmlNode *input)
+xmlNode *handlerWatchDelete(obix_request_t *request, const char *overrideUri,
+							xmlNode *input)
 {
 	watch_t *watch;
+	const char *uri;
 
-	if ((watch = dequeue_watch(request->request_decoded_uri)) != NULL) {
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
+
+	if ((watch = dequeue_watch(uri)) != NULL) {
 		/* Cancel relevant lease task */
 		if (watch->lease_tid) {
 			ptask_cancel(watchset->lease_thread, watch->lease_tid, 1);
@@ -1543,16 +1536,24 @@ xmlNode *handlerWatchDelete(obix_request_t *request, xmlNode *input)
 }
 
 static xmlNode *watch_item_helper(obix_request_t *request,
-								  const char *uri,
+								  const char *overrideUri,
 								  xmlNode *input,
 								  int add)		/* 1 for Watch.add */
 {
 	watch_t *watch;
-	xmlNode *watch_out;
+	xmlNode *watch_out, *list, *item;
+	xmlChar *is_attr = NULL;
+	const char *uri;
 	int ret;
 
-	if (!request || !uri || !input) {
-		ret = ERR_NO_INPUT;
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
+
+	if (!request || !input ||
+		!(is_attr = xmlGetProp(input, BAD_CAST OBIX_ATTR_IS)) ||
+		xmlStrcmp(is_attr, BAD_CAST OBIX_CONTRACT_WATCH_IN) != 0 ||
+		!(list = xml_find_child(input, OBIX_OBJ_LIST, OBIX_ATTR_NAME,
+								WATCH_IN_HREFS))) {
+		ret = ERR_BAD_INPUT;
 		goto out;
 	}
 
@@ -1575,18 +1576,32 @@ static xmlNode *watch_item_helper(obix_request_t *request,
 		}
 	}
 
-	if (add == 1) {
-		xml_xpath_for_each_item(input, XP_WATCH_IN,
-								create_watch_item_wrapper, watch, watch_out);
-	} else {
-		xml_xpath_for_each_item(input, XP_WATCH_IN,
-								delete_watch_item, watch, NULL);
+	for (item = list->children; item; item = item->next) {
+		if (item->type != XML_ELEMENT_NODE) {
+			continue;
+		}
+
+		if (xmlStrcmp(item->name, BAD_CAST OBIX_OBJ_URI) != 0) {
+			continue;
+		}
+
+		if (add == 1) {
+			create_watch_item_wrapper(item, watch, watch_out);
+		} else {
+			delete_watch_item(item, watch);
+		}
 	}
 
 	put_watch(watch);
+
+	xmlFree(is_attr);
 	return watch_out;
 
 failed:
+	if (is_attr) {
+		xmlFree(is_attr);
+	}
+
 	put_watch(watch);
 
 out:
@@ -1597,14 +1612,16 @@ out:
 									watch_err_msg[ret].msgs);
 }
 
-xmlNode *handlerWatchAdd(obix_request_t *request, xmlNode *input)
+xmlNode *handlerWatchAdd(obix_request_t *request, const char *overrideUri,
+						 xmlNode *input)
 {
-	return watch_item_helper(request, request->request_decoded_uri, input, 1);
+	return watch_item_helper(request, overrideUri, input, 1);
 }
 
-xmlNode *handlerWatchRemove(obix_request_t *request, xmlNode *input)
+xmlNode *handlerWatchRemove(obix_request_t *request, const char *overrideUri,
+							xmlNode *input)
 {
-	return watch_item_helper(request, request->request_decoded_uri, input, 0);
+	return watch_item_helper(request, overrideUri, input, 0);
 }
 
 /**
@@ -1740,16 +1757,20 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 	}
 }
 
-static xmlNode *watch_poll_helper(obix_request_t *request, const char *uri,
+static xmlNode *watch_poll_helper(obix_request_t *request,
+								  const char *overrideUri,
 								  int include_all)	/* 1 for pollRefresh */
 {
 	watch_t *watch;
 	xmlNode *watch_out;
 	long wait_min, wait_max, delay = 0;
+	const char *uri;
 	int ret;
 
-	if (!request || !uri) {
-		ret = ERR_NO_INPUT;
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
+
+	if (!request) {
+		ret = ERR_BAD_INPUT;
 		goto out;
 	}
 
@@ -1817,18 +1838,20 @@ out:
 						watch_err_msg[ret].msgs);
 }
 
-xmlNode *handlerWatchPollChanges(obix_request_t *request, xmlNode *input)
+xmlNode *handlerWatchPollChanges(obix_request_t *request,
+								 const char *overrideUri, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(request, request->request_decoded_uri, 0);
+	return watch_poll_helper(request, overrideUri, 0);
 }
 
-xmlNode *handlerWatchPollRefresh(obix_request_t *request, xmlNode *input)
+xmlNode *handlerWatchPollRefresh(obix_request_t *request,
+								 const char *overrideUri, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(request, request->request_decoded_uri, 1);
+	return watch_poll_helper(request, overrideUri, 1);
 }
 
 /**

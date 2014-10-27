@@ -943,7 +943,7 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 		goto failed;
 	}
 
-	ret = link_pathname(&dev->devhref, OBIX_HISTORY_LOBBY_URI, href,
+	ret = link_pathname(&dev->devhref, OBIX_HISTORY_LOBBY, href,
 						NULL, NULL);
 	free(href);
 	if (ret < 0) {
@@ -1970,7 +1970,7 @@ static int get_dev_id_helper(const char *token, void *arg1, void *arg2)
 static int get_dev_id(const char *uri, const char *op_name, char **dev_id)
 {
 	char *str, *end;
-	int len = strlen(OBIX_HISTORY_LOBBY_URI);
+	int len = strlen(OBIX_HISTORY_LOBBY);
 	int ret;
 
 	*dev_id = NULL;
@@ -1979,7 +1979,7 @@ static int get_dev_id(const char *uri, const char *op_name, char **dev_id)
 	 * Skip history lobby uri if present, which is the case
 	 * for the append and query handlers
 	 */
-	if (strncmp(uri, OBIX_HISTORY_LOBBY_URI, len) == 0) {
+	if (strncmp(uri, OBIX_HISTORY_LOBBY, len) == 0) {
 		uri += len;
 	}
 
@@ -2004,16 +2004,20 @@ static int get_dev_id(const char *uri, const char *op_name, char **dev_id)
 	return (ret < 0) ? ERR_NO_MEM : 0;
 }
 
-static xmlNode *handlerHistoryHelper(obix_request_t *request, xmlNode *input,
+static xmlNode *handlerHistoryHelper(obix_request_t *request,
+									 const char *overrideUri,
+									 xmlNode *input,
 									 const char *op_name)
 {
 	obix_hist_dev_t *dev;
 	char *dev_id;
+	const char *uri;
 	int ret = ERR_NO_MEM;
 
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
+
 	/* Find the device to operate on */
-	if ((ret = get_dev_id(request->request_decoded_uri, op_name,
-						  &dev_id)) != 0) {
+	if ((ret = get_dev_id(uri, op_name, &dev_id)) != 0) {
 		ret = ERR_NO_DEV_ID;
 		goto failed;
 	}
@@ -2049,28 +2053,33 @@ static xmlNode *handlerHistoryHelper(obix_request_t *request, xmlNode *input,
 	return NULL;	/* Success */
 
 failed:
-	log_error("%s : %s", request->request_decoded_uri, hist_err_msg[ret].msgs);
+	log_error("%s : %s", uri, hist_err_msg[ret].msgs);
 
-	return obix_server_generate_error(request->request_decoded_uri,
-									  hist_err_msg[ret].type,
+	return obix_server_generate_error(uri, hist_err_msg[ret].type,
 									  op_name, hist_err_msg[ret].msgs);
 }
 
-xmlNode *handlerHistoryAppend(obix_request_t *request, xmlNode *input)
+xmlNode *handlerHistoryAppend(obix_request_t *request, const char *overrideUri,
+							  xmlNode *input)
 {
-	return handlerHistoryHelper(request, input, HIST_OP_APPEND);
+	return handlerHistoryHelper(request, overrideUri, input, HIST_OP_APPEND);
 }
 
-xmlNode *handlerHistoryQuery(obix_request_t *request, xmlNode *input)
+xmlNode *handlerHistoryQuery(obix_request_t *request, const char *overrideUri,
+							 xmlNode *input)
 {
-	return handlerHistoryHelper(request, input, HIST_OP_QUERY);
+	return handlerHistoryHelper(request, overrideUri, input, HIST_OP_QUERY);
 }
 
-xmlNode *handlerHistoryGet(obix_request_t *request, xmlNode *input)
+xmlNode *handlerHistoryGet(obix_request_t *request, const char *overrideUri,
+						   xmlNode *input)
 {
 	obix_hist_dev_t *dev;
 	char *href, *dev_id, *data;
-	int len = strlen(OBIX_HISTORY_LOBBY_URI), ret = ERR_NO_MEM;
+	const char *uri;
+	int len = strlen(OBIX_HISTORY_LOBBY), ret = ERR_NO_MEM;
+
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
 	if (!(href = xml_get_child_val(input, OBIX_OBJ_STR, DEVICE_ID))) {
 		ret = ERR_NO_DEVID;
@@ -2136,9 +2145,8 @@ failed:
 	 */
 	obix_request_destroy_response_items(request);
 
-	log_error("%s : %s", request->request_decoded_uri, hist_err_msg[ret].msgs);
+	log_error("%s : %s", uri, hist_err_msg[ret].msgs);
 
-	return obix_server_generate_error(request->request_decoded_uri,
-									  hist_err_msg[ret].type,
+	return obix_server_generate_error(uri, hist_err_msg[ret].type,
 									  "History.Get", hist_err_msg[ret].msgs);
 }
