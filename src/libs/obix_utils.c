@@ -89,6 +89,9 @@ const int OBIX_RELTIME_ZERO_LEN = 4;
 const char *OBIX_DEVICE_ROOT = "/obix/deviceRoot/";
 const int OBIX_DEVICE_ROOT_LEN = 17;
 
+const char *OBIX_BATCH = "/obix/batch";
+const int OBIX_BATCH_LEN = 11;
+
 /*
  * Timestamps are in "yyyy-mm-ddThh:mm:ssZ" format which has
  * 20 bytes without the NULL terminator.

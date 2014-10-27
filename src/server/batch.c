@@ -30,7 +30,8 @@ enum {
 	ERR_NO_IS,
 	ERR_NO_MEM,
 	ERR_BAD_IS,
-	ERR_NO_INPUT
+	ERR_NO_INPUT,
+	ERR_RECURSIVE
 };
 
 static err_msg_t batch_err_msg[] = {
@@ -53,6 +54,10 @@ static err_msg_t batch_err_msg[] = {
 	[ERR_NO_INPUT] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
 		.msgs = "No required BatchIn document at all"
+	},
+	[ERR_RECURSIVE] = {
+		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
+		.msgs = "Recursive batch commands not supported"
 	}
 };
 
@@ -122,7 +127,12 @@ static void obix_batch_process_item(xmlNode *batchItem, xmlNode *batch_out,
 	} else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
 		itemVal = obix_server_write(request, itemHref, batchItem->children);
 	} else if (xmlStrcasecmp(itemContract, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
-		itemVal = obix_server_invoke(request, itemHref, batchItem->children);
+		/* Prohibit recursive batch invocation */
+		if (strncmp(itemHref, OBIX_BATCH, OBIX_BATCH_LEN) == 0) {
+			ret = ERR_RECURSIVE;
+		} else {
+			itemVal = obix_server_invoke(request, itemHref, batchItem->children);
+		}
 	} else {
 		ret = ERR_BAD_IS;
 	}

@@ -115,6 +115,9 @@ extern const int OBIX_RELTIME_ZERO_LEN;
 extern const char *OBIX_DEVICE_ROOT;
 extern const int OBIX_DEVICE_ROOT_LEN;
 
+extern const char *OBIX_BATCH;
+extern const int OBIX_BATCH_LEN;
+
 /*
  * Reserve 10 bits for a physical value
  */
