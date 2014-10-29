@@ -20,10 +20,13 @@
 #
 ##############################################################################
  
-rpm -qi lighttpd-fastcgi >/dev/null || echo "lighttpd-fastcgi rpm missing" ; exit 1
-rpm -qi lighttpd         >/dev/null || echo "lighttpd rpm missing" ; exit 1
-rpm -qi libxml2          >/dev/null || echo "libxml2  rpm missing" ; exit 1 
-rpm -qi curl             >/dev/null || echo "curl rpm missing" ; exit 1 
-rpm -qi perl-XML-LibXML  >/dev/null || echo "perl-XML-LibXML rpm missing" ; exit 1 
+DEPENDENCIES="lighttpd-fastcgi lighttpd libxml2 curl perl-XML-LibXML" 
+
+for i in ${DEPENDENCIES}; do 
+	if ! rpm -qi ${i} > /dev/null; then 
+		echo "${i} rpm missing" 
+		exit 1 
+	fi 
+done 
 
 exit 0
