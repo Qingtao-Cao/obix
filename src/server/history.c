@@ -2075,7 +2075,7 @@ xmlNode *handlerHistoryGet(obix_request_t *request, const char *overrideUri,
 						   xmlNode *input)
 {
 	obix_hist_dev_t *dev;
-	char *href, *dev_id, *data;
+	char *href, *dev_id = NULL, *data;
 	const char *uri;
 	int len = strlen(OBIX_HISTORY_LOBBY), ret = ERR_NO_MEM;
 
