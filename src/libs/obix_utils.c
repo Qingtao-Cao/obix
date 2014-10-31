@@ -428,9 +428,15 @@ int link_pathname(char **p, const char *root, const char *parent,
 			parent++;
 		}
 
-		fmt = (slash_followed(parent) == 0) ? "%s/" : "%s";
-
-		len += sprintf(buf+len, fmt, parent);
+		/*
+		 * If the parent parameter equals to "/", then it should be
+		 * skipped over directly instead of appending an extra,
+		 * unnecessary slash
+		 */
+		if (*parent != '\0') {
+			fmt = (slash_followed(parent) == 0) ? "%s/" : "%s";
+			len += sprintf(buf+len, fmt, parent);
+		}
 	}
 
 	if (file) {
