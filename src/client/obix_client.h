@@ -165,7 +165,12 @@ typedef struct {
 	/* Pointing to the host Device */
 	Device *dev;
 
-	/* The relative href of the watched upon sub node of the Device */
+	/*
+	 * The relative href of the watched upon sub node of the Device
+	 *
+	 * NOTE: if param equals to "/"，then the entire Device will be
+	 * monitored
+	 */
 	char *param;
 
 	/*
