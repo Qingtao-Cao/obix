@@ -168,8 +168,7 @@ typedef struct {
 	/*
 	 * The relative href of the watched upon sub node of the Device
 	 *
-	 * NOTE: if param equals to "/"，then the entire Device will be
-	 * monitored
+	 * NOTE: if param equals to "/" the entire Device is monitored
 	 */
 	char *param;
 

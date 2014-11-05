@@ -729,15 +729,17 @@ restart:
 				continue;
 			}
 
+			/*
+			 * Only invoke the current listener's callback if the current
+			 * child of watchOut relates with the monitored node
+			 *
+			 * Device.mutex should be released during the invocation of the
+			 * callback, however, this will invite race conditions which may
+			 * attempt to add or delete listeners from the queue. Therefore
+			 * always restart from the beginning of the queue and skip already
+			 * handled listeners once a callbck is returned
+			 */
 			if (xmlStrcmp(href, BAD_CAST hl->href) == 0) {
-				/*
-				 * Device.mutex should be released during the invocation
-				 * of the callback, however, this will invite race conditions
-				 * which may attempt to add or delete listeners from the queue
-				 *
-				 * Therefore once a callback is returned always restart from
-				 * the beginning of the queue and skip already handled items
-				 */
 				pthread_mutex_unlock(&dev->mutex);
 				if (l->cb && l->cb(hd->poll_handle, node, l->arg) != OBIX_SUCCESS) {
 					log_error("Callback failed for %s:%s on Connection %d",
