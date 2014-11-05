@@ -23,6 +23,11 @@
 		</obj>
 	</uri>
 
+	<!--
+		Err contract expected, watch.pollChanges request is not
+		supported through batch since relevant handler returns response
+		and releases related FCGI request independently
+	-->
 	<uri is="obix:Invoke" val="/obix/watchService/0/watch0/pollChanges"/>
 
 	<uri is="obix:Write" val="/obix/deviceRoot/example/time">
@@ -45,16 +50,27 @@
 
 	<uri is="obix:Read" val="/obix/deviceRoot/example"/>
 
+	<!--
+		Err contract expected when unsupported facility is accessed
+	-->
 	<uri is="obix:Invoke" val="/obix/signOff">
 		<obj href="/obix/deviceRoot/example"/>
 	</uri>
 
+	<!--
+		Err contract expected, history related requests are not
+		supported through batch since relevant handlers return responses
+		by themselves
+	-->
 	<uri is="obix:Invoke" val="/obix/historyService/get">
 		<obj>
 			<str name="dev_id" val="example"/>
 		</obj>
 	</uri>	
 
+	<!--
+		Err contract expected, no recursive batch requests are supported
+	-->
 	<uri is="obix:Invoke" val="/obix/batch">
 		<list is="obix:BatchIn">
 			<uri is="obix:Invoke" val="/obix/batch">
