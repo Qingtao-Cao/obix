@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  *
  * This file is part of oBIX.
  *
@@ -14,15 +14,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
 #ifndef _HASH_H
 #define _HASH_H
 
-#include <pthread.h>
 #include "list.h"
+#include "tsync.h"
 
 typedef struct hash_node {
 	const void *item;
@@ -32,7 +32,7 @@ typedef struct hash_node {
 typedef struct hash_head {
 	unsigned int count;
 	struct list_head head;
-	pthread_mutex_t mutex;
+	tsync_t sync;
 } hash_head_t;
 
 typedef unsigned int (*get_hash)(const unsigned char *str, const unsigned int prime);
@@ -51,7 +51,7 @@ typedef struct hash_table {
 
 hash_table_t *hash_init_table(unsigned int size, hash_ops_t *op);
 void hash_destroy_table(hash_table_t *tab);
-const void *hash_get(hash_table_t *tab, const unsigned char *key);
+const void *hash_search(hash_table_t *tab, const unsigned char *key);
 int hash_add(hash_table_t *tab, const unsigned char *key, void *item);
 void hash_del(hash_table_t *tab, const unsigned char *key);
 

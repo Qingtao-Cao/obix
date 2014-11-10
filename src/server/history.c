@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  *
  * This file is part of oBIX.
  *
@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -39,6 +39,7 @@
 #include "xml_storage.h"
 #include "obix_request.h"
 #include "server.h"
+#include "tsync.h"
 
 /*
  * Descriptor for one history log file, whose abstract information
@@ -110,17 +111,11 @@ typedef struct obix_hist_dev {
 	/* SORTED list of obix_hist_file */
 	struct list_head files;
 
-	/* protect status bits and counter */
+	/* protect the list of history file descriptors */
 	pthread_mutex_t mutex;
 
-	/* readers' and writers' waiting queues */
-	pthread_cond_t rq, wq;
-
-	/* all writers cnt */
-	int writers;
-
-	/* running readers cnt */
-	int readers;
+	/* synchroniser among multi threads */
+	tsync_t sync;
 
 	/* joining obix_hist.devices */
 	struct list_head list;
@@ -235,7 +230,8 @@ enum {
 	ERR_WRITE_INDEX,
 	ERR_NO_PERM,
 	ERR_NO_DEV_ID,
-	ERR_CORRUPT_DEV
+	ERR_CORRUPT_DEV,
+	ERR_SHUTDOWN
 };
 
 static err_msg_t hist_err_msg[] = {
@@ -321,6 +317,10 @@ static err_msg_t hist_err_msg[] = {
 	[ERR_CORRUPT_DEV] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
 		.msgs = "Corrupted index file of current device"
+	},
+	[ERR_SHUTDOWN] = {
+		.type = OBIX_CONTRACT_ERR_SERVER,
+		.msgs = "The device is shutting down, abort request"
 	}
 };
 
@@ -843,6 +843,8 @@ static void hist_destroy_dev(obix_hist_dev_t *dev)
 {
 	obix_hist_file_t *file, *n;
 
+	tsync_shutdown(&dev->sync);
+
 	pthread_mutex_lock(&dev->mutex);
 	list_for_each_entry_safe(file, n, &dev->files, list) {
 		list_del(&file->list);
@@ -867,8 +869,8 @@ static void hist_destroy_dev(obix_hist_dev_t *dev)
 	}
 
 	pthread_mutex_destroy(&dev->mutex);
-	pthread_cond_destroy(&dev->rq);
-	pthread_cond_destroy(&dev->wq);
+
+	tsync_cleanup(&dev->sync);
 
 	free(dev);
 }
@@ -928,8 +930,8 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 	INIT_LIST_HEAD(&dev->list);
 	INIT_LIST_HEAD(&dev->files);
 	pthread_mutex_init(&dev->mutex, NULL);
-	pthread_cond_init(&dev->rq, NULL);
-	pthread_cond_init(&dev->wq, NULL);
+
+	tsync_init(&dev->sync);
 
 	if (!(dev->dev_id = strdup(dev_id))) {
 		log_error("Failed to allocate string for %s", dev_id);
@@ -1194,12 +1196,9 @@ static int hist_append_dev(obix_request_t *request,
 	int added;
 	int ret = ERR_NO_MEM;
 
-	pthread_mutex_lock(&dev->mutex);
-	dev->writers++;	/* all writers count */
-	while ((dev->readers > 0) || (dev->writers > 1)) {
-		pthread_cond_wait(&dev->wq, &dev->mutex);
+	if (tsync_writer_entry(&dev->sync) < 0) {
+		return ERR_SHUTDOWN;
 	}
-	pthread_mutex_unlock(&dev->mutex);
 
 	if ((added = hist_append_dev_helper(dev, input)) < 0) {
 		ret = added * -1;
@@ -1217,7 +1216,8 @@ static int hist_append_dev(obix_request_t *request,
 		goto out;
 	}
 
-	if (obix_request_create_append_response_item(request, data, strlen(data), 0) < 0) {
+	if (obix_request_create_append_response_item(request, data,
+												 strlen(data), 0) < 0) {
 		free(data);
 		goto out;
 	}
@@ -1227,12 +1227,7 @@ static int hist_append_dev(obix_request_t *request,
 	/* Fall through */
 
 out:
-	pthread_mutex_lock(&dev->mutex);
-	if (--dev->writers > 0)
-		pthread_cond_signal(&dev->wq);
-	else	/* regardless of whether any readers are waiting */
-		pthread_cond_signal(&dev->rq);
-	pthread_mutex_unlock(&dev->mutex);
+	tsync_writer_exit(&dev->sync);
 
 	return ret;
 }
@@ -1728,22 +1723,13 @@ static int hist_query_dev(obix_request_t *request,
 {
 	int ret;
 
-	pthread_mutex_lock(&dev->mutex);
-	/* Readers give way to any running/waiting writer */
-	while (dev->writers > 0) {
-		pthread_cond_wait(&dev->rq, &dev->mutex);
+	if (tsync_reader_entry(&dev->sync) < 0) {
+		return ERR_SHUTDOWN;
 	}
-	dev->readers++;	/* running readers count */
-	pthread_mutex_unlock(&dev->mutex);
 
 	ret = hist_query_dev_helper(request, dev, input);
 
-	pthread_mutex_lock(&dev->mutex);
-	if ((--dev->readers == 0) && (dev->writers > 0)) {
-		pthread_cond_signal(&dev->wq);
-	}
-	pthread_mutex_unlock(&dev->mutex);
-
+	tsync_reader_exit(&dev->sync);
 	return ret;
 }
 
