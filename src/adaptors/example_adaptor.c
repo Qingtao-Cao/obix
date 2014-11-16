@@ -114,6 +114,13 @@ typedef struct example_dev {
 	xmlNode *contract;
 } example_dev_t;
 
+/*
+ * Descriptors for sub nodes of the example device, containing a node's
+ * tag, relative href, default value.
+ *
+ * NOTE: when registering a listener on a sub node, a special usage is
+ * to set param as "/" which will have the entire device monitored
+ */
 typedef struct dev_node {
 	const OBIX_DATA_TYPE tag;
 	const char *param;
@@ -128,8 +135,7 @@ typedef enum {
 } DEV_NODE_TYPE;
 
 /*
- * The tag, name and default value of sub nodes of the example
- * device. Must be the same as the device contract defined in
+ * NOTE: Settings here must be the same as the device contract defined in
  * the configuration file
  */
 dev_node_t example_nodes[] = {

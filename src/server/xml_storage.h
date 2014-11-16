@@ -42,9 +42,6 @@ extern const char* OBIX_SYS_WATCH_OUT_STUB;
 /** URI of BatchOut object stub. */
 extern const char* OBIX_SYS_BATCH_OUT_STUB;
 
-extern const char *OBIX_DEVICE_LOBBY_URI;
-extern const char *OBIX_HISTORY_LOBBY_URI;
-
 extern const char *OBIX_SYS_HIST_DEV_STUB;
 extern const char *OBIX_SYS_ABS_STUB;
 extern const char *OBIX_SYS_AOUT_STUB;

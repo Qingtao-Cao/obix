@@ -25,6 +25,6 @@
 #include <libxml/tree.h>
 #include "obix_request.h"
 
-xmlNode *handlerBatch(obix_request_t *request, xmlNode *input);
+xmlNode *handlerBatch(obix_request_t *request, const char *overrideUri, xmlNode *input);
 
 #endif

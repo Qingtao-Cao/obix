@@ -58,7 +58,7 @@ SET(CMAKE_C_COMPILER "gcc")
 ######################################
 # Project details
 #
-PROJECT(oBIX)
+PROJECT(oBIX C)
 SET(PRJ_SUMMARY "ONEDC oBIX")
 
 SET(PRJ_DESCRIPTION

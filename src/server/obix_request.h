@@ -50,6 +50,12 @@ typedef struct obix_request {
 	/*
 	 * The FastCGI requested URI, that is, the href on the oBIX
 	 * server that has been requested.
+	 *
+	 * NOTE: the batch mechanism will further redirect each sub
+	 * batch command to relevant facility as specified by the
+	 * "val" attribute of a subnode of the batchIn contract. To
+	 * this end, the read, write and invoke handlers of the oBIX
+	 * server all manipulate an "overrideUri" parameter
 	 */
 	const char *request_uri;
 

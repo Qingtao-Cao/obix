@@ -28,7 +28,7 @@ The main difference between this oBIX Server and other available implementations
 The list of currently implemented oBIX features includes:
  - Read, write and invoke requests handling
  - Lobby object
- - Batch operation
+ - Batch operation (see docs/BATCH.md)
  - HTTP protocol binding
  - WatchService (see docs/WATCH.md)
  - Histories (see docs/HISTORY.md).
