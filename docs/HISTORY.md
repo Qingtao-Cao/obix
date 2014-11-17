@@ -15,7 +15,7 @@ oBIX Server supports the creation of an exclusive history facility for each devi
 
 oBIX adapters can request the oBIX Server have a single history facility created for the devices they control through the History.Get operation. If a required history facility has already been established, the oBIX Server simply responds with the href. The oBIX adapter can then append data to it while the oBIX client queries records which satisfy the specified criteria.
 
-The history facility for one device is comprised of a single index file and a number of log files, named by the date generated. The index file is a complete XML file consisting of a list of abstracts for each log file, while log files just contain 'raw data', or records appended by oBIX adapters without a XML header or  root element, which is why they are all XML fragments. E.g.:
+The history facility for one device is comprised of a single index file and a number of log files, named by the date generated. The index file is a complete XML file consisting of a list of abstracts for each log file, while log files just contain 'raw data', or records appended by oBIX adapters without a XML header or  root element, which is why they are all XML fragments. For example:
 
     $ tree histories/M1.DH1.4A-1A.CB01
 	histories/M1.DH1.4A-1A.CB01
@@ -25,7 +25,10 @@ The history facility for one device is comprised of a single index file and a nu
     
 	0 directories, 3 files
 
-Abstracts in the index file describe the overall number of records in the relevant log file, the date they were generated on and the start and end timestamps of the very first and very last records respectively:
+Abstracts in the index file describe:
+* The overall number of records in the relevant log file
+* The date they were generated on 
+* The start / end timestamps of the very first and very last records respectively:
 
     $ cat histories/M1.DH1.4A-1A.CB01/index.xml 
 	<?xml version="1.0" encoding="UTF-8"?>
@@ -44,19 +47,17 @@ Abstracts in the index file describe the overall number of records in the releva
 	  </obj>
 	</list>
 
-The count and end XML nodes will be updated on every successful History.Append operation.
-
+The count and end XML nodes are updated on every successful History.Append operation.
 
 ## Initialisation
 
-At start-up, oBIX Server will try to initialise from history facilities available on the hard drive, so all available history data generated before the previous shutdown won't get lost.
+At start-up, oBIX Server will try to initialise from history facilities available on the hard drive, so available history data generated before the previous shutdown won't be lost.
 
-If index files are missing, or the suffix of fragments or indexes, or their content is incorrectly touched, oBIX Server may fail to start.
-
+If index files are missing; the suffix of fragments or indexes; or their content is incorrectly touched, oBIX Server may fail to start.
 
 ## History.Get
 
-The History.Get operation will establish a new history facility for a specified device (if it has not yet been set up) and return its href.
+The History.Get operation establishes a new history facility for a specified device (if it has not yet been set up) and return its href.
 
 On the command line, the requestor needs to specify the unique device ID in the "val" attribute of the "dev_id" XML node as the only parameter. The historyGet script is designed for this purpose. For example:
 
@@ -70,23 +71,22 @@ On the command line, the requestor needs to specify the unique device ID in the 
 
     $ ./historyGet -d /M1/DH1/BCM01/CB01/
 
-The oBIX Server will respond with the following XML file:
+The oBIX Server responds with the following XML file:
 
 	<?xml version="1.0" encoding="UTF-8"?>
 	<str name="M1.DH1.BCM01.CB01" href="/obix/historyService/histories/M1/DH1/BCM01/CB01/"/>
 
-Then the requestor can further manipulate the append and query operations of the history facility created.
+The requestor can now further manipulate the append and query operations of the history facility created.
 
 In source code obix_get_history() can be called to this end. The required name of the history facility should have been setup during registration.
 
-
 ## History.Append
 
-The History.Append operation appends the raw history records to the end of the latest history log file and update the end timestamp and count value in relevant abstract, provided that the timestamp of history records are not older than or equal to that of the very last record in the last log file. Otherwise, the record will simply be ignored by oBIX Server.
+The History.Append operation appends the raw history records to the end of the latest history log file and updates the end timestamp and count value in the relevant abstract, provided that the timestamp of history records are no older than, or equal to that of the very last record in the last log file. Otherwise, the record is simply ignored by the oBIX Server.
 
-If the input of the History.Append operation contains some records with an invalid timestamp but at least one valid record, the History.Append operation tries to absorb as many valid records as possible. Only if all records have an invalid timestamp will oBIX Server return an error message.
+If the input of the History.Append operation contains some records with an invalid timestamp but at least one valid record, the History.Append operation tries to absorb as many valid records as possible. the oBIX Server will only return an error message when all records have an invalid timestamp.
 
-If records are on a later, different date than the last log file, a new log file will be created.
+If records are on a later, different date than the last log file, a new log file is created.
 
 On the command line, the requestor needs to provide the HistoryAppendIn contract as input. The historyAppendSingle script could be used for this purpose:
 
@@ -103,7 +103,7 @@ On the command line, the requestor needs to provide the HistoryAppendIn contract
 
 	$ ./historyAppendSingle -d /M1/DH1/BCM01/CB01/ -s `date +%FT%T` -c "I am working"
 
-oBIX Server will respond with the following XML file:
+The oBIX Server will respond with the following XML file:
 
 	<?xml version="1.0" encoding="UTF-8"?>
 	<obj is="obix:HistoryAppendOut">
@@ -120,14 +120,14 @@ Upon success, the History.Append operation will return:
 * The updated start and end timestamps for the very first record
 * The updated start and end timestamps for the very last record.
 
-In source code, obix_create_history_ain() can be used to generate the required HistoryAppendIn contract, which can be further passed to obix_append_history() to send to oBIX Server.
+In source code, obix_create_history_ain() can be used to generate the required HistoryAppendIn contract, which can be further passed to obix_append_history() to send to the oBIX Server.
 
 
 ## History.Query
 
 The History.Query operation will try to fetch the records that were generated within the time range as specified by the HistoryFilter contract.
 
-According to the oBIX specification, nearly all members of a HistoryFilter contract can be safely omitted, when a default value that makes the most sense applies.
+According to the oBIX specification, nearly all members of a HistoryFilter contract can be safely omitted when a default value that makes the most sense applies.
 
 On the command line, the requestor needs to specify a HistoryFilter contract to specify how oBIX Server should fetch the history data.
 
@@ -172,12 +172,11 @@ HistoryQuery script can have fine control on how to query the desired history re
 		-s The start timestamp, as in format "2014-04-25T15:41:48Z"
 		-e The end timestamp, as in format "2014-04-25T15:41:48Z"
 
-Except the "-d" option, any of "-n", "-s" and "-e" options are not mandatory. If absent, relevant handler will fall back on all existing records and the timestamp of the first and the last records respectively. Furthermore, "-n 0" can be used to get the timestamp of the first and the last records explicitly.
+Excepting the '-d' option, any of '-n', '-s' and '-e' options are not mandatory. If absent, the relevant handler will fall back on all existing records, and the timestamp of the first / last records respectively. Furthermore, '-n 0' can be used to obtain the timestamp of the first and the last records explicitly.
 
-Note, oBIX specification demands ISO-8601 timezone support. However, current strptime() C API has made some practical compromise regarding the formats supported. Please refer to docs/timezone.md for more information.
+**Note: The oBIX specification demands ISO-8601 timezone support. However, current strptime() C API has made some practical compromises regarding the formats supported. Please refer to docs/timezone.md for more information.**
 
-In source code, obix_create_history_flt() can be used to generate the required HistoryFilter contract, which can be further passed to obix_query_history() to query desirable history data from the oBIX Server. On success, the caller provided pointer is adjusted pointing to the input buffer of relevant CURL handler which containing the result of the previous history.Query request. Callers should not free this pointer.
-
+In the source code, obix_create_history_flt() can be used to generate the required HistoryFilter contract, which can be further passed to obix_query_history() to query desirable history data from the oBIX Server. On success, the caller provided pointer is adjusted pointing to the input buffer of the relevant CURL handler, which contains the result of the previous history.Query request. Callers should not free this pointer.
 
 ## Hierarchy Support
 
@@ -204,28 +203,25 @@ History facilities are organised in a hierarchy structure in the global XML stor
 	  </list>
 	</obj>
 
-However, they are still organised in a flat mode on the hard drive as illustrated above.
+However, they are still organised in a flat mode on the hard drive, as illustrated above.
 
-**NOTE:** All history handlers take the URI of a request as parameter then extract the portion about device name (/M1/DH1/4A-1A/CB01) and convert all slashes in it to dots (M1.DH1.4A-1A.CB01).
+**NOTE: All history handlers take the URI of a request as a parameter, then extract the portion about the device name (/M1/DH1/4A-1A/CB01) converting all slashes contained to dots (M1.DH1.4A-1A.CB01).**
 
-For this reason any component such as 'name of data centre', 'data all', 'BCM device' and 'CB device' should not contain any dot at all.
-
+For this reason any component such as 'name of data centre', 'data all', 'BCM Device' and 'CB Device' should not contain any dots (.) at all.
 
 ## CURL Timeout Value
 
-Since a CURL handle is not thread-safe, for multi-thread oBIX applications each thread should utilise its own CURL handle to access the history facility in parallel, whereas single thread oBIX applications can safely fall back on the default one, then the "curl-timeout" and "curl-bulky" tags in the generic oBIX connection configuration file are used to setup its timeout threshold and the quantum size.
+Since a CURL handle is not thread-safe, for multi-thread oBIX applications each thread should utilise its own CURL handle to access the history facility in parallel. Single thread oBIX applications can safely fall back on the default one. This way the 'curl-timeout' and 'curl-bulky' tags in the generic oBIX connection configuration file are used to setup the timeout threshold and the quantum size.
 
-Regardless of which CURL handle is used, oBIX applications should setup these two settings of a CURL handle sensibly. For instance, if only a relative smaller amount of history data is exchanged with the oBIX server, the timeout threshold should be shorter than when several GB amount of history data are transmitted.
-
+Regardless of which CURL handle is used, oBIX applications should setup these two settings of a CURL handle sensibly. For instance, if only a relative smaller amount of history data is exchanged with the oBIX Server, the timeout threshold should be shorter than when several GB amount of history data are transmitted.
 
 ## Stress Test
 
-The generate_logs.c in the test/ folder can be used to generate a number of history log files as well as their index file for test purpose. Please refer to the comment at the head of the relevant file for more information.
+The generate_logs.c in the test/ folder can be used to generate a number of history log files as well as an index file for test purposes. Please refer to the comment at the head of the relevant file for more information.
 
-Be sure the hard drive is spacious enough to accommodate all potential log files before running this program. As an example, log files for 12 months will consume 4.3GB.
+Be sure the hard drive is large enough to accommodate all potential log files before running this program. As an example, log files for 12 months will consume 4.3GB.
 
 If generated log files and their indexes are to be merged with the existing history facility, make sure the merged index file is well-formatted and consistent with available log files.
-
 
 ## Timezone Support
 
