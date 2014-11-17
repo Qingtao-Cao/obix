@@ -2,12 +2,12 @@
 
 A super oBIX watch subsystem has been implemented to provide fantastic scalability, flexibility and performance. So far, it supports the following major features:
 
-* No limitation on the number of watches.
-* No limitation on the number of objects monitored by one watch.
-* No limitation on the number of oBIX clients sharing one watch.
-* Multiple watches able to monitor one same object, particularly nested watches installed at different levels in one subtree.
-* Long poll mechanism.
-* Support parallelism and thread safe, specifically, multiple long poll threads handling poll tasks simultaneously to yield minimal latency.
+* No limitation on the number of watches
+* No limitation on the number of objects monitored by one watch
+* No limitation on the number of oBIX clients sharing one watch
+* Multiple watches able to monitor one same object, particularly nested watches installed at different levels in one subtree
+* Long poll mechanism
+* Support parallelism and thread safe; specifically, multiple long poll threads handling poll tasks simultaneously to yield minimal latency
 * Recyclable watch IDs, no worries about watch ID counter's overflow (by manipulating extensible bitmap nodes).
 
 Watch relevant scripts in tests/scripts/ can be used to test the watch subsystem.
