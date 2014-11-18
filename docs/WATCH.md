@@ -5,14 +5,14 @@ A super oBIX watch subsystem has been implemented to provide fantastic scalabili
 * No limitation on the number of watches
 * No limitation on the number of objects monitored by one watch
 * No limitation on the number of oBIX clients sharing one watch
-* Multiple watches able to monitor one same object, particularly nested watches installed at different levels in one subtree
+* Multiple watches are able to monitor a single object, particularly nested watches installed at different levels in one subtree
 * Long poll mechanism
 * Support parallelism and thread safe; specifically, multiple long poll threads handling poll tasks simultaneously to yield minimal latency
-* Recyclable watch IDs, no worries about watch ID counter's overflow (by manipulating extensible bitmap nodes).
+* Recyclable watch IDs; removes concern about watch ID counter's overflow (by manipulating extensible bitmap nodes).
 
 Watch relevant scripts in tests/scripts/ can be used to test the watch subsystem.
 
-A single watch object can be created by watchMakeSingle script and watchAddSingle script can be called for it several times to have multiple objects added to its watched upon list. The watchMake script can also be used to create a number of watches in a batch mode.
+A single watch object can be created with the watchMakeSingle script and watchAddSingle script can be called for it several times to have multiple objects added to its watched upon list. The watchMake script can also be used to create a number of watches in a batch mode.
 
 It's worthwhile to note that one watch object should avoid monitoring different objects that are ancestors or descendants of each other. That is, objects at a different level in one subtree, which is not only redundant but may result in some unexpected side effects such as one watchOut contract may not contain all positive changes in the response to one Watch.pollChange request.
 
