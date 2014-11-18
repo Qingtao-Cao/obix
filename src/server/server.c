@@ -1,6 +1,6 @@
 /* *****************************************************************************
  * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -347,7 +347,7 @@ void obix_server_handleGET(obix_request_t *request)
 	xmlNode *node = NULL;
 
 #ifdef DEBUG
-	if (str_is_identical(request->request_decoded_uri, OBIX_SRV_DUMP_URI) == 0) {
+	if (is_str_identical(request->request_decoded_uri, OBIX_SRV_DUMP_URI) == 1) {
 		node = xmldb_dump(request);
 	} else {
 		node = obix_server_read(request, NULL);

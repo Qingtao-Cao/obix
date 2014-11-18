@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -184,7 +184,7 @@ int str_token_count_helper(const char *token, void *arg1, void *arg2);
 
 pid_t get_tid(void);
 
-int str_is_identical(const char *str1, const char *str2);
+int is_str_identical(const char *str1, const char *str2);
 
 int link_pathname(char **, const char *, const char *, const char *, const char *);
 

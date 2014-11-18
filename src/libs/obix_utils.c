@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -158,10 +158,10 @@ int slash_followed(const char *s)
 /**
  * Compare whether the given two strings are identical
  *
- * Return 0 if two strings are same with each other ignoring
- * any potential trailing slash in any one of them
+ * Return 1 if two strings are same with each other ignoring
+ * any potential trailing slash in any one of them, 0 otherwise
  */
-int str_is_identical(const char *str1, const char *str2)
+int is_str_identical(const char *str1, const char *str2)
 {
 	int len1 = strlen(str1);
 	int len2 = strlen(str2);
@@ -175,7 +175,7 @@ int str_is_identical(const char *str1, const char *str2)
 	}
 
 	/* No assignment passed in the macro, or unwanted effect ensue */
-	return strncmp(str1, str2, max(len1, len2));
+	return (strncmp(str1, str2, max(len1, len2)) == 0)? 1 : 0;
 }
 
 int str_token_count_helper(const char *tok, void *arg1, void *arg2)

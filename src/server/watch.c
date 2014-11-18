@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  *
  * This file is part of oBIX.
  *
@@ -408,7 +408,7 @@ static watch_item_t *__get_watch_item(watch_t *watch, const char *uri)
 	watch_item_t *item;
 
 	list_for_each_entry(item, &watch->items, list) {
-		if (str_is_identical(item->uri, uri) == 0) {
+		if (is_str_identical(item->uri, uri) == 1) {
 			return item;
 		}
 	}
@@ -430,7 +430,7 @@ static watch_item_t *__get_watch_item_or_parent(watch_t *watch, const char *uri)
 	watch_item_t *item;
 
 	list_for_each_entry(item, &watch->items, list) {
-		if (str_is_identical(item->uri, uri) == 0 ||
+		if (is_str_identical(item->uri, uri) == 1 ||
 			strncmp(item->uri, uri, strlen(item->uri)) == 0) {
 			return item;
 		}
@@ -673,7 +673,7 @@ static void delete_watch_item(xmlNode *node, watch_t *watch)
 
 	pthread_mutex_lock(&watch->mutex);
 	list_for_each_entry(item, &watch->items, list) {
-		if (str_is_identical(item->uri, uri) == 0) {
+		if (is_str_identical(item->uri, uri) == 1) {
 			list_del(&item->list);
 			__delete_watch_item(item);
 			log_debug("Item for %s deleted from watch%d", uri, watch->id);
