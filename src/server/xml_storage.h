@@ -1,6 +1,6 @@
 /* *****************************************************************************
  * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -175,10 +175,5 @@ xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice,
 xmlNode *xmldb_add_child(xmlNode *parent, xmlNode *node, int unlink, int relative);
 
 xmlNode *xmldb_set_relative_href(xmlNode *node);
-
-#ifdef DEBUG_CACHE
-long xmldb_get_cache_hit(void);
-long xmldb_get_cache_miss(void);
-#endif
 
 #endif /*XML_STORAGE_H_*/

@@ -17,7 +17,7 @@ set (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 SET (CMAKE_C_FLAGS "-g -Wall -Werror")
 
 # Debug build flags. cmake -DCMAKE_BUILD_TYPE=Debug .
-SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND -DDEBUG_CACHE")
+SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND")
 
 # Location to install header files
 SET(INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")

@@ -1,6 +1,6 @@
 /* *****************************************************************************
  * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -106,195 +106,6 @@ static xmlNode *__xmldb_fatal_error;
 static int SEARCH_WRITABLE_SELF = 1;
 static int SEARCH_WRITABLE_PARENT = 2;
 static int SEARCH_WRITABLE_INDEFINITE = -1;		/* use with care! */
-
-/**
- * Cache of the XML database to take advantage of the "locality
- * principle" used when finding a node with the specified href.
- *
- * !! IMPORTANT !!
- * 1. Since xmldb_cache_update will move existing members in the
- * cache forward by one offset, and xmldb_invalid_cache will have
- * to copy every deleted node with ALL cache slot to ensure cache
- * coherence, a relatively large cache size will be increasingly
- * cumbersome when a subtree having lots of descendants is deleted
- */
-#define XMLDB_CACHE_LEN		4
-
-typedef struct cache_node {
-	xmlNode *node;			/* reference to node in the global DOM tree */
-	xmlChar *href;			/* the node's absolute href */
-} cache_node_t;
-
-static cache_node_t *_xmldb_cache;
-
-static long _xmldb_cache_hit;
-static long _xmldb_cache_miss;
-
-#ifdef DEBUG_CACHE
-long xmldb_get_cache_hit(void)
-{
-	return _xmldb_cache_hit;
-}
-
-long xmldb_get_cache_miss(void)
-{
-	return _xmldb_cache_miss;
-}
-#endif
-
-static int xmldb_init_cache(void)
-{
-	if (!(_xmldb_cache = (cache_node_t *)malloc(sizeof(cache_node_t) *
-												XMLDB_CACHE_LEN))) {
-		return -1;
-	}
-	memset(_xmldb_cache, 0, sizeof(cache_node_t) * XMLDB_CACHE_LEN);
-
-	_xmldb_cache_hit = _xmldb_cache_miss = 0;
-
-	return 0;
-}
-
-static void xmldb_dispose_cache_node(int i)
-{
-	if (_xmldb_cache[i].href != NULL) {
-		xmlFree(_xmldb_cache[i].href);
-		_xmldb_cache[i].href = NULL;
-	}
-
-	_xmldb_cache[i].node = NULL;
-}
-
-static void xmldb_dispose_cache(void)
-{
-	int i;
-
-	for (i = 0; i < XMLDB_CACHE_LEN; i++) {
-		xmldb_dispose_cache_node(i);
-	}
-
-	free(_xmldb_cache);
-}
-
-/**
- * Update the cache of XML database, the first pointer at index 0
- * will always point to the latest search result, while the rest
- * of pointers in the cache will be moved down by one offset, so
- * that xmldb_search_cache can manipulate the latest search result
- */
-static void xmldb_update_cache(xmlNode *node, const xmlChar *href)
-{
-	int loc = XMLDB_CACHE_LEN - 1;
-
-	/*
-	 * Could not eliminate but avoid duplicates in cache
-	 * as much as possible
-	 */
-	if (_xmldb_cache[0].node == node) {
-		return;
-	}
-
-	if (_xmldb_cache[loc].href != NULL) {
-		free(_xmldb_cache[loc].href);
-	}
-
-	while (loc > 0) {
-		_xmldb_cache[loc].node = _xmldb_cache[loc - 1].node;
-		_xmldb_cache[loc].href = _xmldb_cache[loc - 1].href;
-		loc--;
-	}
-
-	if (!(_xmldb_cache[0].href = xmlStrdup(href))) {
-		_xmldb_cache[0].node = NULL;
-	} else {
-		_xmldb_cache[0].node = node;
-	}
-}
-
-static int xmldb_invalid_cache_helper(xmlNode **current, void *arg1, void *arg2)
-{
-	/*both arg1 and arg2 are ignored */
-	int i;
-	xmlNode *node = *current;
-
-	for (i = 0; i < XMLDB_CACHE_LEN; i++) {
-		if (_xmldb_cache[i].node == node) {
-			log_warning("Nullify cached node at %d with href %s", i,
-						_xmldb_cache[i].href);
-			xmldb_dispose_cache_node(i);
-		}
-
-		/*
-		 * Have to keep on iterating the whole cache since one node
-		 * could be cached up more than once
-		 */
-	}
-
-	return 0;
-}
-
-/**
- * Nullify any reference in the cache of XML database to any nodes
- * in the subtree that is to be deleted.
- *
- * Node deletion happens in signOff handler and Watch.Delete handler.
- *
- * TODO:
- * 1. It could be both time-consuming and tricky to maintain cache
- * coherence.
- *
- * To this end, there is a need to search if the cache has any
- * reference to every node in the subtree to be deleted. Moreover,
- * xmldb_delete_node would have to be made the only entry point
- * to delete a node from the global DOM tree so as to ensure the
- * cache will get properly updated, otherwise dangling pointers
- * will bring about segfault.
- *
- * Furthermore, in a less likely case that a node's href is
- * changed, relevant cache node would have to be invalidated as
- * well.
- */
-static void xmldb_invalid_cache(xmlNode *root)
-{
-	if (root->doc != _storage) {
-		return;
-	}
-
-	xml_for_each_element(root, xmldb_invalid_cache_helper, NULL, NULL);
-}
-
-/**
- * Search the cache of XML database.
- *
- * Return a xmlNode pointer on cache hit, while NULL on cache miss
- */
-static xmlNode *xmldb_search_cache(const xmlChar *href)
-{
-	xmlNode *node;
-	int i;
-
-	for (i = 0; i < XMLDB_CACHE_LEN; i++) {
-		if (!(node = _xmldb_cache[i].node) || !_xmldb_cache[i].href) {
-			/*
-			 * Keep searching the rest of cache instead of break
-			 * since the current reference may have been nullified
-			 */
-			continue;
-		}
-
-		/* Cache hit */
-		if (str_is_identical((const char *)_xmldb_cache[i].href,
-							 (const char *)href) == 0) {
-			xmldb_update_cache(node, href);
-			_xmldb_cache_hit++;
-			return node;
-		}
-	}
-
-	/* Cache miss */
-	_xmldb_cache_miss++;
-	return NULL;
-}
 
 /**
  * Returns a pre-allocated fatal error contract, which will be released
@@ -514,8 +325,6 @@ xmlNode *xmldb_copy_sys(const char *sys)
 void xmldb_delete_node(xmlNode *node, xmldb_dom_action_t action)
 {
 	xmlNode *parent = node->parent;
-
-	xmldb_invalid_cache(node);
 
 	xml_delete_node(node);
 
@@ -909,28 +718,15 @@ static int xmldb_get_node_helper(const char *token, void *arg1, void *arg2)
 
 xmlNode *xmldb_get_node(const xmlChar *href)
 {
-	xmlNode *node;
-
-	if ((node = xmldb_search_cache(href)) != NULL) {
-		return node;	/* Cache hit */
-	}
-
-	/* Otherwise fall back on normal search method */
-
-	node = xmlDocGetRootElement(_storage);
+	xmlNode *node = xmlDocGetRootElement(_storage);
 
 	if (xmlStrcmp(href, BAD_CAST "/") == 0) {
-		goto out;
+		return node;
 	}
 
 	if (for_each_str_token(STR_DELIMITER_SLASH, (const char *)href,
 						   xmldb_get_node_helper, &node, NULL) < 0) {
 		node = NULL;
-	}
-
-out:
-	if (node != NULL) {
-		xmldb_update_cache(node, href);
 	}
 
 	return node;
@@ -1400,11 +1196,6 @@ int obix_xmldb_init(const char *resdir)
 		return 0;
 	}
 
-	if (xmldb_init_cache() < 0) {
-		log_error("Failed to initialize XML Cache");
-		return -1;
-	}
-
 	if (!(_storage = xmlNewDoc(BAD_CAST XML_VERSION))) {
 		log_error("Unable to initialize the storage.");
 		return -1;
@@ -1464,11 +1255,6 @@ void obix_xmldb_dispose(void)
 	if (_storage != NULL) {
 		xmlFreeDoc(_storage);
 		_storage = NULL;
-	}
-
-	if (_xmldb_cache != NULL) {
-		xmldb_dispose_cache();
-		_xmldb_cache = NULL;
 	}
 
 	log_debug("XML Database is disposed");
