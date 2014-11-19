@@ -273,9 +273,8 @@ The "-o cat" option helps highlight the actual message by suppressing meta data 
 
 		$ sudo tail /var/log/lighttpd/error.log
 
-* Strace is very handy to nail down the reason why lighttpd failed to start oBIX Server:
+* Strace is very handy to understand lighttpd behaviour, providing an insight into why it failed to start the oBIX server, or how it run into a broken fastcgi channel.
 
-		$ cd /etc/lighttpd
 		$ sudo strace -ff -o strace lighttpd -f /etc/lighttpd/lighttpd.conf
 
 	The above command will have multiple strace.<TID> files generated under
@@ -283,7 +282,6 @@ The "-o cat" option helps highlight the actual message by suppressing meta data 
 
 * Moreover, if the lighttpd thread that tries to execute oBIX Server segfaults, it is also desirable to have coredump generated. To enable this, use the following commands:
 
-		$ cd /etc/lighttpd
 		$ ulimit -c unlimited
 		$ sudo lighttpd -f /etc/lighttpd/lighttpd.conf
 

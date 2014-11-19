@@ -35,7 +35,17 @@ typedef struct hash_head {
 	tsync_t sync;
 } hash_head_t;
 
+/*
+ * Calculate the hash value for the given string
+ */
 typedef unsigned int (*get_hash)(const unsigned char *str, const unsigned int prime);
+
+/*
+ * Compare if the given string matches with relevant counterpart
+ * in the given hash node
+ *
+ * Return 1 if they match, 0 otherwise
+ */
 typedef int (*cmp_hash)(const unsigned char *str, hash_node_t *node);
 
 typedef struct hash_ops {
@@ -55,6 +65,6 @@ const void *hash_search(hash_table_t *tab, const unsigned char *key);
 int hash_add(hash_table_t *tab, const unsigned char *key, void *item);
 void hash_del(hash_table_t *tab, const unsigned char *key);
 
-unsigned int hash_bkdr(const unsigned char *str, const unsigned int size);
+unsigned int hash_bkdr(const unsigned char *str, const int len, const unsigned int tab_size);
 
 #endif

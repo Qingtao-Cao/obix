@@ -22,9 +22,9 @@
 
 #include <ctype.h>
 #include <pthread.h>
+#include "obix_fcgi.h"
 #include "log_utils.h"
 #include "server.h"
-#include "obix_request.h"
 #include "xml_utils.h"
 #include "xml_config.h"
 #include "obix_utils.h"
@@ -40,14 +40,19 @@
 #define MAX_REQUESTS_SERVED		(-1)
 #endif
 
-/*
- * Parameters contained in FCGI request
- */
-static const char *FCGI_REQUEST_URI = "REQUEST_URI";
-static const char *FCGI_REQUEST_METHOD = "REQUEST_METHOD";
-static const char *FCGI_REQUEST_METHOD_GET = "GET";
-static const char *FCGI_REQUEST_METHOD_PUT = "PUT";
-static const char *FCGI_REQUEST_METHOD_POST = "POST";
+static char *fcgi_envp[] = {
+	[FCGI_ENV_REQUEST_URI] = "REQUEST_URI",
+	[FCGI_ENV_REQUEST_METHOD] = "REQUEST_METHOD",
+	[FCGI_ENV_REMOTE_PORT] = "REMOTE_PORT",
+	[FCGI_ENV_REMOTE_ADDR] = "REMOTE_ADDR",
+	[FCGI_ENV_REQUESTER_ID] = "REQUESTER_ID"
+};
+
+static const char *FCGI_ENV_REQUEST_METHOD_GET = "GET";
+static const char *FCGI_ENV_REQUEST_METHOD_PUT = "PUT";
+static const char *FCGI_ENV_REQUEST_METHOD_POST = "POST";
+
+static const char *FCGI_DEF_REQUESTER_ID = "UNDEFINED:UNDEFINED";
 
 static const char *SERVER_CONFIG_FILE = "server_config.xml";
 
@@ -58,6 +63,18 @@ static const char *HTTP_STATUS_OK =
 static const char *HTTP_CONTENT_LOCATION = "Content-Location: %s\r\n";
 static const char *HTTP_CONTENT_LENGTH = "Content-Length: %lu\r\n";
 static const char *HTTP_HEADER_SEPARATOR = "\r\n";
+
+char *obix_fcgi_get_requester_id(obix_request_t *request)
+{
+	const char *val;
+
+	if (!(val = FCGX_GetParam(fcgi_envp[FCGI_ENV_REQUESTER_ID],
+							  request->request->envp))) {
+		val = FCGI_DEF_REQUESTER_ID;
+	}
+
+	return strdup(val);
+}
 
 /*
  * Decodes a URL-Encoded string.
@@ -194,9 +211,15 @@ failed:
 	}
 }
 
+/*
+ * Initialise the FCGX channel
+ *
+ * Return the listening socket fd on success, < 0 on errors
+ */
 static int obix_fcgi_init(xml_config_t *config)
 {
-	int ret;
+	char *sock;
+	int fd, backlog, ret;
 
 	obix_request_set_listener(obix_fcgi_sendResponse);
 
@@ -205,12 +228,29 @@ static int obix_fcgi_init(xml_config_t *config)
 		return -1;
 	}
 
+	if (!(sock = xml_config_get_str(config, XP_LISTEN_SOCKET)) ||
+		(backlog = xml_config_get_int(config, XP_LISTEN_BACKLOG)) < 0) {
+		log_error("Failed to get server settings");
+		goto failed;
+	}
+
+	fd = FCGX_OpenSocket(sock, backlog);
+	free(sock);
+
+	if (fd < 0) {
+		log_error("Failed to create FCGI listen socket");
+		goto failed;
+	}
+
 	if ((ret = obix_server_init(config)) < 0) {
 		log_error("Failed to initialise oBIX server");
 		goto failed;
 	}
 
-	return 0;
+	log_debug("oBIX server thread communicates on fd %d, and \"sudo ls -l "
+			  "/proc/%u/fd\" illustrates how it uses open files", fd, get_tid());
+
+	return fd;
 
 failed:
 	FCGX_ShutdownPending();
@@ -292,11 +332,12 @@ static void obix_handle_request(obix_request_t *request)
 	xmlDoc *doc = NULL;
 	const char *requestType;
 
-	if (!(request->request_uri =
-			FCGX_GetParam(FCGI_REQUEST_URI, fcgiRequest->envp)) ||
+	if (!(request->request_uri = FCGX_GetParam(fcgi_envp[FCGI_ENV_REQUEST_URI],
+											   fcgiRequest->envp)) ||
 		slash_preceded(request->request_uri) == 0 ||			/* not started with slash */
 		slash_preceded(request->request_uri + 1) == 1) {        /* double slashes */
-		log_error("Invalid URI in current request: %s", request->request_uri);
+		log_error("Invalid URI env in current request: %s",
+				  (request->request_uri) ? request->request_uri : "(null)");
 		obix_server_handleError(request, "Invalid URI");
 		return;
 	}
@@ -310,22 +351,22 @@ static void obix_handle_request(obix_request_t *request)
 
 	obix_fcgi_url_decode(request->request_decoded_uri, request->request_uri);
 
-	if (!(requestType = FCGX_GetParam(FCGI_REQUEST_METHOD,
+	if (!(requestType = FCGX_GetParam(fcgi_envp[FCGI_ENV_REQUEST_METHOD],
 									  fcgiRequest->envp))) {
-		log_error("Invalid %s in current request", FCGI_REQUEST_METHOD);
+		log_error("Invalid METHOD env in current request: %s", requestType);
 		obix_server_handleError(request, "Missing HTTP verb");
 		return;
 	}
 
-	if (strcmp(requestType, FCGI_REQUEST_METHOD_GET) == 0) {
+	if (strcmp(requestType, FCGI_ENV_REQUEST_METHOD_GET) == 0) {
 		obix_server_handleGET(request);
-	} else if (strcmp(requestType, FCGI_REQUEST_METHOD_PUT) == 0) {
+	} else if (strcmp(requestType, FCGI_ENV_REQUEST_METHOD_PUT) == 0) {
 		doc = obix_fcgi_read(fcgiRequest);
 		obix_server_handlePUT(request, doc);
 		if (doc) {
 			xmlFreeDoc(doc);
 		}
-	} else if (strcmp(requestType, FCGI_REQUEST_METHOD_POST) == 0) {
+	} else if (strcmp(requestType, FCGI_ENV_REQUEST_METHOD_POST) == 0) {
 		doc = obix_fcgi_read(fcgiRequest);
 		obix_server_handlePOST(request, doc);
 		if (doc) {
@@ -349,7 +390,7 @@ static void obix_handle_request(obix_request_t *request)
  * to pass in a pointer to a common mutex that all threads need
  * to compete to grab during the invocation of accept().
  */
-static void payload(void)
+static void payload(int fd)
 {
 	FCGX_Request *fcgiRequest = NULL;
 	obix_request_t *request = NULL;
@@ -368,13 +409,13 @@ static void payload(void)
 		}
 #endif
 
-		if (!(fcgiRequest = obix_fcgi_request_create())) {
+		if (!(fcgiRequest = obix_fcgi_request_create(fd))) {
 			log_error("Failed to create FCGI Request structure");
 			break;
 		}
 
 		if (!(request = obix_request_create(fcgiRequest))) {
-			log_error("Failed to create Response structure");
+			log_error("Failed to create Response structure due to no memory");
 			break;
 		}
 
@@ -383,7 +424,7 @@ static void payload(void)
 		/*
 		 * The [request, response] pair will be released regardless on error
 		 * conditions or after response is sent out, which may take place in an
-		 * asynchronous manner for Watch.longPoll request.
+		 * asynchronous manner
 		 */
 	}
 
@@ -398,6 +439,7 @@ static void payload(void)
 int main(int argc, char **argv)
 {
 	xml_config_t *config;
+	int fd;
 
 	if (argc != 2) {
 		printf("Usage: %s <resource-dir>\n"
@@ -421,12 +463,12 @@ int main(int argc, char **argv)
 		goto log_failed;
 	}
 
-	if (obix_fcgi_init(config) < 0) {
+	if ((fd = obix_fcgi_init(config)) < 0) {
 		log_error("Failed to initialise FCGX");
 		goto log_failed;
 	}
 
-	payload();
+	payload(fd);
 
 	obix_fcgi_exit();
 

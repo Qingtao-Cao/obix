@@ -32,7 +32,12 @@ static const char *XP_LOG_FACILITY = "/config/log/facility";
 /*
  * XPath predicates used by the server side
  */
-const char *XP_POLL_THREAD_COUNT = "/config/poll-threads-count";
+const char *XP_LISTEN_SOCKET = "/config/listen-socket";
+const char *XP_LISTEN_BACKLOG = "/config/listen-backlog";
+const char *XP_POLL_THREADS = "/config/poll-threads";
+const char *XP_DEV_TABLE_SIZE = "/config/dev-table-size";
+const char *XP_DEV_CACHE_SIZE = "/config/dev-cache-size";
+const char *XP_DEV_BACKUP_PERIOD = "/config/dev-backup-period";
 
 /*
  * XPath predicates used by the client side

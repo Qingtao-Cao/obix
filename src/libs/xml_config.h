@@ -27,7 +27,13 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 
-extern const char *XP_POLL_THREAD_COUNT;
+extern const char *XP_LISTEN_SOCKET;
+extern const char *XP_LISTEN_BACKLOG;
+extern const char *XP_POLL_THREADS;
+extern const char *XP_DEV_TABLE_SIZE;
+extern const char *XP_DEV_CACHE_SIZE;
+extern const char *XP_DEV_BACKUP_PERIOD;
+
 extern const char *XP_CT;
 
 extern const char *CT_ID;

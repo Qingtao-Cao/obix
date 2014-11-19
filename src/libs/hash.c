@@ -176,7 +176,7 @@ const void *hash_search(hash_table_t *tab, const unsigned char *key)
 	}
 
 	list_for_each_entry(node, &head->head, list) {
-		if (tab->op->cmp(key, node) == 0) {
+		if (tab->op->cmp(key, node) == 1) {
 			item = node->item;
 			break;
 		}
@@ -203,7 +203,7 @@ void hash_del(hash_table_t *tab, const unsigned char *key)
 	}
 
 	list_for_each_entry_safe(node, n, &head->head, list) {
-		if (tab->op->cmp(key, node) == 0) {
+		if (tab->op->cmp(key, node) == 1) {
 			list_del(&node->list);
 			free(node);
 			head->count--;
@@ -214,6 +214,11 @@ void hash_del(hash_table_t *tab, const unsigned char *key)
 	tsync_writer_exit(&head->sync);
 }
 
+/*
+ * Add an item into the given hash table
+ *
+ * Return 0 on success, < 0 for error code
+ */
 int hash_add(hash_table_t *tab, const unsigned char *key, void *item)
 {
 	hash_head_t *head;
@@ -231,7 +236,7 @@ int hash_add(hash_table_t *tab, const unsigned char *key, void *item)
 	}
 
 	list_for_each_entry(node, &head->head, list) {
-		if (tab->op->cmp(key, node) == 0) {
+		if (tab->op->cmp(key, node) == 1) {
 			/* Already added, return success */
 			goto out;
 		}
@@ -252,18 +257,25 @@ out:
 	return ret;
 }
 
-unsigned int hash_bkdr(const unsigned char *str, const unsigned int size)
+unsigned int hash_bkdr(const unsigned char *str, const int len,
+					   const unsigned int tab_size)
 {
 	unsigned int seed = 31;	/* 31 131 1313 13131 131313 etc */
 	unsigned int hash = 0;
+	int pos = 0;
 
-	if (!str || size == 0) {
+	if (!str || len == 0 || tab_size == 0) {
 		return 0;
 	}
 
 	while (*str) {
+		/* Skip the trailing slash */
+		if ((pos++ == len - 1) && (*str == '/')) {
+			break;
+		}
+
 		hash = hash * seed + (*str++);
 	}
 
-	return hash % size;
+	return hash % tab_size;
 }

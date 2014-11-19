@@ -23,7 +23,7 @@
 	The About object for the oBIX server
 -->
 <obj href="/obix/about/" is="obix:About" display="Obix About">
-	<str name="obixVersion" val="1.0" href="obixVersion" displayName="oBIX Version" />
+	<str name="obixVersion" val="2.0" href="obixVersion" displayName="oBIX Version" />
 	<str name="serverName" val="oBIX Server" href="serverName"/>
 	<abstime name="serverTime" href="serverTime"/>
 	<abstime name="serverBootTime" href="serverBootTime"/>

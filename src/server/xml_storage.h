@@ -27,43 +27,18 @@
 #include "obix_request.h"
 #include "xml_utils.h"
 
+typedef enum sys_stubs {
+	ERROR_STUB = 0,
+	FATAL_ERROR_STUB,
+	WATCH_STUB,
+	WATCH_OUT_STUB,
+	BATCH_OUT_STUB,
+	HIST_DEV_STUB,
+	HIST_ABS_STUB,
+	HIST_AOUT_STUB
+} sys_stubs_t;
+
 extern xmlDoc* _storage;
-
-/** @name URIs of various system objects.
- * These objects are not accessible for a client. They are used by server to
- * generate quickly XML data structures.
- * @{ */
-/** URI of Watch object stub. */
-extern const char* OBIX_SYS_WATCH_STUB;
-/** URI of Error object stub. */
-extern const char* OBIX_SYS_ERROR_STUB;
-/** URI of WatchOut object stub. */
-extern const char* OBIX_SYS_WATCH_OUT_STUB;
-/** URI of BatchOut object stub. */
-extern const char* OBIX_SYS_BATCH_OUT_STUB;
-
-extern const char *OBIX_SYS_HIST_DEV_STUB;
-extern const char *OBIX_SYS_ABS_STUB;
-extern const char *OBIX_SYS_AOUT_STUB;
-/** @} */
-
-/**
- * Indicates the result of the update_node function.
- */
-typedef enum _xmldb_errcode {
-	ERR_SUCCESS = 0,
-	ERR_UPDATE_NODE_BAD_BOOL,
-	ERR_UPDATE_NODE_NO_SUCH_URI,
-	ERR_UPDATE_NODE_NOT_WRITABLE,
-	ERR_UPDATE_NODE_NO_MEM,
-	ERR_UPDATE_NODE_REPARENT,
-	ERR_UPDATE_NODE_BAD_INPUT,
-	ERR_PUT_NODE_NO_HREF,
-	ERR_PUT_NODE_NO_PARENT_URI,
-	ERR_PUT_NODE_NO_PARENT_OBJ,
-	ERR_PUT_NODE_EXIST,
-	ERR_PUT_NODE_ADD_FAILED
-} xmldb_errcode_t;
 
 /*
  * Impose refined control on how to update the XML global database
@@ -72,23 +47,22 @@ typedef enum xmldb_dom_action {
 	/*
 	 * Actions for xmldb_put_node
 	 */
-	DOM_CHECK_SANITY = 1,
-	DOM_CREATE_ANCESTORS = (1 << 1),
-	DOM_NOTIFY_WATCHES = (1 << 2),
-	DOM_CREATE_ANCESTORS_HIST = (1 << 3),
+	DOM_CREATE_ANCESTORS_WATCH = 1,
+	DOM_CREATE_ANCESTORS_HISTORY = (1 << 1),
 
 	/*
 	 * Actions for xmldb_delete_node
 	 */
-	DOM_DELETE_EMPTY_PARENT = (1 << 4)
+	DOM_DELETE_EMPTY_WATCH_PARENT = (1 << 2)
 } xmldb_dom_action_t;
 
 void xmldb_delete_any_hidden(xmlNode *node);
 
-/** Returns a pointer to a statically allocated read-only oBIX Error contract,
+/**
+ * Returns a pointer to a statically allocated read-only oBIX Error contract,
  * for use in adverse conditions and mallocs fail.
  */
-xmlNode * const xmldb_fatal_error();
+xmlNode *xmldb_fatal_error(void);
 
 #ifdef DEBUG
 /**
@@ -118,24 +92,21 @@ void obix_xmldb_dispose(void);
  * Inserts the provided node pointed to by @a node into the XML storage database.
  * @param node		A pointer to the node to be added into the XML database
  * @param action	The action when adding the given node
- * @return			0 if success, negative value otherwise.
+ * @return			0 if success, > 0 for error codes
  */
-xmldb_errcode_t xmldb_put_node(xmlNode *node, xmldb_dom_action_t action);
+int xmldb_put_node_legacy(xmlNode *node, xmldb_dom_action_t action);
 
 /**
  * Updates XML node to the storage. Only @a val attribute is
- * updated and only for nodes which have @a writable attribute
- * equal to @a TRUE.
+ * updated
  *
  * @param input         A pointer to the XML node that has a val attribute to be
  *                      written to the destination href.
+ * @param target		A pointer to the target node in the XML tree
  * @param href          URI of the object to be updated.
- * @param updatedNode   An [out] pointer to the node in the XML tree that has been updated
- * @returns             An xmldb_errcode_t indicating 0 success on success,
- *                      or a positive value otherwise.
+ * @returns				0 on success, < 0 otherwise
  */
-xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
-								  xmlNode **updatedNode);
+int xmldb_update_node(xmlNode *input, xmlNode *target, const char *href);
 
 /**
  * Retrieves a node from the XML storage by the href pointed to by @a href
@@ -145,6 +116,7 @@ xmldb_errcode_t xmldb_update_node(xmlNode *input, const char *href,
  *				manipulated or freed unless explicitly desired.
  */
 xmlNode *xmldb_get_node(const xmlChar *href);
+xmlNode *xmldb_get_node_legacy(xmlNode *start, const xmlChar *href);
 
 void xmldb_delete_node(xmlNode *node, xmldb_dom_action_t action);
 
@@ -155,10 +127,9 @@ void xmldb_delete_comment(xmlNode *node);
 void xmldb_delete_hidden(xmlNode *node);
 
 xmlNode *xmldb_copy_node(const xmlNode *orig, xml_copy_exclude_flags_t flag);
+xmlNode *xmldb_copy_node_legacy(const xmlNode *orig, xml_copy_exclude_flags_t flag);
 
-xmlNode *xmldb_copy_uri(const char *uri);
-
-xmlNode *xmldb_copy_sys(const char *sys);
+xmlNode *xmldb_copy_sys(sys_stubs_t which);
 
 /**
  * Builds and returns a pointer to a string containing the full path of the
@@ -168,12 +139,14 @@ xmlNode *xmldb_copy_sys(const char *sys);
  * @param	node			A pointer to an XML node in the DOM tree
  */
 xmlChar *xmldb_node_path(xmlNode *node);
+xmlChar *xmldb_node_path_legacy(xmlNode *start, xmlNode *top_node,
+								const xmlChar *top_href);
 
-xmlNode *xmldb_create_ref(const char *lobby, xmlNode *newDevice,
-						  const xmlChar *deviceHref, int *existed);
-
-xmlNode *xmldb_add_child(xmlNode *parent, xmlNode *node, int unlink, int relative);
+int xmldb_add_child(xmlNode *parent, xmlNode *node, int unlink, int relative);
 
 xmlNode *xmldb_set_relative_href(xmlNode *node);
+
+int xmldb_get_op_id(const xmlNode *node, long *id);
+int xmldb_get_op_id_legacy(const xmlNode *node, long *id);
 
 #endif /*XML_STORAGE_H_*/

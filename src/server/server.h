@@ -52,10 +52,9 @@ void obix_server_exit(void);
  *			provided.
  * @param name The name of the error
  * @param desc The description of the error.
- *
- * @remarks This is an allocating function.  It's up to the caller to free the xmlNode pointer once it has finished with it.
  */
-xmlNode *obix_server_generate_error(const char *href, const char *contract, const char *name, const char *desc);
+xmlNode *obix_server_generate_error(const char *href, const char *contract,
+									const char *name, const char *desc);
 
 /**
  * Handles an unknown or unsupported HTTP request.
@@ -75,9 +74,6 @@ void obix_server_handleGET(obix_request_t *request);
 
 /**
  * Reads an XML structure from the XML database and returns it to the caller.
- *
- * @remark	This is an allocating function.  It's up to the caller to free the
- *			memory allocated.
  */
 xmlNode *obix_server_read(obix_request_t *request, const char *overrideUri);
 
@@ -93,11 +89,9 @@ void obix_server_handlePUT(obix_request_t *request, const xmlDoc *input);
  * Writes an oBIX Document pointed to by @a input to the XML storage at the location
  * contained inside @a response, and returns a copy copy of the element it inserted,
  * or an oBIX error document.
- *
- * @remark this is an allocating function.  It's up to the caller to free the XML
- * node allocated by this function.
  */
-xmlNode *obix_server_write(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *obix_server_write(obix_request_t *request, const char *overrideUri,
+						   xmlNode *input);
 
 /**
  * Handles POST request and sends response back to the client.
@@ -120,11 +114,9 @@ void obix_server_handlePOST(obix_request_t *request, const xmlDoc *input);
  *                      respond to the client; the Response mechanism pointed to by
  *                      @a response should be responsible for responding to the client
  *                      at some point in the future.
- *
- * @remark              This is an allocating function.  It's up to the caller to free
- *                      the memory allocated by this function with @a xmlFree.
  */
-xmlNode *obix_server_invoke(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *obix_server_invoke(obix_request_t *request, const char *overrideUri,
+							xmlNode *input);
 
 /**
  * Removes all sub-nodes in the XML tree pointed to by @a obixObject that has a
@@ -145,13 +137,6 @@ void obix_server_reply_object(obix_request_t *request, xmlNode *obixObject);
 
 xmlNode *handlerError(obix_request_t *request, const char *overrideUri, xmlNode *input);
 xmlNode *handlerSignUp(obix_request_t *request, const char *overrideUri, xmlNode *input);
-
-/**
- * Descriptor of an error message and relevant error type
- */
-typedef struct err_msg {
-	const char *type;
-	const char *msgs;
-} err_msg_t;
+xmlNode *handlerSignOff(obix_request_t *request, const char *overrideUri, xmlNode *input);
 
 #endif /* OBIX_SERVER_H_ */

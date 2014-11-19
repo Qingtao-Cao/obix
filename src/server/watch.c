@@ -49,6 +49,8 @@
 #include "bitmap.h"
 #include "watch.h"
 #include "ptask.h"
+#include "device.h"
+#include "errmsg.h"
 
 /*
  * Descriptor of all watch objects on the oBIX server
@@ -260,45 +262,6 @@ typedef struct poll_task {
 
 static poll_backlog_t *backlog;
 static watch_set_t *watchset;
-
-/**
- * Error codes used in watch subsystem
- */
-enum {
-	ERR_NO_WATCHOBJ = 0,
-	ERR_NO_WATCHOUT,
-	ERR_NO_NULLOBJ,
-	ERR_NO_POLLTASK,
-	ERR_NO_MEM,
-	ERR_BAD_INPUT
-};
-
-static err_msg_t watch_err_msg[] = {
-	[ERR_NO_WATCHOBJ] = {
-		.type = OBIX_CONTRACT_ERR_BAD_URI,
-		.msgs = "No watch available at this URI"
-	},
-	[ERR_NO_WATCHOUT] = {
-		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Failed to allocate a watchOut object"
-	},
-	[ERR_NO_NULLOBJ] = {
-		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Failed to allocate a NULL object"
-	},
-	[ERR_NO_POLLTASK] = {
-		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Failed to allocate a polling task"
-	},
-	[ERR_NO_MEM] = {
-		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Failed to allocate a watch object"
-	},
-	[ERR_BAD_INPUT] = {
-		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Invalid input from client"
-	}
-};
 
 /* 2^32 = 4,294,967,296, containing 10 digits */
 #define WATCH_ID_MAX_BITS	10
@@ -546,6 +509,11 @@ static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent, WATCH_EVT event)
 	if (!(item = __get_watch_item(watch, (const char *)uri))) {
 		log_warning("%s has not watched upon %s", watch->uri, uri);
 	} else {
+		/*
+		 * The watch item should not be deleted along with the monitored
+		 * object that has been deleted so that polling threads will have
+		 * a chance to harvest a null object
+		 */
 		if (event == WATCH_EVT_NODE_DELETED) {
 			item->node = item->meta = NULL;
 		}
@@ -610,47 +578,38 @@ void xmldb_notify_watches(xmlNode *node, WATCH_EVT event)
 	}
 }
 
-xmlNode *xmldb_put_watch_meta(xmlNode *node, int watch_id)
+static void fill_watch_out(xmlNode *watch_out, xmlNode *child)
 {
-	xmlNode *meta;
-	char buf[WATCH_ID_MAX_BITS];
-
-	sprintf(buf, "%d", watch_id);
-
-	/* Already existing */
-	if ((meta = xml_find_child(node, OBIX_OBJ_META,
-							   OBIX_META_ATTR_WATCH_ID, buf)) != NULL) {
-		return meta;
+	if (!child) {
+		return;
 	}
 
-	if (!(meta = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_META, NULL))) {
-		return NULL;
-	}
+	/*
+	 * Remove the hidden attribute so as to have the watched upon object
+	 * properly displayed in the response
+	 */
+	xmlUnsetProp(child, BAD_CAST OBIX_ATTR_HIDDEN);
 
-	if (xmlSetProp(meta, BAD_CAST OBIX_META_ATTR_WATCH_ID,
-				   BAD_CAST buf) == NULL ||
-		xmlAddChild(node, meta) == NULL) {
-		xmlFreeNode(meta);
-		meta = NULL;
+	if (!xmlAddChild(watch_out->children, child)) {
+		log_error("Failed to add copied node to watchOut contract");
+		xmlFreeNode(child);
 	}
-
-	return meta;
 }
 
 /*
  * Delete a watch meta node and release the watch item descriptor
  *
- * Note,
- * 1. Callers should have held watch->mutex.
+ * NOTE: callers should have held watch->mutex
  */
 static void __delete_watch_item(watch_item_t *item)
 {
 	/*
-	 * The watch meta node may have been deleted along with
-	 * the monitored object
+	 * The watch meta may have been deleted along with
+	 * its parent device contract and device_del() ensures
+	 * relevant watch meta references are nullified
 	 */
 	if (item->meta) {
-		xmldb_delete_node(item->meta, 0);
+		device_delete_node(item->meta);
 	}
 
 	free(item->uri);
@@ -660,20 +619,17 @@ static void __delete_watch_item(watch_item_t *item)
 /**
  * Delete the specified watch item from the watch object
  */
-static void delete_watch_item(xmlNode *node, watch_t *watch)
+static void delete_watch_item(watch_t *watch, const char *uri,
+							  xmlNode *watch_out)
 {
 	watch_item_t *item;
-	char *uri;
-
-	if (!(uri = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_VAL))) {
-		log_error("The current sub-node of watchIn contract doesn't contain "
-				  "a valid val attribute");
-		return;
-	}
+	xmlNode *node;
+	int ret = ERR_WATCH_NO_SUCH_URI;
 
 	pthread_mutex_lock(&watch->mutex);
 	list_for_each_entry(item, &watch->items, list) {
 		if (is_str_identical(item->uri, uri) == 1) {
+			ret = 0;
 			list_del(&item->list);
 			__delete_watch_item(item);
 			log_debug("Item for %s deleted from watch%d", uri, watch->id);
@@ -682,125 +638,65 @@ static void delete_watch_item(xmlNode *node, watch_t *watch)
 	}
 	pthread_mutex_unlock(&watch->mutex);
 
-	free(uri);
+	node = (ret == 0) ? obix_obj_null(BAD_CAST uri) :
+						obix_server_generate_error(uri, server_err_msg[ret].type,
+										"Watch.delete", server_err_msg[ret].msgs);
+
+	fill_watch_out(watch_out, node);
+
 }
 
-static watch_item_t *create_watch_item(watch_t *watch, const char *uri)
+static int create_watch_item_helper(watch_t *watch, xmlNode *node,
+									const char *uri)
 {
-	watch_item_t *item;
-	xmlNode *node;
+	watch_item_t *item = NULL;
+	char buf[WATCH_ID_MAX_BITS];
+	int ret = 0;
 
-	if ((item = get_watch_item_or_parent(watch, uri)) != NULL) {
+	if (get_watch_item_or_parent(watch, uri)) {
 		log_debug("watch%d already monitoring %s or its parent",
 				  watch->id, uri);
-		return item;
+		return 0;
 	}
 
-	/*
-	 * Before creating watch item and relevant meta object, check sanity
-	 * of the watched upon object in the DOM tree which should not be
-	 * an operation node
-	 */
-	if (!(node = xmldb_get_node(BAD_CAST uri))) {
-		log_error("The watched upon object of %s doesn't exist", uri);
-		return NULL;
-	}
+	sprintf(buf, "%d", watch->id);
 
-	if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_OP) == 0) {
-		log_error("Unable to watch upon an operation node");
-		return NULL;
-	}
-
-	if (!(item = (watch_item_t *)malloc(sizeof(watch_item_t)))) {
-		log_error("Failed to allocate watch_item_t");
-		return NULL;
-	}
-	memset(item, 0, sizeof(watch_item_t));
-
-	if (!(item->uri = (char *)malloc(strlen(uri) + 1))) {
-		log_error("Failed to duplicate uri %s", uri);
+	if (!(item = (watch_item_t *)malloc(sizeof(watch_item_t))) ||
+		!(item->uri = strdup(uri)) ||
+		!(item->meta = xmlNewNode(NULL, BAD_CAST OBIX_OBJ_META)) ||
+		!xmlSetProp(item->meta, BAD_CAST OBIX_META_ATTR_WATCH_ID, BAD_CAST buf)) {
+		ret = ERR_NO_MEM;
 		goto failed;
 	}
-	strcpy(item->uri, uri);
 
 	item->node = node;
+	item->count = 0;
 	INIT_LIST_HEAD(&item->list);
 
-	if (!(item->meta = xmldb_put_watch_meta(item->node, watch->id))) {
-		log_error("Failed to install a meta node under %s for watch %d",
-					uri, watch->id);
-		goto dom_failed;
-	}
+	if ((ret = device_add_node(node, item->meta)) == 0) {
+		pthread_mutex_lock(&watch->mutex);
+		list_add_tail(&item->list, &watch->items);
+		pthread_mutex_unlock(&watch->mutex);
 
-	pthread_mutex_lock(&watch->mutex);
-	list_add_tail(&item->list, &watch->items);
-	pthread_mutex_unlock(&watch->mutex);
-
-	log_debug("Item for %s created for watch%d", uri, watch->id);
-
-	return item;
-
-dom_failed:
-	free(item->uri);
-
-failed:
-	free(item);
-	return NULL;
-}
-
-/**
- * Populate the obix:watchOut contract with the watched upon object.
- *
- * Return 0 on success, < 0 otherwise.
- *
- * Note:
- * 1. All copied nodes under watchOut/list will be released along with
- * the whole watchOut contract once its content have been sent back
- * to client. Since the copies are orphans, releasing them won't impact
- * the global DOM tree at all.
- *
- * 2. Callers should have held relevant watch->mutex.
- *
- * 3. Set href in watchOut contract absolute so as to better indicate
- * the monitored object.
- */
-static int fill_watch_out(xmlNode *watch_out, watch_item_t *item)
-{
-	xmlNode *node;
-
-	if (!(node = xmldb_copy_node(item->node, XML_COPY_EXCLUDE_META))) {
-		log_error("Failed to copy node at %s into watchOut contract",
-				  item->uri);
-		return -1;
-	}
-
-	if (xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, BAD_CAST item->uri) == NULL) {
-		log_error("Failed to set absolute href in watchOut contract");
-		goto failed;
-	}
-
-	/*
-	 * Remove the hidden attribute so as to have the watched upon object
-	 * properly displayed in the response
-	 */
-	xmlUnsetProp(node, BAD_CAST OBIX_ATTR_HIDDEN);
-
-	/*
-	 * All monitored object will be added as children of the list object
-	 * in the watchOut contract
-	 */
-	if (xmlAddChild(watch_out->children, node) == NULL) {
-		log_error("Failed to add copied node at %s to watchOut contract",
-				  item->uri);
-	} else {
-		return 0;
+		log_debug("Item for %s created for watch%d", uri, watch->id);
 	}
 
 	/* Fall through */
 
 failed:
-	xmlFreeNode(node);
-	return -1;
+	if (ret > 0 && item) {
+		if (item->uri) {
+			free(item->uri);
+		}
+
+		if (item->meta) {
+			xmlFreeNode(item->meta);
+		}
+
+		free(item);
+	}
+
+	return ret;
 }
 
 /**
@@ -809,26 +705,54 @@ failed:
  * also fill in the watchOut contract with the content of the monitored
  * object.
  */
-static void create_watch_item_wrapper(xmlNode *node, watch_t *watch,
-									  xmlNode *watch_out)
+static void create_watch_item(watch_t *watch, const char *uri,
+							  xmlNode *watch_out)
 {
-	watch_item_t *item;
-	xmlChar *uri;
+	xmlNode *node, *copy = NULL;
+	int ret = 0;
 
-	if (!(uri = xmlGetProp(node, BAD_CAST OBIX_ATTR_VAL))) {
-		log_error("The current sub-node of watchIn contract doesn't contain "
-				  "a valid val attribute");
-		return;
+	if (!uri) {
+		ret = ERR_NO_HREF;
+		goto failed;
 	}
 
-	if (!(item = create_watch_item(watch, (const char *)uri))) {
-		log_error("Failed to create watch_item_t and meta tag for %s", uri);
-		xmlFree(uri);
-		return;
+	if (is_device_href((xmlChar *)uri) == 0 ||
+		!(node = xmldb_get_node((xmlChar *)uri))) {
+		ret = ERR_DEVICE_NO_SUCH_URI;
+		goto failed;
 	}
-	xmlFree(uri);
 
-	fill_watch_out(watch_out, item);
+	if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_OP) == 0 ||
+		xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_META) == 0) {
+		ret = ERR_WATCH_UNSUPPORTED_HREF;
+		goto failed;
+	}
+
+	if ((ret = create_watch_item_helper(watch, node, uri)) != 0) {
+		goto failed;
+	}
+
+	if (!(copy = xmldb_copy_node(node, XML_COPY_EXCLUDE_META)) ||
+		!xmlSetProp(copy, BAD_CAST OBIX_ATTR_HREF, BAD_CAST uri)) {
+		ret = ERR_NO_MEM;
+	}
+
+	/* Fall through */
+
+failed:
+	if (ret > 0) {
+		log_error("%s : %s", (uri) ? uri : "(Not available)",
+				  server_err_msg[ret].msgs);
+
+		if (copy) {
+			xmlFreeNode(copy);
+		}
+
+		copy = obix_server_generate_error(uri, server_err_msg[ret].type,
+									  "Watch.add", server_err_msg[ret].msgs);
+	}
+
+	fill_watch_out(watch_out, copy);
 }
 
 /**
@@ -920,7 +844,7 @@ static void delete_watch_helper(watch_t *watch)
 	}
 	pthread_mutex_unlock(&watch->mutex);
 
-	xmldb_delete_node(watch->node, DOM_DELETE_EMPTY_PARENT);
+	xmldb_delete_node(watch->node, DOM_DELETE_EMPTY_WATCH_PARENT);
 
 	pthread_mutex_destroy(&watch->mutex);
 	pthread_cond_destroy(&watch->wq);
@@ -988,8 +912,7 @@ static watch_t *create_watch(void)
 	sprintf(watch->uri, WATCH_URI_TEMPLATE,
 			watch->id / MAX_WATCHES_PER_FOLDER, watch->id);
 
-	if (!(watch->node = xmldb_copy_uri(OBIX_SYS_WATCH_STUB))) {
-		log_error("Failed to copy a watch contract from the DOM tree");
+	if (!(watch->node = xmldb_copy_sys(WATCH_STUB))) {
 		goto copy_node_failed;
 	}
 
@@ -1004,7 +927,7 @@ static watch_t *create_watch(void)
 	 * since there are a 2-level hierarchy for watch service and
 	 * their direct parent nodes may not exist yet
 	 */
-	if (xmldb_put_node(watch->node, DOM_CREATE_ANCESTORS) != 0) {
+	if (xmldb_put_node_legacy(watch->node, DOM_CREATE_ANCESTORS_WATCH) != 0) {
 		log_error("Failed to register %s node to DOM tree", watch->uri);
 		goto dom_failed;
 	}
@@ -1438,30 +1361,29 @@ void obix_watch_dispose(void)
 		backlog = NULL;
 	}
 
-	log_debug("Watch subsystem is disposed");
+	log_debug("The Watch subsystem disposed");
 }
 
 
 /**
  * Initialize the watch subsystem
  *
- * Return 0 on success, < 0 on failures
+ * Return 0 on success, > 0 for error code
  */
-int obix_watch_init(const int thread_count)
+int obix_watch_init(const int poll_threads)
 {
 	if (watchset || backlog) {
-		log_error("The watch subsystem may have been initialized already");
 		return 0;
 	}
 
 	if (!(watchset = watch_set_init()) ||
-		!(backlog = poll_backlog_init(thread_count))) {
+		!(backlog = poll_backlog_init(poll_threads))) {
 		log_error("Failed to initialized watch subsystem");
 		obix_watch_dispose();
-		return -1;
+		return ERR_NO_MEM;
 	}
 
-	log_debug("Watch subsystem is initialized");
+	log_debug("The Watch subsystem is initialised");
 
 	return 0;
 }
@@ -1502,10 +1424,10 @@ xmlNode *handlerWatchServiceMake(obix_request_t *request,
 	return node;
 
 failed:
-	log_error("%s : %s", uri, watch_err_msg[ret].msgs);
+	log_error("%s : %s", uri, server_err_msg[ret].msgs);
 
-	return obix_server_generate_error(uri, watch_err_msg[ret].type,
-									  "WatchService", watch_err_msg[ret].msgs);
+	return obix_server_generate_error(uri, server_err_msg[ret].type,
+									  "WatchService", server_err_msg[ret].msgs);
 }
 
 /**
@@ -1532,7 +1454,7 @@ xmlNode *handlerWatchDelete(obix_request_t *request, const char *overrideUri,
 		delete_watch_helper(watch);
 	}
 
-	return obix_obj_null();
+	return obix_obj_null(BAD_CAST uri);
 }
 
 static xmlNode *watch_item_helper(obix_request_t *request,
@@ -1541,10 +1463,11 @@ static xmlNode *watch_item_helper(obix_request_t *request,
 								  int add)		/* 1 for Watch.add */
 {
 	watch_t *watch;
-	xmlNode *watch_out, *list, *item;
+	xmlNode *watch_out = NULL, *list, *item;
 	xmlChar *is_attr = NULL;
 	const char *uri;
-	int ret;
+	char *target_uri;
+	int ret = 0;
 
 	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
@@ -1553,63 +1476,63 @@ static xmlNode *watch_item_helper(obix_request_t *request,
 		xmlStrcmp(is_attr, BAD_CAST OBIX_CONTRACT_WATCH_IN) != 0 ||
 		!(list = xml_find_child(input, OBIX_OBJ_LIST, OBIX_ATTR_NAME,
 								WATCH_IN_HREFS))) {
-		ret = ERR_BAD_INPUT;
-		goto out;
+		ret = ERR_INVALID_INPUT;
+		goto failed;
+	}
+
+	if (!(watch_out = xmldb_copy_sys(WATCH_OUT_STUB))) {
+		ret = ERR_NO_MEM;
+		goto failed;
 	}
 
 	if (!(watch = get_watch(uri))) {
-		ret = ERR_NO_WATCHOBJ;
-		goto out;
+		ret = ERR_NO_SUCH_URI;
+		goto failed;
 	}
 
 	reset_lease_time(watch);
 
-	if (add == 1) {
-		if (!(watch_out = xmldb_copy_sys(OBIX_SYS_WATCH_OUT_STUB))) {
-			ret = ERR_NO_WATCHOUT;
-			goto failed;
-		}
-	} else {
-		if (!(watch_out = obix_obj_null())) {
-			ret = ERR_NO_NULLOBJ;
-			goto failed;
-		}
-	}
-
 	for (item = list->children; item; item = item->next) {
-		if (item->type != XML_ELEMENT_NODE) {
+		if (item->type != XML_ELEMENT_NODE ||
+			xmlStrcmp(item->name, BAD_CAST OBIX_OBJ_URI) != 0) {
 			continue;
 		}
 
-		if (xmlStrcmp(item->name, BAD_CAST OBIX_OBJ_URI) != 0) {
-			continue;
-		}
+		target_uri = (char *)xmlGetProp(item, BAD_CAST OBIX_ATTR_VAL);
 
 		if (add == 1) {
-			create_watch_item_wrapper(item, watch, watch_out);
+			create_watch_item(watch, target_uri, watch_out);
 		} else {
-			delete_watch_item(item, watch);
+			delete_watch_item(watch, target_uri, watch_out);
+		}
+
+		if (target_uri) {
+			free(target_uri);
 		}
 	}
 
 	put_watch(watch);
 
-	xmlFree(is_attr);
-	return watch_out;
+	/* Fall through */
 
 failed:
 	if (is_attr) {
 		xmlFree(is_attr);
 	}
 
-	put_watch(watch);
+	if (ret > 0) {
+		log_error("%s : %s", uri, server_err_msg[ret].msgs);
 
-out:
-	log_error("%s : %s", uri, watch_err_msg[ret].msgs);
+		if (watch_out) {
+			xmlFreeNode(watch_out);
+		}
 
-	return obix_server_generate_error(uri, watch_err_msg[ret].type,
+		watch_out = obix_server_generate_error(uri, server_err_msg[ret].type,
 									((add == 1) ? "Watch.add" : "Watch.remove"),
-									watch_err_msg[ret].msgs);
+									server_err_msg[ret].msgs);
+	}
+
+	return watch_out;
 }
 
 xmlNode *handlerWatchAdd(obix_request_t *request, const char *overrideUri,
@@ -1723,6 +1646,7 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 							int include_all)	/* 1 for pollRefresh */
 {
 	watch_item_t *item;
+	xmlNode *node;
 
 	if (watch->changed == 0 && include_all == 0) {
 		return;
@@ -1743,11 +1667,22 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 			item->count = 0;
 		}
 
-		/*
-		 * Ignore the return value, since the watchOut contract
-		 * would have to be sent back to client anyway
-		 */
-		fill_watch_out(watch_out, item);
+		/* The monitored node may have been signed off */
+		if (item->node &&
+			(node = xmldb_copy_node(item->node, XML_COPY_EXCLUDE_META))) {
+			xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, BAD_CAST item->uri);
+		} else {
+			node = obix_obj_null(BAD_CAST item->uri);
+		}
+
+		if (!node) {
+			node = obix_server_generate_error(item->uri,
+										server_err_msg[ERR_NO_MEM].type,
+										"Watch.PollChange",
+										server_err_msg[ERR_NO_MEM].msgs);
+		}
+
+		fill_watch_out(watch_out, node);
 
 		log_debug("[%u] Harvested %s", get_tid(), item->uri);
 	}
@@ -1765,24 +1700,24 @@ static xmlNode *watch_poll_helper(obix_request_t *request,
 	xmlNode *watch_out;
 	long wait_min, wait_max, delay = 0;
 	const char *uri;
-	int ret;
+	int ret = 0;
 
 	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
 	if (!request) {
-		ret = ERR_BAD_INPUT;
+		ret = ERR_INVALID_ARGUMENT;
 		goto out;
 	}
 
 	if (!(watch = get_watch(uri))) {
-		ret = ERR_NO_WATCHOBJ;
+		ret = ERR_NO_SUCH_URI;
 		goto out;
 	}
 
 	reset_lease_time(watch);
 
-	if (!(watch_out = xmldb_copy_sys(OBIX_SYS_WATCH_OUT_STUB))) {
-		ret = ERR_NO_WATCHOUT;
+	if (!(watch_out = xmldb_copy_sys(WATCH_OUT_STUB))) {
+		ret = ERR_NO_MEM;
 		goto failed;
 	}
 
@@ -1807,7 +1742,7 @@ static xmlNode *watch_poll_helper(obix_request_t *request,
 	if (delay > 0) {
 		if (create_poll_task(watch, delay, request, watch_out) < 0) {
 			xmlFreeNode(watch_out);
-			ret = ERR_NO_POLLTASK;
+			ret = ERR_NO_MEM;
 			goto failed;
 		}
 
@@ -1831,11 +1766,11 @@ failed:
 	put_watch(watch);
 
 out:
-	log_error("%s : %s", uri, watch_err_msg[ret].msgs);
+	log_error("%s : %s", uri, server_err_msg[ret].msgs);
 
-	return obix_server_generate_error(uri, watch_err_msg[ret].type,
+	return obix_server_generate_error(uri, server_err_msg[ret].type,
 						((include_all == 1) ? "Watch.refresh" : "Watch.poll"),
-						watch_err_msg[ret].msgs);
+						server_err_msg[ret].msgs);
 }
 
 xmlNode *handlerWatchPollChanges(obix_request_t *request,

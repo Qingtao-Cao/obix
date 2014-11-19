@@ -27,12 +27,6 @@
 #include "obix_request.h"
 #include "xml_utils.h"
 
-/*
- * Parameters used in FCGI connection settings
- */
-#define LISTENSOCK_FILENO	0
-#define LISTENSOCK_FLAGS	0
-
 static obix_request_listener _request_listener = NULL;
 
 void obix_request_set_listener(obix_request_listener listener)
@@ -48,7 +42,7 @@ void obix_request_send_response(obix_request_t *request)
 }
 
 /**
- * Create a response descriptor and pair it up with relevant
+ * Create a request descriptor and pair it up with relevant
  * FCGI request, which is the vehicle to send response back
  * to oBIX client.
  *
@@ -112,7 +106,7 @@ void obix_fcgi_request_destroy(FCGX_Request *request)
  * Create a brand-new FCGI Request, initialize it and listen on
  * FCGI channel until a request has been successfully accepted
  */
-FCGX_Request *obix_fcgi_request_create(void)
+FCGX_Request *obix_fcgi_request_create(int listen_socket)
 {
 	FCGX_Request *request;
 	int error;
@@ -122,7 +116,7 @@ FCGX_Request *obix_fcgi_request_create(void)
 		return NULL;
 	}
 
-	if ((FCGX_InitRequest(request, LISTENSOCK_FILENO, LISTENSOCK_FLAGS)) != 0) {
+	if ((FCGX_InitRequest(request, listen_socket, 0)) != 0) {
 		log_error("Failed to initialize the FCGI request");
 		goto failed;
 	}
@@ -199,7 +193,6 @@ response_item_t *obix_request_create_response_item(char *text, int size, int cop
 	if (!(item = (response_item_t *)malloc(sizeof(response_item_t)))) {
 		return NULL;
 	}
-
 	memset(item, 0, sizeof(response_item_t));
 
 	INIT_LIST_HEAD(&item->list);
@@ -252,7 +245,8 @@ void obix_request_append_response_item(obix_request_t *request, response_item_t 
  * 2. On failure callers should pay attention to release
  * the text before exit.
  */
-int obix_request_create_append_response_item(obix_request_t *request, char *text, int size, int copy)
+int obix_request_create_append_response_item(obix_request_t *request,
+											 char *text, int size, int copy)
 {
 	response_item_t *item;
 
@@ -309,18 +303,3 @@ int obix_request_add_response_xml_header(obix_request_t *request)
 
 	return 0;
 }
-
-/*
- * TODO:
- * Check if the current request comes from a privileged adapter.
- * Return 1 if this is the case, 0 otherwise
- *
- * An environmental variable of current request could be manipulated
- * for this purpose. And the web server responsible for authentication
- * should set/reset such variable according to the client's IP address.
- */
-int is_privileged_mode(obix_request_t *request)
-{
-	return 1;
-}
-

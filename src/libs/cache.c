@@ -23,36 +23,6 @@
 #include "obix_utils.h"
 #include "cache.h"
 
-long cache_get_hit(cache_t *c)
-{
-	long val;
-
-	if (!c) {
-		return -1;
-	}
-
-	pthread_mutex_lock(&c->mutex);
-	val = c->hit;
-	pthread_mutex_unlock(&c->mutex);
-
-	return val;
-}
-
-long cache_get_miss(cache_t *c)
-{
-	long val;
-
-	if (!c) {
-		return -1;
-	}
-
-	pthread_mutex_lock(&c->mutex);
-	val = c->miss;
-	pthread_mutex_unlock(&c->mutex);
-
-	return val;
-}
-
 /*
  * NOTE: to make the most sense, the size of the cache should be
  * less than the average length of "conflict queues" of the accompanied
@@ -76,8 +46,11 @@ cache_t *cache_init(const int len)
 	memset(cache->items, 0, sizeof(cache_item_t) * len);
 
 	cache->len = len;
-	cache->hit = cache->miss = 0;
 	pthread_mutex_init(&cache->mutex, NULL);
+
+#ifdef DEBUG
+	cache->hit = cache->miss = 0;
+#endif
 
 	return cache;
 
@@ -92,13 +65,7 @@ failed:
 static void __cache_dispose_slot(cache_t *c, int i)
 {
 	/* Sanity checks on arguments already done by internal callers */
-
-	if (c->items[i].href) {
-		free(c->items[i].href);
-		c->items[i].href = NULL;
-	}
-
-	c->items[i].item = NULL;
+	c->items[i].href = c->items[i].item = NULL;
 }
 
 void cache_dispose(cache_t *c)
@@ -130,17 +97,15 @@ void cache_dispose(cache_t *c)
  * into the cache. However, it would be too costy to fully prevent
  * this by checking the entire cache for potential duplicate before
  * pushing in a new one, especially considering that such scenario
- * is very rare.
+ * is very rare
+ *
+ * NOTE: given that the cache slot won't duplicate href strings, the
+ * href passed in must have the same life cycle as the item parameter
  */
-void cache_update(cache_t *c, const unsigned char *href, const void *item)
+static void __cache_update(cache_t *c, const unsigned char *href,
+						   const void *item)
 {
-	int loc;	/* index within the cache */
-
-	if (!c || !href || !item) {
-		return;
-	}
-
-	pthread_mutex_lock(&c->mutex);
+	int loc;
 
 	/* Try to minimise duplicate but not traverse the entire cache */
 	if (is_str_identical((const char *)c->items[0].href,
@@ -149,24 +114,26 @@ void cache_update(cache_t *c, const unsigned char *href, const void *item)
 		return;
 	}
 
-	loc = c->len - 1;
-
-	if (c->items[loc].href != NULL) {
-		free(c->items[loc].href);
-	}
+	loc = c->len - 1;	/* the last slot */
 
 	while (loc > 0) {
-		c->items[loc].item = c->items[loc - 1].item;
 		c->items[loc].href = c->items[loc - 1].href;
+		c->items[loc].item = c->items[loc - 1].item;
 		loc--;
 	}
 
-	if (!(c->items[0].href = (unsigned char *)strdup((const char *)href))) {
-		c->items[0].item = NULL;
-	} else {
-		c->items[0].item = item;
+	c->items[0].href = href;
+	c->items[0].item = item;
+}
+
+void cache_update(cache_t *c, const unsigned char *href, const void *item)
+{
+	if (!c || !href || !item) {
+		return;
 	}
 
+	pthread_mutex_lock(&c->mutex);
+	__cache_update(c, href, item);
 	pthread_mutex_unlock(&c->mutex);
 }
 
@@ -186,28 +153,36 @@ const void *cache_search(cache_t *c, const unsigned char *href)
 			/*
 			 * Keep searching the rest of cache instead of break
 			 * since the current reference may have been nullified
+			 *
+			 * NOTE: since the entire cache is iterated, the cache
+			 * size must remain small when oBIX clients are quickly
+			 * accessing different URIs, as a result, the locality
+			 * principle won't work
 			 */
 			continue;
 		}
 
-		/*
-		 * Cache hit
-		 *
-		 * NOTE: no more cache_update to ensure:
-		 * 1. no more duplicated slots in the cache when the matching
-		 *	  one is not the first;
-		 * 2. no performance loss on cache hit
-		 */
 		if (is_str_identical((const char *)c->items[i].href,
 							 (const char *)href) == 1) {
+#ifdef DEBUG
 			c->hit++;
+#endif
+			/*
+			 * NOTE: invoke cache_update to ensure the recently most
+			 * accessed on always on top, although this will incur
+			 * duplication in the cache
+			 */
+			if (i > 0) {
+				__cache_update(c, c->items[i].href, c->items[i].item);
+			}
 			pthread_mutex_unlock(&c->mutex);
 			return item;
 		}
 	}
 
-	/* Cache miss */
+#ifdef DEBUG
 	c->miss++;
+#endif
 	pthread_mutex_unlock(&c->mutex);
 	return NULL;
 }
@@ -215,10 +190,15 @@ const void *cache_search(cache_t *c, const unsigned char *href)
 void cache_invalidate(cache_t *c, const unsigned char *href)
 {
 	const void *item;
-	int i;
+	int i, len;
 
 	if (!c || !href) {
 		return;
+	}
+
+	len = strlen((const char *)href);
+	if (href[len - 1] == '/') {
+		len--;
 	}
 
 	pthread_mutex_lock(&c->mutex);
@@ -228,11 +208,17 @@ void cache_invalidate(cache_t *c, const unsigned char *href)
 			continue;
 		}
 
-		if (is_str_identical((const char *)c->items[i].href,
-							 (const char *)href) == 1) {
+		/*
+		 * NOTE: the entire cache should be traversed due to duplicated slots
+		 *
+		 * Note: although the oBIX server can help ensure the device won't be
+		 * deleted if it has any children, for sake of consisitency any hrefs
+		 * in the cache that are prefixed with that of the deleted device need
+		 * to be invalidated as well
+		 */
+		if (strncmp((const char *)c->items[i].href, (const char *)href,
+					len) == 0) {
 			__cache_dispose_slot(c, i);
-
-			/* Continue since there may be duplicated slots in the cache */
 		}
 	}
 

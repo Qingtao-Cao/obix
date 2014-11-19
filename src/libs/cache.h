@@ -32,8 +32,13 @@ typedef struct cache_item {
 	/* reference to a data structure */
 	const void *item;
 
-	/* the data structure's unique absolute href */
-	unsigned char *href;
+	/*
+	 * reference to the data structure's unique absolute href
+	 *
+	 * NOTE: for sake of performance and efficiency, strings
+	 * shouldn't be copied
+	 */
+	const unsigned char *href;
 } cache_item_t;
 
 typedef struct cache {
@@ -43,8 +48,10 @@ typedef struct cache {
 	/* cache size */
 	int len;
 
+#ifdef DEBUG
 	/* statistics variables */
 	long hit, miss;
+#endif
 
 	/* lock to protect the whole structure */
 	pthread_mutex_t mutex;

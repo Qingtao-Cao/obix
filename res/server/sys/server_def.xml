@@ -18,20 +18,10 @@
 	* along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
 	*
 -->
-	<!--
-		Custom contracts definition.
-	-->
+<!--
+	Custom contracts definition.
+-->
 <obj href="/obix/def/" hidden="true">
-	<!--
-		Extension for the Lobby object which allows clients adding their own
-		information to the server using signUp operation.
-	-->
-	<obj href="SignUpLobby" is="obix:Lobby">
-		<op name="signUp" in="obix:obj" out="obix:obj" />
-	</obj>
-	<obj href="DevicesLobby" is="obix:Lobby">
-		<ref name="devices" />
-	</obj>
 	<!--
 		Advanced Watch object, which supports long poll requests (pollChanges
 		operation doesn't answer immediately, but waits for something to be

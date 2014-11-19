@@ -50,7 +50,7 @@ typedef enum {
 	XML_COPY_EXCLUDE_COMMENTS = (1 << 2)
 } xml_copy_exclude_flags_t;
 
-xmlNode *xml_copy(const xmlNode *sourceNode, xml_copy_exclude_flags_t excludeFlags);
+xmlNode *xml_copy(const xmlNode *src, xml_copy_exclude_flags_t flag);
 
 /**
  * Prototype describing the callback function that gets called once for every
@@ -105,7 +105,8 @@ void xml_xpath_for_each_item(xmlNode *rootNode, const char *pattern,
  *				memory.  If your callbacks xmlFreeNode() any node at any time, set that pointer
  *				to NULL.
  */
-int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type, xml_item_cb_t callback,
+int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
+						   xml_item_cb_t callback,
 						   void *arg1, void *arg2);
 
 /**
@@ -150,12 +151,13 @@ int xml_is_hidden(const xmlNode *node);
 
 int xml_is_null(const xmlNode *node);
 
-int xml_for_each_ancestor_or_self(xmlNode *child, xml_item_cb_t callback,
+int xml_for_each_ancestor_or_self(xmlNode *start, xmlNode *stop,
+								  xml_item_cb_t callback,
 								  void *arg1, void *arg2);
 
 char *xml_dump_node(const xmlNode *node);
 
-xmlNode *obix_obj_null(void);
+xmlNode *obix_obj_null(const xmlChar *href);
 
 void xml_delete_node(xmlNode *node);
 void xml_remove_children(xmlNode *parent);
@@ -175,5 +177,9 @@ int xml_is_valid_doc(const char *, const char *);
  *  . containing more than one consecutive slashes in any position.
  */
 int xml_is_valid_href(xmlChar *);
+
+xmlNode *xml_create_ref_node(xmlNode *src, const xmlChar *href);
+
+int xml_write_file(const char *path, const char *data, int size);
 
 #endif	/* _XML_UTILS_H_ */

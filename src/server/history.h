@@ -24,6 +24,8 @@
 #include <libxml/tree.h>
 #include "obix_request.h"
 
+int is_history_href(const xmlChar *href);
+
 int obix_hist_init(const char *resdir);
 void obix_hist_dispose(void);
 

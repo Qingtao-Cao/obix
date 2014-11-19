@@ -63,6 +63,7 @@ typedef enum {
 #define OBIX_OBJ_FEED			"feed"
 #define OBIX_OBJ_META			"meta"
 #define OBIX_OBJ_DATE			"date"
+#define OBIX_OBJ_HTML			"html"
 
 #define HIST_ABS_DATE			"date"
 #define HIST_ABS_COUNT			"count"
@@ -131,6 +132,10 @@ extern const int OBIX_WATCH_SERVICE_LEN;
 
 extern const char *OBIX_WATCH_POLLCHANGES;
 
+extern const char *XML_FILENAME_SUFFIX;
+
+#define OBIX_DIR_PERM		0755
+#define OBIX_FILE_PERM		0644
 
 /*
  * Reserve 10 bits for a physical value

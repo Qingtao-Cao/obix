@@ -44,6 +44,6 @@
 	<ref name="histories" href="/obix/historyService/histories" of="obix:obj"/>
 	<op name="get" href="get" displayName="Get History Facility For specified device" 
 		in="obix:str" out="obix:str">
-		<meta op="9"/>
+		<meta op="10"/>
 	</op>
 </obj>

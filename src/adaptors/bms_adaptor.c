@@ -1,20 +1,20 @@
 /* *****************************************************************************
- * Copyright (c) 2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2014-2015 Qingtao Cao [harry.cao@nextdc.com]
  *
- * This file is part of obix-adaptors.
+ * This file is part of obix.
  *
- * obix-adaptors is free software: you can redistribute it and/or modify
+ * obix is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * obix-adaptors is distributed in the hope that it will be useful,
+ * obix is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with obix-adaptors. If not, see <http://www.gnu.org/licenses/>.
+ * along with obix. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -127,43 +127,33 @@ static const unsigned char BMS_CSV_DELIM = CSV_TAB;
 #define BMS_CSV_KEY_IDX		1
 #define BMS_CSV_VAL_IDX		2
 
-/* oBIX contracts for various devices
- *
- * NOTE: Contracts such as feeders, bulk tanks and day tanks that are
- * not registered standalone, they are added directly to relevant
- * lists of their parent contracts. To this end, the placeholder for
- * the list node in their parent contract must be included.
+/*
+ * oBIX contracts for various devices
  *
  * NOTE: obix_write() expects a well-formed XML file therefore a XML
  * header is appended for each contract
  */
 static const char *SB_FDR_CONTRACT =
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
-"<list href=\"%s\">\r\n"
 "<obj name=\"%s\" href=\"%s\" is=\"nextdc:power_meter\">\r\n"
 "<real name=\"kW\" href=\"kW\" val=\"%.1f\" writable=\"true\"/>\r\n"
 "<real name=\"kWh\" href=\"kWh\" val=\"%.1f\" writable=\"true\"/>\r\n"
-"</obj>\r\n"
-"</list>\r\n";
+"</obj>\r\n";
 
 static const char *BMS_BTANK_CONTRACT =
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
-"<list href=\"%s\">\r\n"
 "<obj name=\"%s\" href=\"%s\" is=\"nextdc:bulk_tank\">\r\n"
 "<int name=\"level\" href=\"level\" val=\"%d\" writable=\"true\"/>\r\n"
-"</obj>\r\n"
-"</list>\r\n";
+"</obj>\r\n";
 
 static const char *BMS_DTANK_CONTRACT =
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
-"<list href=\"%s\">\r\n"
 "<obj name=\"%s\" href=\"%s\" is=\"nextdc:day_tank\">\r\n"
 "<str name=\"lvl_10\" href=\"lvl_10\" val=\"%s\" writable=\"true\"/>\r\n"
 "<str name=\"lvl_25\" href=\"lvl_25\" val=\"%s\" writable=\"true\"/>\r\n"
 "<str name=\"lvl_50\" href=\"lvl_50\" val=\"%s\" writable=\"true\"/>\r\n"
 "<str name=\"lvl_98\" href=\"lvl_98\" val=\"%s\" writable=\"true\"/>\r\n"
-"</obj>\r\n"
-"</list>\r\n";
+"</obj>\r\n";
 
 /*
  * Input or output feeders on HVSB always have 2 attributes
@@ -279,6 +269,8 @@ static const uint32_t UINT32_MASK = (uint32_t)-1;		/* ffffffff */
  */
 typedef struct hvsb_fdr {
 	char *name;
+	char *history_name;
+	char *href;
 	bms_mtr_t kW;
 	bms_mtr_t kWh;
 	struct list_head list;
@@ -322,6 +314,8 @@ static const char *msb_fdr_kwh[] = {
  */
 typedef struct msb_fdr {
 	char *name;
+	char *history_name;
+	char *href;
 	bms_mtr_t kW;
 	bms_mtr_t kWh[MSB_FDR_KWH_MAX];
 	struct list_head list;
@@ -332,6 +326,8 @@ typedef struct msb_fdr {
  */
 typedef struct bms_btank {
 	char *name;
+	char *history_name;
+	char *href;
 	bms_mtr_t level;
 	struct list_head list;
 } bms_btank_t;
@@ -343,6 +339,8 @@ typedef struct bms_btank {
  */
 typedef struct bms_dtank {
 	char *name;
+	char *history_name;
+	char *href;
 	bms_mtr_t levels[DTANK_LVL_MAX];
 	struct list_head list;
 } bms_dtank_t;
@@ -369,7 +367,8 @@ static const char *bms_sb_list[] = {
 
 struct bms_sb;
 
-typedef int (*fdr_cb_t)(struct bms_sb *sb, const char *parent_list, const char *name,
+typedef int (*fdr_cb_t)(struct bms_sb *sb, const char *name,
+						const char *href, const char *history_name,
 						const float kw, const float kwh, void *arg);
 /*
  * Descriptor for the high voltage switch board and/or
@@ -761,8 +760,8 @@ static int for_each_msb_fdr(bms_sb_t *sb, fdr_cb_t cb, void *arg)
 			get_mtr_reading(&n->kW, &kw);
 			get_msb_fdr_kwh(n->kWh, MSB_FDR_KWH_MAX, &kwh);
 
-			if ((ret = cb(sb, sb_fdr_list[i], n->name, kw, kwh,
-						  arg)) != OBIX_SUCCESS) {
+			if ((ret = cb(sb, n->name, n->href, n->history_name,
+						  kw, kwh, arg)) != OBIX_SUCCESS) {
 				return ret;
 			}
 		}
@@ -783,8 +782,8 @@ static int for_each_hvsb_fdr(bms_sb_t *sb, fdr_cb_t cb, void *arg)
 			get_mtr_reading(&n->kW, &kw);
 			get_mtr_reading(&n->kWh, &kwh);
 
-			if ((ret = cb(sb, sb_fdr_list[i], n->name, kw, kwh,
-						  arg)) != OBIX_SUCCESS) {
+			if ((ret = cb(sb, n->name, n->href, n->history_name,
+						  kw, kwh, arg)) != OBIX_SUCCESS) {
 				return ret;
 			}
 		}
@@ -799,6 +798,14 @@ static void bms_destroy_hvsb_fdr(void *arg)
 
 	if (fdr->name) {
 		free(fdr->name);
+	}
+
+	if (fdr->href) {
+		free(fdr->href);
+	}
+
+	if (fdr->history_name) {
+		free(fdr->history_name);
 	}
 
 	if (fdr->kW.key) {
@@ -871,6 +878,14 @@ static void bms_destroy_msb_fdr(void *arg)
 		free(fdr->name);
 	}
 
+	if (fdr->href) {
+		free(fdr->href);
+	}
+
+	if (fdr->history_name) {
+		free(fdr->history_name);
+	}
+
 	if (fdr->kW.key) {
 		free(fdr->kW.key);
 	}
@@ -907,6 +922,14 @@ static void bms_destroy_btank(bms_btank_t *btank)
 		free(btank->name);
 	}
 
+	if (btank->href) {
+		free(btank->href);
+	}
+
+	if (btank->history_name) {
+		free(btank->history_name);
+	}
+
 	if (btank->level.key) {
 		free(btank->level.key);
 	}
@@ -930,6 +953,14 @@ static void bms_destroy_dtank(bms_dtank_t *dtank)
 
 	if (dtank->name) {
 		free(dtank->name);
+	}
+
+	if (dtank->href) {
+		free(dtank->href);
+	}
+
+	if (dtank->history_name) {
+		free(dtank->history_name);
 	}
 
 	for (i = 0; i < DTANK_LVL_MAX; i++) {
@@ -1086,7 +1117,11 @@ static int bms_setup_hvsb_fdr(bms_sb_t *sb, int which, xmlNode *node)
 	}
 	memset(fdr, 0, sizeof(hvsb_fdr_t));
 
-	if (!(fdr->name = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_NAME))) {
+	if (!(fdr->name = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_NAME)) ||
+		link_pathname(&fdr->history_name, sb->history_name, NULL,
+					  fdr->name, NULL) < 0 ||
+		link_pathname(&fdr->href, sb->href, sb_fdr_list[which],
+					  fdr->name, NULL) < 0) {
 		goto failed;
 	}
 
@@ -1151,7 +1186,11 @@ static int bms_setup_msb_fdr(bms_sb_t *sb, int which, xmlNode *node)
 		fdr->kWh[count].type = MTR_TYPE_MAX;
 	}
 
-	if (!(fdr->name = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_NAME))) {
+	if (!(fdr->name = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_NAME)) ||
+		link_pathname(&fdr->history_name, sb->history_name, NULL,
+					  fdr->name, NULL) < 0 ||
+		link_pathname(&fdr->href, sb->href, sb_fdr_list[which],
+					  fdr->name, NULL) < 0) {
 		goto failed;
 	}
 
@@ -1449,7 +1488,11 @@ static int bms_setup_btank(xmlNode *node, void *arg1, void *arg2)
 	}
 	memset(btank, 0, sizeof(bms_btank_t));
 
-	if (!(btank->name = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_NAME))) {
+	if (!(btank->name = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_NAME)) ||
+		link_pathname(&btank->history_name, bms->history_name, NULL,
+					  btank->name, NULL) < 0 ||
+		link_pathname(&btank->href, bms->href, BTANKS,
+					  btank->name, NULL) < 0) {
 		goto failed;
 	}
 
@@ -1500,7 +1543,11 @@ static int bms_setup_dtank(xmlNode *node, void *arg1, void *arg2)
 	}
 	memset(dtank, 0, sizeof(bms_dtank_t));
 
-	if (!(dtank->name = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_NAME))) {
+	if (!(dtank->name = (char *)xmlGetProp(node, BAD_CAST OBIX_ATTR_NAME)) ||
+		link_pathname(&dtank->history_name, bms->history_name, NULL,
+					  dtank->name, NULL) < 0 ||
+		link_pathname(&dtank->href, bms->href, DTANKS,
+					  dtank->name, NULL) < 0) {
 		goto failed;
 	}
 
@@ -1674,9 +1721,11 @@ failed:
 	return NULL;
 }
 
-static void bms_unregister_sb(bms_sb_t *sb)
+static int bms_unregister_fdr(bms_sb_t *sb, const char *name,
+							  const char *href, const char *history_name,
+							  const float kw, const float kwh, void *arg)
 {
-	obix_unregister_device(OBIX_CONNECTION_ID, sb->history_name);
+	return obix_unregister_device(OBIX_CONNECTION_ID, history_name);
 }
 
 /*
@@ -1689,38 +1738,51 @@ static void bms_unregister_sb(bms_sb_t *sb)
 static void bms_unregister_bms(obix_bms_t *bms)
 {
 	bms_sb_t *sb;
+	bms_btank_t *btank;
+	bms_dtank_t *dtank;
 	int i;
 
 	for (i = 0; i < BMS_SB_LIST_MAX; i++) {
 		list_for_each_entry(sb, &bms->sbs[i], list) {
-			bms_unregister_sb(sb);
+			if (sb->for_each_fdr(sb, bms_unregister_fdr, NULL) != OBIX_SUCCESS) {
+				log_error("Failed to unregister fdr on hvsb/msb %s",
+						  sb->history_name);
+			}
+
+			obix_unregister_device(OBIX_CONNECTION_ID, sb->history_name);
 		}
+	}
+
+	list_for_each_entry(btank, &bms->btanks, list) {
+		obix_unregister_device(OBIX_CONNECTION_ID, btank->history_name);
+	}
+
+	list_for_each_entry(dtank, &bms->dtanks, list) {
+		obix_unregister_device(OBIX_CONNECTION_ID, dtank->history_name);
 	}
 
 	obix_unregister_device(OBIX_CONNECTION_ID, bms->history_name);
 }
 
-static int bms_add_fdr(bms_sb_t *sb, const char *parent_list,
-					   const char *name, const float kw, const float kwh,
-					   void *arg)	/* arg == bms's address, not used yet */
+static int bms_register_fdr(bms_sb_t *sb, const char *name,
+							const char *href, const char *history_name,
+							const float kw, const float kwh,
+							void *arg)	/* arg == bms's address, not used yet */
 {
 	char *dev_data;
 	int len, ret;
 
-	len = strlen(SB_FDR_CONTRACT) + strlen(parent_list) - 2 +
-		  (strlen(name) - 2) * 2 + (FLOAT_MAX_BITS - 2) * 2;
+	len = strlen(SB_FDR_CONTRACT) + strlen(name) - 2 +  strlen(href) - 2 +
+		  (FLOAT_MAX_BITS - 2) * 2;
 
 	if (!(dev_data = (char *)malloc(len + 1))) {
 		return OBIX_ERR_NO_MEMORY;
 	}
+	sprintf(dev_data, SB_FDR_CONTRACT, name, href, kw, kwh);
 
-	sprintf(dev_data, SB_FDR_CONTRACT,
-			parent_list, name, name,
-			kw, kwh);
-
-	ret = obix_write(NULL, OBIX_CONNECTION_ID, sb->history_name,
-					 parent_list, dev_data);
+	ret = obix_register_device(OBIX_CONNECTION_ID, history_name, dev_data);
 	free(dev_data);
+
 	return ret;
 }
 
@@ -1749,7 +1811,7 @@ static int bms_register_sb_core(bms_sb_t *sb)
 	ret = obix_get_history(NULL, OBIX_CONNECTION_ID, sb->history_name);
 	if (ret != OBIX_SUCCESS) {
 		log_error("Failed to get history facility for %s", sb->history_name);
-		bms_unregister_sb(sb);
+		obix_unregister_device(OBIX_CONNECTION_ID, sb->history_name);
 	}
 
 	return ret;
@@ -1766,23 +1828,22 @@ static int bms_register_sb(obix_bms_t *bms, bms_sb_t *sb, const int which)
 		return ret;
 	}
 
-	if ((ret = sb->for_each_fdr(sb, bms_add_fdr, bms)) != OBIX_SUCCESS) {
+	if ((ret = sb->for_each_fdr(sb, bms_register_fdr, bms)) != OBIX_SUCCESS) {
 		log_error("Failed to add fdrs on %s", sb->name);
-		bms_unregister_sb(sb);
+		obix_unregister_device(OBIX_CONNECTION_ID, sb->history_name);
 	}
 
 	return ret;
 }
 
-static int bms_add_btank(obix_bms_t *bms, bms_btank_t *btank)
+static int bms_register_btank(obix_bms_t *bms, bms_btank_t *btank)
 {
 	char *dev_data;
 	uint32_t val = 0;
 	int len, ret;
-	const char *parent_list = BTANKS;
 
-	len = strlen(BMS_BTANK_CONTRACT) + strlen(parent_list) - 2 +
-		  (strlen(btank->name) - 2) * 2 + UINT32_MAX_BITS - 2;
+	len = strlen(BMS_BTANK_CONTRACT) + strlen(btank->name) - 2 +
+		  strlen(btank->href) - 2 + UINT32_MAX_BITS - 2;
 
 	if (!(dev_data = (char *)malloc(len + 1))) {
 		log_error("Failed to allocate contract for %s", btank->name);
@@ -1790,11 +1851,9 @@ static int bms_add_btank(obix_bms_t *bms, bms_btank_t *btank)
 	}
 
 	get_mtr_reading(&btank->level, &val);
-	sprintf(dev_data, BMS_BTANK_CONTRACT, parent_list,
-			btank->name, btank->name, val);
+	sprintf(dev_data, BMS_BTANK_CONTRACT, btank->name, btank->href, val);
 
-	ret = obix_write(NULL, OBIX_CONNECTION_ID, bms->history_name,
-					 parent_list, dev_data);
+	ret = obix_register_device(OBIX_CONNECTION_ID, btank->history_name, dev_data);
 	free(dev_data);
 
 	if (ret != OBIX_SUCCESS) {
@@ -1804,30 +1863,27 @@ static int bms_add_btank(obix_bms_t *bms, bms_btank_t *btank)
 	return ret;
 }
 
-static int bms_add_dtank(obix_bms_t *bms, bms_dtank_t *dtank)
+static int bms_register_dtank(obix_bms_t *bms, bms_dtank_t *dtank)
 {
 	char *dev_data;
 	int len, ret;
-	const char *parent_list = DTANKS;
 
-	len = strlen(BMS_DTANK_CONTRACT) + strlen(parent_list) - 2 +
-		  (strlen(dtank->name) - 2) * 2 +
-		  (DTANK_LVL_MAX_BITS - 2) * DTANK_LVL_MAX;
+	len = strlen(BMS_DTANK_CONTRACT) + strlen(dtank->name) - 2 +
+		  strlen(dtank->href) - 2 + (DTANK_LVL_MAX_BITS - 2) * DTANK_LVL_MAX;
 
 	if (!(dev_data = (char *)malloc(len + 1))) {
 		log_error("Failed to allocate contract for %s", dtank->name);
 		return OBIX_ERR_NO_MEMORY;
 	}
 
-	sprintf(dev_data, BMS_DTANK_CONTRACT, parent_list,
-			dtank->name, dtank->name,
+	sprintf(dev_data, BMS_DTANK_CONTRACT,
+			dtank->name, dtank->href,
 			lvl_mtr[dtank->levels[DTANK_LVL_10].value.b],
 			lvl_mtr[dtank->levels[DTANK_LVL_25].value.b],
 			lvl_mtr[dtank->levels[DTANK_LVL_50].value.b],
 			lvl_mtr[dtank->levels[DTANK_LVL_98].value.b]);
 
-	ret = obix_write(NULL, OBIX_CONNECTION_ID, bms->history_name,
-					 parent_list, dev_data);
+	ret = obix_register_device(OBIX_CONNECTION_ID, dtank->history_name, dev_data);
 	free(dev_data);
 
 	if (ret != OBIX_SUCCESS) {
@@ -1897,13 +1953,13 @@ static int bms_register_bms(obix_bms_t *bms)
 	}
 
 	list_for_each_entry(btank, &bms->btanks, list) {
-		if ((ret = bms_add_btank(bms, btank)) != OBIX_SUCCESS) {
+		if ((ret = bms_register_btank(bms, btank)) != OBIX_SUCCESS) {
 			goto failed;
 		}
 	}
 
 	list_for_each_entry(dtank, &bms->dtanks, list) {
-		if ((ret = bms_add_dtank(bms, dtank)) != OBIX_SUCCESS) {
+		if ((ret = bms_register_dtank(bms, dtank)) != OBIX_SUCCESS) {
 			goto failed;
 		}
 	}
@@ -2154,114 +2210,124 @@ static int bms_append_history(obix_bms_t *bms)
 	return ret;
 }
 
-static int bms_update_fdr(bms_sb_t *sb, const char *parent_list,
-						  const char *name, const float kw, const float kwh,
-						  void *arg)
+static int bms_update_fdr(bms_sb_t *sb, const char *name,
+						  const char *href, const char *history_name,
+						  const float kw, const float kwh, void *arg)
 {
-	Batch *batch = (Batch *)arg;
+	Batch *batch;
 	char buf[FLOAT_MAX_BITS + 1];
 	int ret;
-	char *uri;
 
-	if (link_pathname(&uri, parent_list, name, KW, NULL) < 0) {
-		log_error("Failed to assemble relative uri for %s on %s",
+	if (!(batch = obix_batch_create(OBIX_CONNECTION_ID))) {
+		log_error("Failed to create batch command for %s on %s",
 				  name, sb->name);
 		return OBIX_ERR_NO_MEMORY;
 	}
 
 	sprintf(buf, FORMAT_FLOAT, kw);
-	ret = obix_batch_write_value(batch, sb->history_name, uri, buf, OBIX_T_REAL);
-	free(uri);
+	ret = obix_batch_write_value(batch, history_name, KW, buf, OBIX_T_REAL);
 
 	if (ret != OBIX_SUCCESS) {
 		log_error("Failed to append batch command for %s on %s",
 				  name, sb->name);
-		return ret;
-	}
-
-	if (link_pathname(&uri, parent_list, name, KWH, NULL) < 0) {
-		log_error("Failed to assemble relative uri for %s on %s",
-				  name, sb->name);
-		return OBIX_ERR_NO_MEMORY;
+		goto failed;
 	}
 
 	sprintf(buf, FORMAT_FLOAT, kwh);
-	ret = obix_batch_write_value(batch, sb->history_name, uri, buf, OBIX_T_REAL);
-	free(uri);
 
+	ret = obix_batch_write_value(batch, history_name, KWH, buf, OBIX_T_REAL);
 	if (ret != OBIX_SUCCESS) {
 		log_error("Failed to append batch command for %s on %s",
 				  name, sb->name);
+		goto failed;
 	}
 
+	if ((ret = obix_batch_send(NULL, batch)) != OBIX_SUCCESS) {
+		log_error("Failed to update %s on %s via batch object",
+				  name, sb->name);
+	}
+
+	/* Fall through */
+
+failed:
+	obix_batch_destroy(batch);
 	return ret;
 }
 
 static int bms_update_sb(obix_bms_t *bms, bms_sb_t *sb, const int which)
 {
-	Batch *batch;
-	int ret;
-
 	assert(which == BMS_SB_LIST_HVSB || which == BMS_SB_LIST_MSB);
 
-	if (!(batch = obix_batch_create(OBIX_CONNECTION_ID))) {
-		log_error("Failed to create batch object");
-		return OBIX_ERR_NO_MEMORY;
-	}
-
-	if ((ret = sb->for_each_fdr(sb, bms_update_fdr, batch)) != OBIX_SUCCESS ||
-		(ret = obix_batch_send(NULL, batch)) != OBIX_SUCCESS) {
-		log_error("Failed to update %s via batch object", sb->name);
-	}
-
-	obix_batch_destroy(batch);
-	return ret;
+	return sb->for_each_fdr(sb, bms_update_fdr, NULL);
 }
 
-static int bms_update_btank(obix_bms_t *bms, bms_btank_t *btank,
-							Batch *batch)
-
+static int bms_update_btank(obix_bms_t *bms, bms_btank_t *btank)
 {
+	Batch *batch;
 	char buf[UINT32_MAX_BITS + 1];
-	char *uri;
-	int ret;
 	uint32_t val = 0;
+	int ret;
 
-	if (link_pathname(&uri, BTANKS, btank->name, LEVEL, NULL) < 0) {
-		log_error("Failed to assemble relative uri for %s on %s",
-				  LEVEL, btank->name);
+	if (!(batch = obix_batch_create(OBIX_CONNECTION_ID))) {
+		log_error("Failed to create batch command for %s on %s",
+				  btank->name, bms->name);
 		return OBIX_ERR_NO_MEMORY;
 	}
 
 	get_mtr_reading(&btank->level, &val);
 	sprintf(buf, FORMAT_INT, val);
 
-	ret = obix_batch_write_value(batch, bms->history_name, uri, buf, OBIX_T_INT);
-	free(uri);
+	ret = obix_batch_write_value(batch, btank->history_name, LEVEL,
+								 buf, OBIX_T_INT);
+	if (ret != OBIX_SUCCESS) {
+		log_error("Failed to append batch command for %s on %s",
+				  btank->name, bms->name);
+		goto failed;
+	}
 
+	if ((ret = obix_batch_send(NULL, batch)) != OBIX_SUCCESS) {
+		log_error("Failed to update %s via batch object", btank->name);
+	}
+
+	/* Fall through */
+
+failed:
+	obix_batch_destroy(batch);
 	return ret;
 }
 
-static int bms_update_dtank(obix_bms_t *bms, bms_dtank_t *dtank,
-							Batch *batch)
+static int bms_update_dtank(obix_bms_t *bms, bms_dtank_t *dtank)
 {
-	char *uri;
-	int ret = OBIX_SUCCESS, i;
+	Batch *batch;
 	LVL_MTR val = LVL_OFF;
+	int ret = OBIX_SUCCESS, i;
 
-	for (i = 0; i < DTANK_LVL_MAX; i++) {
-		if (link_pathname(&uri, DTANKS, dtank->name, dtank_lvl[i], NULL) < 0) {
-			log_error("Failed to assemble relative uri for %s on %s",
-					  dtank_lvl[i], dtank->name);
-			return OBIX_ERR_NO_MEMORY;
-		}
-
-		get_mtr_reading(dtank->levels + i, &val);
-		ret |= obix_batch_write_value(batch, bms->history_name, uri,
-									 lvl_mtr[val], OBIX_T_STR);
-		free(uri);
+	if (!(batch = obix_batch_create(OBIX_CONNECTION_ID))) {
+		log_error("Failed to create batch command for %s on %s",
+				  dtank->name, bms->name);
+		return OBIX_ERR_NO_MEMORY;
 	}
 
+	for (i = 0; i < DTANK_LVL_MAX; i++) {
+		get_mtr_reading(dtank->levels + i, &val);
+
+		ret = obix_batch_write_value(batch, dtank->history_name, dtank_lvl[i],
+									 lvl_mtr[val], OBIX_T_STR);
+		if (ret != OBIX_SUCCESS) {
+			log_error("Failed to append batch command for %s on %s",
+					  dtank->name, bms->name);
+			goto failed;
+		}
+	}
+
+	if ((ret = obix_batch_send(NULL, batch)) != OBIX_SUCCESS) {
+		log_error("Failed to update %s via batch object", dtank->name);
+	}
+
+	/* Fall through */
+
+failed:
+	obix_batch_destroy(batch);
 	return ret;
 }
 
@@ -2275,7 +2341,7 @@ static int bms_update_bms(obix_bms_t *bms)
 	bms_btank_t *btank;
 	bms_dtank_t *dtank;
 	Batch *batch = NULL;
-	int i, ret;
+	int ret, i;
 
 	for (i = 0; i < BMS_SB_LIST_MAX; i++) {
 		list_for_each_entry(sb, &bms->sbs[i], list) {
@@ -2286,28 +2352,28 @@ static int bms_update_bms(obix_bms_t *bms)
 		}
 	}
 
-	/*
-	 * Use a separate batch object to update bulk tanks,
-	 * day tanks and mtime on BMS contract
-	 */
-
-	if (!(batch = obix_batch_create(OBIX_CONNECTION_ID))) {
-		log_error("Failed to create batch object");
-		return OBIX_ERR_NO_MEMORY;
-	}
-
 	list_for_each_entry(btank, &bms->btanks, list) {
-		if ((ret = bms_update_btank(bms, btank, batch)) != OBIX_SUCCESS) {
+		if ((ret = bms_update_btank(bms, btank)) != OBIX_SUCCESS) {
 			log_error("Failed to update %s", btank->name);
-			goto failed;
+			return ret;
 		}
 	}
 
 	list_for_each_entry(dtank, &bms->dtanks, list) {
-		if ((ret = bms_update_dtank(bms, dtank, batch)) != OBIX_SUCCESS) {
+		if ((ret = bms_update_dtank(bms, dtank)) != OBIX_SUCCESS) {
 			log_error("Failed to update %s", dtank->name);
-			goto failed;
+			return ret;
 		}
+	}
+
+	/*
+	 * Although there is only one subnode needs to be updated in the
+	 * BMS contract, a standalone batch object is used so as to better
+	 * manipulate the "Persistent Device" feature of the oBIX server
+	 */
+	if (!(batch = obix_batch_create(OBIX_CONNECTION_ID))) {
+		log_error("Failed to create batch object");
+		return OBIX_ERR_NO_MEMORY;
 	}
 
 	ret = obix_batch_write_value(batch, bms->history_name, BMS_MTIME,
@@ -2326,10 +2392,7 @@ static int bms_update_bms(obix_bms_t *bms)
 	/* Fall through */
 
 failed:
-	if (batch) {
-		obix_batch_destroy(batch);
-	}
-
+	obix_batch_destroy(batch);
 	return ret;
 }
 

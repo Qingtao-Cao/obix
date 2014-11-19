@@ -23,16 +23,31 @@
 	NOTE: the subnodes should contain relative hrefs except the ref
 	nodes, whose carry the absolute hrefs of the target nodes
 -->
-<obj href="/obix/" is="obix:Lobby /obix/def/SignUpLobby /obix/def/DevicesLobby">
+<obj href="/obix/" is="obix:Lobby">
 	<op name="signUp" href="signUp" in="obix:obj" out="obix:obj">
 		<meta op="7"/>
 	</op>
-	<op name="batch" href="batch" in="obix:BatchIn" out="obix:BatchOut">
+	<op name="signOff" href="signOff" in="obix:obj" out="obix:obj">
 		<meta op="8"/>
 	</op>
-	<obj name="deviceRoot" href="deviceRoot" display="Device Lobby" hidden="true"/>
+	<op name="batch" href="batch" in="obix:BatchIn" out="obix:BatchOut">
+		<meta op="9"/>
+	</op>
+	<obj name="deviceRoot" href="deviceRoot" display="Device Lobby" hidden="true">
+		<!--
+			A placeholder for test devices
+		-->
+		<obj name="test" href="test"/>
+		<!--
+			A placeholder for one particular data centre
+		-->
+		<obj name="M1" href="M1">
+			<obj name="DH1" href="DH1" display="Data Hall 1"/>
+		</obj>
+	</obj>
 	<ref name="about" href="/obix/about" is="obix:About"/>
 	<ref name="historyService" href="/obix/historyService" is="obix:HistoryService"/>
 	<ref name="watchService" href="/obix/watchService" is="obix:WatchService"/>
 	<ref name="devices" href="/obix/devices" display="Device References" is="obix:list"/>
+	<list name="devices" href="devices" display="Device List" of="obix:ref" hidden="true"/>
 </obj>

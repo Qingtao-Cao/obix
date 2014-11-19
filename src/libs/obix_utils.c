@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <stdio.h>			/* sprintf */
@@ -87,6 +88,9 @@ const char *OBIX_CONTRACT_WATCH_IN = "obix:WatchIn";
 const char *OBIX_RELTIME_ZERO = "PT0S";
 const int OBIX_RELTIME_ZERO_LEN = 4;
 
+/*
+ * Must ended up with a slash as expected by the Device subsystem
+ */
 const char *OBIX_DEVICE_ROOT = "/obix/deviceRoot/";
 const int OBIX_DEVICE_ROOT_LEN = 17;
 
@@ -104,6 +108,8 @@ const char *OBIX_WATCH_SERVICE = "/obix/watchService";
 const int OBIX_WATCH_SERVICE_LEN = 18;
 
 const char *OBIX_WATCH_POLLCHANGES = "pollChanges";
+
+const char *XML_FILENAME_SUFFIX = ".xml";
 
 /*
  * Timestamps are in "yyyy-mm-ddThh:mm:ssZ" format which has
@@ -156,26 +162,49 @@ int slash_followed(const char *s)
 }
 
 /**
- * Compare whether the given two strings are identical
+ * Compare whether the given two strings are identical regardless
+ * of the trailing slash if present.
  *
- * Return 1 if two strings are same with each other ignoring
- * any potential trailing slash in any one of them, 0 otherwise
+ * Return 1 if this is the case, 0 otherwise
  */
 int is_str_identical(const char *str1, const char *str2)
 {
-	int len1 = strlen(str1);
-	int len2 = strlen(str2);
+	int len1, len2, i;
 
-	if (slash_followed(str1) == 1) {
+	if (!str1 || !str2) {
+		return 0;
+	}
+
+	len1 = strlen(str1);
+	len2 = strlen(str2);
+
+	if (str1[len1 - 1] == '/') {
 		len1--;
 	}
 
-	if (slash_followed(str2) == 1) {
+	if (str2[len2 - 1] == '/') {
 		len2--;
 	}
 
-	/* No assignment passed in the macro, or unwanted effect ensue */
-	return (strncmp(str1, str2, max(len1, len2)) == 0)? 1 : 0;
+	if (len1 != len2) {
+		return 0;
+	}
+
+	if (len1 == 0 && len2 == 0) {
+		return 1;	/* both strings are "/" */
+	}
+
+	/*
+	 * NOTE: for sake of performance, compare from the tail to the head
+	 * since strings tend to be different in their tails
+	 */
+	for (i = len1 - 1; i >= 0; i--) {
+		if (str1[i] != str2[i]) {
+			return 0;
+		}
+	}
+
+	return 1;
 }
 
 int str_token_count_helper(const char *tok, void *arg1, void *arg2)

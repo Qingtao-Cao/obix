@@ -1,4 +1,4 @@
-/* *****************************************************************************
+/******************************************************************************
  * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
  * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
  * Copyright (c) 2009 Andrey Litvinov
@@ -16,9 +16,9 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
- * *****************************************************************************/
+ ******************************************************************************/
 
 #ifndef _OBIX_REQUEST_H
 #define _OBIX_REQUEST_H
@@ -141,8 +141,6 @@ int obix_request_get_response_items(obix_request_t *);
 
 void obix_fcgi_request_destroy(FCGX_Request *);
 
-FCGX_Request *obix_fcgi_request_create(void);
-
-int is_privileged_mode(obix_request_t *);
+FCGX_Request *obix_fcgi_request_create(int);
 
 #endif

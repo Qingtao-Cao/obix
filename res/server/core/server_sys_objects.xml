@@ -85,10 +85,10 @@
 	-->
 	<obj href="hist-dev-stub" is="obix:HistoryDevLobby">
 		<op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut">
-			<meta op="10"/>
+			<meta op="11"/>
 		</op>
 		<op name="append" href="append" in="obix:HistoryAppendIn" out="obix:HistoryAppendOut">
-			<meta op="11"/>
+			<meta op="12"/>
 		</op>
     </obj>
 
