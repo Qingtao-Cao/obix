@@ -2,7 +2,7 @@
 
 Name:           obix
 Version:        1.2.1
-Release:        0.1%{?dist}
+Release:        1%{?dist}
 Summary:        ONEDC toolkit
 
 License:        GPLv3+
@@ -166,6 +166,9 @@ exit 0
 
 
 %changelog
+
+* Fri Dec 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2.1-1
+- The 1.2.1 build
 
 * Thu Dec 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2.1-0.1
 - Rebuilding with init scripts
