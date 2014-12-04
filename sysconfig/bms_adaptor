@@ -1,0 +1,1 @@
+OPTIONS="/etc/obix/res/adaptors/bms_adaptor_devices_config.xml /etc/obix/res/adaptors/generic_server_config.xml /etc/obix/res/adaptors/bms_adaptor_history_template.xml"

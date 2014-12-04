@@ -24,12 +24,12 @@
 #include <libxml/tree.h>
 #include "obix_request.h"
 
-int obix_hist_init(const char *);
+int obix_hist_init(const char *resdir);
 void obix_hist_dispose(void);
 
-xmlNode *handlerHistoryGet(obix_request_t *, xmlNode *);
-xmlNode *handlerHistoryAppend(obix_request_t *, xmlNode *);
-xmlNode *handlerHistoryQuery(obix_request_t *, xmlNode *);
+xmlNode *handlerHistoryGet(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerHistoryAppend(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerHistoryQuery(obix_request_t *request, const char *overrideUri, xmlNode *input);
 
 int is_history_requests(const char *uri);
 

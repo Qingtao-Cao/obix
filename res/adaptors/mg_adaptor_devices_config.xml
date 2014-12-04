@@ -32,7 +32,7 @@
 			represented by the current adaptor program are created under
 			/obix/historyService/histories/. If needed, each BCM device
 			could have its own history_lobby settings, or use the
-			device_href of each BCM (see below) for the same purpose.
+			parent_href of each BCM (see below) for the same purpose.
 		-->
 		<controller_address>
 			<ip val="1.2.3.4"/>
@@ -254,74 +254,74 @@
 		BCMs that are in fact on the same modbus line so as to take the
 		most advantage of parallelism.
 
-		Lastly, the device_href gives clue to where to register the relevant
+		Lastly, the parent_href gives clue to where to register the relevant
 		BCM and all its CB devices. It MUST be started and followed by a slash,
 		for example, "/M1/DH1/A/",  which means "Melbourne, Data Hall 1,
 		section A". There is no limitation on the depth of the href hierarchy,
 		facility technicians are free to use more complicated hrefs.
 
-		With the help of device_href, BCM devices controlled by one MGATE box
+		With the help of parent_href, BCM devices controlled by one MGATE box
 		do not necessarily have to be registered to the same parent href on the
 		oBIX server.
 
 		It is the FACILITY TECHNICIANS responsibility to setup values of the
-		slave_id and device_href settings properly.
+		slave_id and parent_href settings properly.
 	-->
 	<modbus>
 		<list name="PORT1">
 			<obj name="4A-1A">
 				<int name="slave_id" val="1"/>
-				<str name="device_href" val="/M1/DH1/A/"/>
+				<str name="parent_href" val="/M1/DH1/A/"/>
 			</obj>
 			<obj name="4A-2A">
 				<int name="slave_id" val="3"/>
-				<str name="device_href" val="/M1/DH1/A/"/>
+				<str name="parent_href" val="/M1/DH1/A/"/>
 			</obj>
 			<obj name="4G-3A">
 				<int name="slave_id" val="5"/>
-				<str name="device_href" val="/M1/DH1/A/"/>
+				<str name="parent_href" val="/M1/DH1/A/"/>
 			</obj>
 		</list>
 		<list name="PORT2">
 			<obj name="4G-4A">
 				<int name="slave_id" val="7"/>
-				<str name="device_href" val="/M1/DH1/B/"/>
+				<str name="parent_href" val="/M1/DH1/B/"/>
 			</obj>
 			<obj name="4C-5A">
 				<int name="slave_id" val="9"/>
-				<str name="device_href" val="/M1/DH1/B/"/>
+				<str name="parent_href" val="/M1/DH1/B/"/>
 			</obj>
 			<obj name="4C-6A">
 				<int name="slave_id" val="11"/>
-				<str name="device_href" val="/M1/DH1/B/"/>
+				<str name="parent_href" val="/M1/DH1/B/"/>
 			</obj>
 		</list>
 		<list name="PORT3">
 			<obj name="4J-7A">
 				<int name="slave_id" val="13"/>
-				<str name="device_href" val="/M1/DH1/C/"/>
+				<str name="parent_href" val="/M1/DH1/C/"/>
 			</obj>
 			<obj name="4G-8A">
 				<int name="slave_id" val="15"/>
-				<str name="device_href" val="/M1/DH1/C/"/>
+				<str name="parent_href" val="/M1/DH1/C/"/>
 			</obj>
 			<obj name="4H-9A">
 				<int name="slave_id" val="17"/>
-				<str name="device_href" val="/M1/DH1/C/"/>
+				<str name="parent_href" val="/M1/DH1/C/"/>
 			</obj>
 		</list>
 		<list name="PORT4">
     	 	<obj name="4I-10A">
 				<int name="slave_id" val="19"/>
-				<str name="device_href" val="/M1/DH1/D/"/>
+				<str name="parent_href" val="/M1/DH1/D/"/>
 			</obj>
 			<obj name="4I-11A">
 				<int name="slave_id" val="21"/>
-				<str name="device_href" val="/M1/DH1/D/"/>
+				<str name="parent_href" val="/M1/DH1/D/"/>
 			</obj>
 			<obj name="4I-12A">
 				<int name="slave_id" val="23"/>
-				<str name="device_href" val="/M1/DH1/D/"/>
+				<str name="parent_href" val="/M1/DH1/D/"/>
 			</obj>
 		</list>
 	</modbus>

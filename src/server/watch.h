@@ -47,12 +47,12 @@ typedef enum {
 	WATCH_EVT_NODE_DELETED = 2
 } WATCH_EVT;
 
-xmlNode *handlerWatchServiceMake(obix_request_t *, xmlNode *);
-xmlNode *handlerWatchDelete(obix_request_t *, xmlNode *);
-xmlNode *handlerWatchAdd(obix_request_t *, xmlNode *);
-xmlNode *handlerWatchRemove(obix_request_t *, xmlNode *);
-xmlNode *handlerWatchPollChanges(obix_request_t *, xmlNode *);
-xmlNode *handlerWatchPollRefresh(obix_request_t *, xmlNode *);
+xmlNode *handlerWatchServiceMake(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerWatchDelete(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerWatchAdd(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerWatchRemove(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerWatchPollChanges(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerWatchPollRefresh(obix_request_t *request, const char *overrideUri, xmlNode *input);
 
 int obix_watch_init(const int);
 void obix_watch_dispose(void);

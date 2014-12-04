@@ -118,7 +118,7 @@ static const char *XP_I_COUNT = "/config/meta/reg_table/I/count";
 static const char *XP_MODBUS = "/config/modbus/list";
 
 static const char *SLAVE_ID = "slave_id";
-static const char *DEVICE_HREF = "device_href";
+static const char *PARENT_HREF = "parent_href";
 
 
 /*
@@ -307,8 +307,8 @@ typedef struct mg_bcm {
 	/* device name read from config file */
 	char *name;
 
-	/* part of the PARENT absolute href of this device */
-	char *device_href;
+	/* the root location of this device under the Device Lobby */
+	char *parent_href;
 
 	/*
 	 * the name that is unique for all BCMs in one datacentre
@@ -940,8 +940,8 @@ static void mg_destroy_bcm(mg_bcm_t *bcm)
 		free(bcm->mtime_ts);
 	}
 
-	if (bcm->device_href) {
-		free(bcm->device_href);
+	if (bcm->parent_href) {
+		free(bcm->parent_href);
 	}
 
 	mg_destroy_bcm_regs(bcm);
@@ -986,9 +986,9 @@ static int mg_setup_bcm(xmlNode *node, mg_modbus_t *bus)
 	}
 
 
-	if (!(bcm->device_href = xml_get_child_val(node, OBIX_OBJ_STR,
-											   DEVICE_HREF))) {
-		log_error("Failed to get %s from current BCM node", DEVICE_HREF);
+	if (!(bcm->parent_href = xml_get_child_val(node, OBIX_OBJ_STR,
+											   PARENT_HREF))) {
+		log_error("Failed to get %s from current BCM node", PARENT_HREF);
 		goto failed;
 	}
 
@@ -1225,7 +1225,7 @@ static int mg_register_bm(mg_bm_t *bm)
 	int len, ret;
 
 	len = strlen(OBIX_BM_CONTRACT) + strlen(bm->name) * 2 +
-			strlen(bcm->device_href) + strlen(bcm->name) - 8 +
+			strlen(bcm->parent_href) + strlen(bcm->name) - 8 +
 			(FLOAT_MAX_BITS - 2) * OBIX_BM_ATTR_MAX;
 
 	if (!(dev_data = (char *)malloc(len + 1))) {
@@ -1234,7 +1234,7 @@ static int mg_register_bm(mg_bm_t *bm)
 	}
 
 	sprintf(dev_data, OBIX_BM_CONTRACT,
-			bm->name, bcm->device_href, bcm->name, bm->name,
+			bm->name, bcm->parent_href, bcm->name, bm->name,
 			bm->attr[OBIX_BM_ATTR_KWH],
 			bm->attr[OBIX_BM_ATTR_KW],
 			bm->attr[OBIX_BM_ATTR_V],
@@ -1368,7 +1368,7 @@ static int mg_register_bcm(obix_mg_t *mg, mg_bcm_t *bcm)
 		*bcm->location_r = '\0';	/* Empty location string */
 	}
 
-	len = strlen(OBIX_BCM_CONTRACT) + (strlen(bcm->name) - 2) * 2 + strlen(bcm->device_href) - 2 +
+	len = strlen(OBIX_BCM_CONTRACT) + (strlen(bcm->name) - 2) * 2 + strlen(bcm->parent_href) - 2 +
 			(MG_ID_MAX_BITS - 2) * 5 +
 			(((strlen(bcm->location_r) > 0) ? strlen(bcm->location_r) : strlen(MG_BCM_OFFLINED)) - 2) +
 			(FLOAT_MAX_BITS - 2) * OBIX_BCM_ATTR_MAX +
@@ -1396,7 +1396,7 @@ static int mg_register_bcm(obix_mg_t *mg, mg_bcm_t *bcm)
 	}
 
 	sprintf(dev_data, OBIX_BCM_CONTRACT,
-			bcm->name, bcm->device_href, bcm->name,
+			bcm->name, bcm->parent_href, bcm->name,
 			bcm->slave_id,
 			bcm->sn,
 			bcm->firmware,

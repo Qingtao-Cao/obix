@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<list is="obix:BatchIn">
+	<uri is="obix:Invoke" val="/obix/signUp">
+		<obj name="ExampleDevice" href="/obix/deviceRoot/example" writable="true">
+			<reltime name="time" href="time" val="PT0S" writable="true"/>
+			<bool name="reset" href="/obix/deviceRoot/example/reset" val="false" writable="true"/>
+		</obj>
+	</uri>
+
+	<uri is="obix:Invoke" val="/obix/watchService/make"/>
+	<uri is="obix:Write" val="/obix/watchService/0/watch0/pollWaitInterval/max">
+		<reltime val="PT1S"/>
+	</uri>
+
+	<uri is="obix:Invoke" val="/obix/watchService/0/watch0/pollRefresh"/>
+
+	<uri is="obix:Invoke" val="/obix/watchService/0/watch0/add">
+		<obj is="obix:WatchIn">
+			<list name="hrefs">
+				<uri val="/obix/deviceRoot/example/time"/>
+				<uri val="/obix/deviceRoot/example/reset"/>
+			</list>
+		</obj>
+	</uri>
+
+	<!--
+		Err contract expected, watch.pollChanges request is not
+		supported through batch since relevant handler returns response
+		and releases related FCGI request independently
+	-->
+	<uri is="obix:Invoke" val="/obix/watchService/0/watch0/pollChanges"/>
+
+	<uri is="obix:Write" val="/obix/deviceRoot/example/time">
+		<reltime val="PT1S"/>
+	</uri>
+
+	<uri is="obix:Write" val="/obix/deviceRoot/example/reset">
+		<bool val="true"/>
+	</uri>
+
+	<uri is="obix:Invoke" val="/obix/watchService/0/watch0/remove">
+		<obj is="obix:WatchIn">
+			<list name="hrefs">
+				<uri val="/obix/deviceRoot/example/time"/>
+			</list>
+		</obj>
+	</uri>
+
+	<uri is="obix:Invoke" val="/obix/watchService/0/watch0/delete"/>
+
+	<uri is="obix:Read" val="/obix/deviceRoot/example"/>
+
+	<!--
+		Err contract expected when unsupported facility is accessed
+	-->
+	<uri is="obix:Invoke" val="/obix/signOff">
+		<obj href="/obix/deviceRoot/example"/>
+	</uri>
+
+	<!--
+		Err contract expected, history related requests are not
+		supported through batch since relevant handlers return responses
+		by themselves
+	-->
+	<uri is="obix:Invoke" val="/obix/historyService/get">
+		<obj>
+			<str name="dev_id" val="example"/>
+		</obj>
+	</uri>	
+
+	<!--
+		Err contract expected, no recursive batch requests are supported
+	-->
+	<uri is="obix:Invoke" val="/obix/batch">
+		<list is="obix:BatchIn">
+			<uri is="obix:Invoke" val="/obix/batch">
+					<list is="obix:BatchIn">
+						<uri is="obix:Read" val="/obix/watchService/make"/>
+					</list>
+			</uri>
+		</list>
+	</uri>
+</list>

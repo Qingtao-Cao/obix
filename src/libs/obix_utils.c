@@ -82,12 +82,28 @@ const char *OBIX_CONTRACT_HIST_FILE_ABS = "obix:HistoryFileAbstract";
 const char *OBIX_CONTRACT_HIST_AIN = "obix:HistoryAppendIn";
 const char *OBIX_CONTRACT_HIST_FLT = "obix:HistoryFilter";
 const char *OBIX_CONTRACT_BATCH_IN = "obix:BatchIn";
+const char *OBIX_CONTRACT_WATCH_IN = "obix:WatchIn";
 
 const char *OBIX_RELTIME_ZERO = "PT0S";
 const int OBIX_RELTIME_ZERO_LEN = 4;
 
 const char *OBIX_DEVICE_ROOT = "/obix/deviceRoot/";
 const int OBIX_DEVICE_ROOT_LEN = 17;
+
+const char *OBIX_BATCH = "/obix/batch";
+const int OBIX_BATCH_LEN = 11;
+
+const char *OBIX_DEVICES = "/obix/devices/";
+
+const char *OBIX_HISTORY_LOBBY = "/obix/historyService/histories/";
+
+const char *OBIX_HISTORY_SERVICE = "/obix/historyService";
+const int OBIX_HISTORY_SERVICE_LEN = 20;
+
+const char *OBIX_WATCH_SERVICE = "/obix/watchService";
+const int OBIX_WATCH_SERVICE_LEN = 18;
+
+const char *OBIX_WATCH_POLLCHANGES = "pollChanges";
 
 /*
  * Timestamps are in "yyyy-mm-ddThh:mm:ssZ" format which has
@@ -412,9 +428,15 @@ int link_pathname(char **p, const char *root, const char *parent,
 			parent++;
 		}
 
-		fmt = (slash_followed(parent) == 0) ? "%s/" : "%s";
-
-		len += sprintf(buf+len, fmt, parent);
+		/*
+		 * If the parent parameter equals to "/", then it should be
+		 * skipped over directly instead of appending an extra,
+		 * unnecessary slash
+		 */
+		if (*parent != '\0') {
+			fmt = (slash_followed(parent) == 0) ? "%s/" : "%s";
+			len += sprintf(buf+len, fmt, parent);
+		}
 	}
 
 	if (file) {

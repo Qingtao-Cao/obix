@@ -96,6 +96,7 @@ extern const char *OBIX_CONTRACT_HIST_AIN;
 extern const char *OBIX_CONTRACT_HIST_FLT;
 extern const char *OBIX_CONTRACT_HIST_FILE_ABS;
 extern const char *OBIX_CONTRACT_BATCH_IN;
+extern const char *OBIX_CONTRACT_WATCH_IN;
 
 extern const char *HIST_OP_APPEND;
 extern const char *HIST_OP_QUERY;
@@ -114,6 +115,22 @@ extern const int OBIX_RELTIME_ZERO_LEN;
 
 extern const char *OBIX_DEVICE_ROOT;
 extern const int OBIX_DEVICE_ROOT_LEN;
+
+extern const char *OBIX_BATCH;
+extern const int OBIX_BATCH_LEN;
+
+extern const char *OBIX_DEVICES;
+
+extern const char *OBIX_HISTORY_LOBBY;
+
+extern const char *OBIX_HISTORY_SERVICE;
+extern const int OBIX_HISTORY_SERVICE_LEN;
+
+extern const char *OBIX_WATCH_SERVICE;
+extern const int OBIX_WATCH_SERVICE_LEN;
+
+extern const char *OBIX_WATCH_POLLCHANGES;
+
 
 /*
  * Reserve 10 bits for a physical value

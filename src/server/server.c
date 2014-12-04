@@ -43,8 +43,13 @@ static const char *OBIX_SRV_DUMP_URI = "/obix-dump/";
 
 /*
  * Prototype of a POST Handler function.
+ *
+ * The second parameter is to support the batch mechanism to further
+ * redirect sub requests to specific facilities as specified by the
+ * "val" attributes of batch commands in the batchIn contract
  */
-typedef xmlNode * (*obix_server_postHandler)(obix_request_t *, xmlNode *);
+typedef xmlNode *(*obix_server_postHandler)(obix_request_t *, const char *,
+											xmlNode *);
 
 /*
  * NOTE: each handler's index must be the same as specified
@@ -466,7 +471,7 @@ xmlNode *obix_server_invoke(obix_request_t *request, const char *overrideUri,
 		goto failed;
 	}
 
-	return obix_server_post_handler(handlerId)(request, input);
+	return obix_server_post_handler(handlerId)(request, overrideUri, input);
 
 failed:
 	log_error("%s : %s", uri, server_err_msg[ret].msgs);
@@ -550,10 +555,17 @@ void obix_server_reply_object(obix_request_t *request, xmlNode *node)
 	}
 
 	/*
-	 * Reparent the answer node to the newly created temp document
-	 * to generate a response. To this end, the original XML parser
-	 * dictionary should be referenced so that the release of
-	 * the temp document won't touch the dictionary at all
+	 * Reparent the answer node to the newly created temp document to generate
+	 * response. If it comes from the original input document that may have
+	 * used a XML parser dictionary (e.g., returned by the signUp handler),
+	 * the dictionary should be referenced so that the release of the temp
+	 * document won't interfere with it
+	 *
+	 * However, such logic will be bypassed if the node using dictionary is not
+	 * added as the root node of the temp document, e.g., as the child of the
+	 * batchOut contract (which is created from a template and have no relation
+	 * to any document), an extra copy is a must-have to de-associate with the
+	 * dictionary. See comments in obix_batch_add_item
 	 */
 	if (node->doc) {
 		doc->dict = node->doc->dict;
@@ -603,13 +615,16 @@ failed:
  * Default handler, which sends error message telling that this operation
  * is not supported.
  */
-xmlNode *handlerError(obix_request_t *request, xmlNode *input)
+xmlNode *handlerError(obix_request_t *request, const char *overrideUri,
+					  xmlNode *input)
 {
-	log_error("Requested operation \"%s\" not implemented.",
-			  request->request_decoded_uri);
+	const char *uri;
 
-	return obix_server_generate_error(request->request_decoded_uri,
-						  OBIX_CONTRACT_ERR_UNSUPPORTED,
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
+
+	log_error("Requested operation \"%s\" not implemented.", uri);
+
+	return obix_server_generate_error(uri, OBIX_CONTRACT_ERR_UNSUPPORTED,
 						  "Unsupported Request",
 						  "The requested operation is not yet implemented.");
 }
@@ -617,12 +632,16 @@ xmlNode *handlerError(obix_request_t *request, xmlNode *input)
 /**
  * Handles signUp operation. Adds new device data to the server.
  */
-xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
+xmlNode *handlerSignUp(obix_request_t *request, const char *overrideUri,
+					   xmlNode *input)
 {
 	xmlNode *inputCopy, *ref, *node, *pos;
 	xmlChar *href = NULL;
 	int ret, existed = 0;
 	xmldb_dom_action_t action;
+	const char *uri;
+
+	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
 	if (!input) {
 		ret = ERR_NO_INPUT;
@@ -641,8 +660,7 @@ xmlNode *handlerSignUp(obix_request_t *request, xmlNode *input)
 		goto failed;
 	}
 
-	if (!(ref = xmldb_create_ref(OBIX_DEVICE_LOBBY_URI, input,
-								 href, &existed))) {
+	if (!(ref = xmldb_create_ref(OBIX_DEVICES, input, href, &existed))) {
 		ret = ERR_NO_REF;
 		goto failed;
 	}
@@ -732,8 +750,7 @@ failed:
 	log_error("SignUp \"%s\" : %s", ((href) ? (char *)href :
 					"(No Href got from Device Contract)"), server_err_msg[ret].msgs);
 
-	node = obix_server_generate_error(request->request_decoded_uri,
-									  server_err_msg[ret].type,
+	node = obix_server_generate_error(uri, server_err_msg[ret].type,
 									  "SignUp", server_err_msg[ret].msgs);
 
 	if (href) {

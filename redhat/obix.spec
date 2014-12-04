@@ -1,7 +1,7 @@
 # %define checkout 20141023git43807d3
 
 Name:           obix
-Version:        1.2
+Version:        1.2.1
 Release:        1%{?dist}
 Summary:        ONEDC toolkit
 
@@ -93,6 +93,12 @@ make %{?_smp_mflags} VERBOSE=1
 make DESTDIR=%{buildroot} install
 find %{buildroot} -name '*.la' -exec rm -f {} ';'
 
+# Init scripts
+install -d %{buildroot}/%{_initrddir}
+install -d %{buildroot}/%{_sysconfdir}/sysconfig
+install -m 755 init/bms_adaptor %{buildroot}/%{_initrddir}
+install -m 644 sysconfig/bms_adaptor %{buildroot}/%{_sysconfdir}/sysconfig
+
 ln -sf %{_sharedstatedir}/obix/histories %{buildroot}/%{_sysconfdir}/obix/res/server/
 ln -sf %{_sysconfdir}/obix/res/obix-fcgi.conf %{buildroot}/%{_sysconfdir}/lighttpd/conf.d/
 
@@ -152,12 +158,20 @@ exit 0
 %config(noreplace) %{_sysconfdir}/obix/res/adaptors/example_adaptor_history_template.xml
 %config(noreplace) %{_sysconfdir}/obix/res/adaptors/generic_server_config.xml
 %config(noreplace) %{_sysconfdir}/obix/res/adaptors/mg_adaptor_devices_config.xml
+%config(noreplace) %{_sysconfdir}/sysconfig/bms_adaptor
+%{_initrddir}/bms_adaptor
 %{_bindir}/bms_adaptor
 %{_bindir}/example_adaptor
 %{_bindir}/mg_adaptor
 
 
 %changelog
+
+* Fri Dec 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2.1-1
+- The 1.2.1 build
+
+* Thu Dec 04 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2.1-0.1
+- Rebuilding with init scripts
 
 * Fri Oct 24 2014 Andrew Ross <andrew.ross@nextdc.com> - 1.2-1
 - The 1.2 build
