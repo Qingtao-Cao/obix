@@ -2,13 +2,13 @@
 
 ## Supported Timezone Format
 
-The oBIX specification demands a ISO-8601 timezone support. However, according to current glibc implementation of the strptime() API, it recognises only two formats with 2 or 4 digits in the timezone string after the "+/-" offset character and will silently ignore any other unrecognisable formats.
+The oBIX specification demands a ISO-8601 timezone support. However, according to current glibc implementation of the strptime() API, it recognises only two formats with two or four digits in the timezone string after the '+/-' offset character, and will silently ignore any other unrecognisable formats.
 
-To start with, if there is any non-digit number following the first 2 digits, such as a colon as in "hh:mm" format, then strptime() will stop parsing the rest of string and regard it as in "hh" format.
+Firstly, if there is any non-digit character or symbol following the first 2 digits, e.g. the colon in a 'hh:mm' format, then strptime() will stop parsing the rest of string and regard it as an 'hh' format.
 
-Secondly, the value of "hh" should be no bigger than 12 which is understandable since the offset characters are used. In particular, if "hh" equals to 12 then "mm" must be zero.
+Secondly, the value of 'hh' should be no bigger than 12, which is understandable since the offset characters are used. In particular, if 'hh' equals 12, then 'mm' must be zero.
 
-Thirdly, the value of "mm" is calculated as "(mm * 5/3) * 36" seconds. As a result, it will only be interpreted as the number of "minutes" normally expected by users when it is a multiple of 3. For example:
+Thirdly, the value of 'mm' is calculated as '(mm * 5/3) * 36' seconds. As a result, it will only be interpreted as the number of 'minutes' normally expected by users when it is a multiple of three. For example:
 
 	2014-10-14T10:00:00-0001
 	2014-10-14T10:00:00-0002
@@ -20,7 +20,7 @@ are treated as:
 	2014-10-14T10:01:48Z
 	2014-10-14T10:03:00Z
 
-Considering this and the fact that most countries's timezone has an integral difference from UTC and a few others has a 15 or 30 minutes difference (such as SA pr NT of Australia, Nepal etc), only "00/15/30/45" are allowed in the "mm" part.
+Considering this and the fact that most timezones have an integral difference from UTC, with a few others having a 15 or 30 minute difference (such as South Australia or the Northern Territories of Australia, Nepal etc.), only "00/15/30/45" are allowed in the "mm" part.
 
 Moreover, if no timezone designators are provided in the timestamp strings (e.g., all existing history records generated earlier), they will be regarded as in UTC timezone by default. It's also worthwhile to note that the oBIX server will convert all timestamp into UTC timezone before comparison, however, it will not re-format the timestamp in history records into UTC timezone before saving into raw history raw data files.
 
