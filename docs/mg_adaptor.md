@@ -10,43 +10,43 @@ This file contains a description of the project in the following sections:
 4. Handy Tool
 
 
---1-- Overview
+# 1 Overview
 
-The MGATE adaptor is the oBIX adaptor for the MGATE box which is a modbus master device and converts modbus commands/responses between TCP connection and modbus lines.
+The MGATE adaptor is the oBIX adaptor for the MGATE box which is a modbus master device. It converts modbus commands / responses between the TCP connection and modbus lines.
 
-The MGATE adaptor manipulates a couple of core data structures as hardware descriptors for MGATE box, modbus line, BCM (Branch Circuit Monitor) device and CB (Circuit Branch Meter) device respectively, which are organized in the same way as depicted by relevant XML config file, which also illustrates hardware parameters, in particular, holding registers layout on BCM device about various analog attributes on the AUX and CB devices such as I, V, PF, kW and kWh.
+The MGATE adaptor manipulates core data structures as hardware descriptors for the MGATE box, modbus line, BCM (Branch Circuit Monitor) device and CB (Circuit Branch Meter) device respectively. These are organised in the same way as depicted by the relevant XML config file, which also illustrates the hardware parameters. In particular, it illustrates holding registers layout on BCM device about various analog attributes on the AUX and CB devices such as I, V, PF, kW and kWh.
 
-At start-up, the MGATE adaptor will register all BCM and CB devices on the oBIX server, then update their status as fast as possible and post history records of above power consumption relevant information for each CB device at fixed interval.
+At start-up, the MGATE adaptor registerd all BCM and CB devices on the oBIX server, then updates their status as fast as possible. It posts history records of above power consumption relevant information for each CB device, at fixed intervals.
 
-One MGATE box can host a number of modbus lines with several BCM devices serialized on each of them. As a proper balance between manipulation of one modbus capacity and speed, it is a common practice to connect 2~3 BCMs on one modbus line.
+One MGATE box can host a number of modbus lines with several BCM devices serialised on each. To balance the capacity and speed for a single modbus, it is a common practice to connect two to three BCMs on one modbus line.
 
-In theory a MGATE box can serve and respond to requests to different modbus lines simultaneously. To take the most advantage out of it, a pair of producer-consumer threads are spawned for each modbus line and assume different roles to collect latest hardware status via MGATE box and to post them to oBIX server separately.
+In theory an MGATE box can serve and respond to requests to different modbus lines simultaneously. To take advantage of this, a pair of producer-consumer threads are spawned for each modbus line and will assume different roles, to collect the latest hardware status via the MGATE box and post them to the oBIX server separately.
 
-Each producer thread will have its own modbus context structure exclusively from other producer threads attending different modbus lines, so is the fact that each consumer thread will monopoly its own curl handle from other consumer threads, since both structures are not thread-safe.
+Each producer thread has its own modbus context structure, exclusive from the other producer threads and attending different modbus lines. So each consumer thread will monopoly its own curl handle from other consumer threads, since both structures are not thread-safe.
 
-If a producer thread finds the timeout counter when reading from a BCM device exceeds the predefined threshold(e.g., 3), which in most cases implies that the BCM has been removed off-line, it would mark the device as is. Consequently, the paired consumer thread would stop posting its status to oBIX server until this flag has been cleared either by administrator on the command line(refer to the comments of mg_resurrect_dev() for details), or by the producer thread when it finds the device is accessible again.
+If a producer thread finds the timeout counter (when reading from a BCM device) exceeds the predefined threshold (e.g. three miliseconds), which in most cases implies that the BCM has been removed off-line, it would mark the device as is. Consequently, the paired consumer thread would stop posting its status to oBIX server until this flag has been cleared either by administrator on the command line (refer to the comments of mg_resurrect_dev() for details), or by the producer thread when it finds the device is accessible again.
 
 To achieve 'real-time' behaviour when representing hardware status on oBIX server, the period settings for the consumer and producer threads could be set as zero so that they will be running as fast as possible. Then the latency will be mostly comprised of the network latency between MGATE adaptor program and the MOXA box and the oBIX server it talks with on both sides, the latency occurred on MGATE box hardware and that of modbus lines.
 
 Last but not least, the administrator can press Ctrl-C which will emit SIGINT signal to have the whole MGATE adaptor program exit gracefully. 
 
 
---2-- Configuration Files
+#2 Configuration Files
 
-The MGATE adaptor needs two configuration files and can be started by the following command:
+The MGATE adaptor needs two configuration files and can be started using the following command:
 
 	$ <PREFIX>/usr/bin/mg_adaptor
 			<PREFIX>/etc/obix/res/adaptors/mg_adaptor_devices_config.xml
 			<PREFIX>/etc/obix/res/adaptors/generic_server_config.xml
 
-Both above configuration files help extract and separate hardware configurables and settings away from the mechanism implemented by binaries, so that binaries are hardware-neutral and only these configuration files need to be edited when MOXA boxes are configured differently.
+Both above configuration files help extract and separate hardware configurables and settings away from the mechanism implemented by binaries. This way the binaries are hardware-neutral and only these configuration files need to be edited when MOXA boxes are configured differently.
 
 The first configuration file describes hardware connection and configuration information such as the IP address and port number of the MOXA box, the name and slave ID of each BCM device on each modbus line and the layout of holding registers on BCM devices.
 
 The second configuration file captures the connection settings with the oBIX server, the client side limitations such as the maximal number of devices supported and the log facilities used.
 
 
---3-- Hierarchy Organisations
+#3 Hierarchy Organisations
 
 The oBIX contracts for BCM and CB devices and history facilities for each CB devices are all organised in a hierarchy structure. In particular, the "device_href" and "history_lobby" settings in the MGATE adaptor's device configuration file specify where all BCM and CB contracts are registered and where history facilities of all CB devices are placed within "/obix/historyService/histories/" lobby:
 
