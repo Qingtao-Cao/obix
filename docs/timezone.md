@@ -20,19 +20,19 @@ are treated as:
 	2014-10-14T10:01:48Z
 	2014-10-14T10:03:00Z
 
-Considering this and the fact that most timezones have an integral difference from UTC, with a few others having a 15 or 30 minute difference (such as South Australia or the Northern Territories of Australia, Nepal etc.), only "00/15/30/45" are allowed in the "mm" part.
+Considering this and the fact that most timezones have an integral difference from UTC, with a few others having a 15 or 30 minute difference (such as South Australia or the Northern Territories of Australia, Nepal etc.), only '00/15/30/45' are allowed in the 'mm' part.
 
-Moreover, if no timezone designators are provided in the timestamp strings (e.g., all existing history records generated earlier), they will be regarded as in UTC timezone by default. It's also worthwhile to note that the oBIX server will convert all timestamp into UTC timezone before comparison, however, it will not re-format the timestamp in history records into UTC timezone before saving into raw history raw data files.
+If no timezone designators are provided in the timestamp strings (e.g. all existing history records generated earlier), they will be regarded as in UTC timezone by default. The oBIX server converts all timestamps into UTC timezone before comparison, however, it will not reformat the timestamp in the history records into UTC timezone before saving into raw history raw data files.
 
-If (all or part of) the provided timezone could not be properly interpreted an error contract is sent back to relevant clients to notify them of this.
+If (all or part of) the provided timezone can not be properly interpreted, an error contract is sent back to the relevant clients to notify them of this.
 
-Last but not least, please refer to the following link regarding the implementation of strptime():
+Please refer to the following link regarding the implementation of strptime():
 	https://github.com/andikleen/glibc/blob/master/time/strptime_l.c
 
 
 ## Test Case
 
-The src/tools/ts2utc.c program extracts the core timestamp manipulation code and can be used for test purpose. Basically it checks the sanity of the given timestamp and rebase it to UTC timezone. Even though the sanity check fails the rebase will be carried out so that users can see how C library strptime() API may have ignored unrecognisable timezone designator.
+The src/tools/ts2utc.c program extracts the core timestamp manipulation code and can be used for test purposes. It checks the sanity of the given timestamp and rebases it to the UTC timezone. Even if the sanity check fails, the rebase will be carried out so that users can see how the C library strptime() API may have ignored unrecognisable timezone designator.
 
 Some examples are illustrated below.
 
@@ -149,9 +149,9 @@ Some examples are illustrated below.
 
 ## Robustness of C APIs
 
-It's worthwhile to mention that timestamp_is_valid() can only sanity check if a timestamp string is in "%FT%T%z" format and can't further validate if a specific field contains a meaningful value, for example, whether the minute value is larger than 61 or whether February has 28 or 29 days.
+It should be noted that timestamp_is_valid() can only sanity check if a timestamp string is in "%FT%T%z" format. It cannot further validate if a specific field contains a meaningful value, e.g. whether the minute value is larger than 61, or whether February has 28 or 29 days.
 
-Moreover, it's also interesting to notice how strptime() and timegm() APIs handle invalid values, sometimes they are converted to valid ones but this won't always happen and they are simply treated as all zero or bring about an error code. As a result, history handler may complain that the given record includes a timestamp older than or equal to that of the last one.
+It is also important to note how strptime() and timegm() APIs handle invalid values. Sometimes they are converted to valid values, but this will not always happen and they will simply be treated as all zero, or bring about an error code. As a result, the history handler may complain that the given record includes a timestamp older than, or equal to that of the last one.
 
 Some examples are illustrated below.
 
