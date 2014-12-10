@@ -27,22 +27,22 @@
 			<!--
 				The ID and type of current connection
 			-->
-			<int name="id" val="0"/>
-			<str name="type" val="http"/>
+			<id val="0"/>
+			<type val="http"/>
 
 			<!--
 				Specifies the address of oBIX server and relative address of the
 				Lobby object at this server. Obligatory tag for HTTP connections.
 	        -->
-			<str name="server-ip" val="http://10.72.11.24"/>
-			<str name="server-lobby" val="/obix/"/>
+			<server-ip val="http://localhost/"/>
+			<server-lobby val="/obix/"/>
 
 			<!--
 				The timeout threshold for the default CURL handle to talk with the
 				oBIX server
 			-->
-			<int name="curl-timeout" val="30" unit="sec"/>
-			<int name="curl-bulky" val="0"/>
+			<curl-timeout val="30" unit="sec"/>
+			<curl-bulky val="0"/>
 
 			<!--
 				If the oBIX server supports long-poll watches, then below settings
@@ -58,14 +58,14 @@
 				If the min setting is not zero, then the oBIX server will always
 				delay the specified period of time before sending out notifications
 			-->
-			<int name="long-poll-max" val="55555" unit="msec"/>
-			<int name="long-poll-min" val="0" unit="msec"/>
+			<long-poll-max val="55555" unit="msec"/>
+			<long-poll-min val="0" unit="msec"/>
 
 			<!--
 				If the oBIX server does not support long-poll watches, then the
 				client can send out Watch.PollChange requests at fixed pace
 			-->
-			<int name="poll-interval" val="1000" unit="msec"/>
+			<poll-interval val="1000" unit="msec"/>
         </connection>
 
 		<!--

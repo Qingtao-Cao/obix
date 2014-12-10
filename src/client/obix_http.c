@@ -204,13 +204,13 @@ int http_setup_connection(xmlNode *node, Connection *conn)
 	}
 	memset(hc, 0, sizeof(Http_Connection));
 
-	if ((hc->timeout = xml_get_child_long(node, OBIX_OBJ_INT, CT_CURL_TIMEOUT)) < 0 ||
-		(hc->bulky = xml_get_child_long(node, OBIX_OBJ_INT, CT_CURL_BULKY)) < 0 ||
-		(hc->poll_int = xml_get_child_long(node, OBIX_OBJ_INT, CT_POLL_INTERVAL)) < 0 ||
-		(hc->poll_min = xml_get_child_long(node, OBIX_OBJ_INT, CT_LP_MIN)) < 0 ||
-		(hc->poll_max = xml_get_child_long(node, OBIX_OBJ_INT, CT_LP_MAX)) < 0 ||
-		!(hc->ip = xml_get_child_val(node, OBIX_OBJ_STR, CT_SERVER_IP)) ||
-		!(hc->lobby = xml_get_child_val(node, OBIX_OBJ_STR, CT_SERVER_LOBBY))) {
+	if ((hc->timeout = xml_get_child_long(node, CT_CURL_TIMEOUT, NULL)) < 0 ||
+		(hc->bulky = xml_get_child_long(node, CT_CURL_BULKY, NULL)) < 0 ||
+		(hc->poll_int = xml_get_child_long(node, CT_POLL_INTERVAL, NULL)) < 0 ||
+		(hc->poll_min = xml_get_child_long(node, CT_LP_MIN, NULL)) < 0 ||
+		(hc->poll_max = xml_get_child_long(node, CT_LP_MAX, NULL)) < 0 ||
+		!(hc->ip = xml_get_child_val(node, CT_SERVER_IP, NULL)) ||
+		!(hc->lobby = xml_get_child_val(node, CT_SERVER_LOBBY, NULL))) {
 		log_error("Failed to get config settings for connection %d", conn->id);
 		ret = OBIX_ERR_INVALID_ARGUMENT;
 		goto failed;
