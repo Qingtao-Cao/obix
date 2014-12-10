@@ -325,7 +325,7 @@ static err_msg_t hist_err_msg[] = {
 };
 
 /**
- * Write the index file. The whole index file will be re-written
+ * Write the index file, which will be re-written each time
  *
  * Return > 0 on success, < 0 otherwise
  */
@@ -340,7 +340,12 @@ static int write_index(const char *path, const char *data, int size)
 	iov[1].iov_base = (char *)data;
 	iov[1].iov_len = size;
 
-	if ((fd = open(path, O_RDWR | O_TRUNC)) >= 0) {
+	/*
+	 * NOTE: no O_TRUNC option so that even if the write attempt failed
+	 * due to lack of disk space, the original content won't be erased
+	 * right at the time of open!
+	 */
+	if ((fd = open(path, O_RDWR)) >= 0) {
 		ret = writev(fd, iov, 2);
 		close(fd);
 	}
@@ -1920,7 +1925,7 @@ static int create_dev_helper(const char *dev_id,
 							 obix_hist_dev_t **dev)
 {
 	char *devdir, *indexpath;
-	int ret = ERR_NO_MEM;
+	int ret = ERR_NO_PERM;
 
 	*dev = NULL;
 
@@ -1930,13 +1935,23 @@ static int create_dev_helper(const char *dev_id,
 		goto failed;
 	}
 
+	errno = 0;
 	if (mkdir(devdir, 0755) < 0) {
-		ret = ERR_NO_PERM;
+		log_error("Failed to mkdir %s because of %s", devdir,
+				  strerror(errno));
+		if (errno == EDQUOT || errno == ENOMEM || errno == ENOSPC) {
+			ret = ERR_NO_MEM;
+		}
 		goto failed;
 	}
 
+	errno = 0;
 	if (creat(indexpath, 0644) < 0) {
-		ret = ERR_NO_PERM;
+		log_error("Failed to creat %s because of %s", indexpath,
+				  strerror(errno));
+		if (errno == EDQUOT || errno == ENOMEM || errno == ENOSPC) {
+			ret = ERR_NO_MEM;
+		}
 		goto creat_failed;
 	}
 
