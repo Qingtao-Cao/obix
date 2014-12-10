@@ -230,7 +230,7 @@ int obix_unregister_device(const int conn_id, const char *name)
 			if (list_empty(&dev->listeners) == 0) {
 				pthread_mutex_unlock(&dev->mutex);
 				pthread_mutex_unlock(&conn->mutex);
-				log_error("Device %s still have active listeners installed");
+				log_error("Device %s still have active listeners installed", name);
 				return OBIX_ERR_INVALID_STATE;
 			}
 			pthread_mutex_unlock(&dev->mutex);

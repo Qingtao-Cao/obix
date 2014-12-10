@@ -95,7 +95,7 @@ const Comm_Stack OBIX_HTTP_COMM_STACK = {
 
 	.register_device = http_register_device,
 	.unregister_device = http_unregister_device,
-	.unregister_device = http_unregister_device_local,
+	.unregister_device_local = http_unregister_device_local,
 
 	.register_listener = http_register_listener,
 	.unregister_listener = http_unregister_listener,
@@ -398,7 +398,7 @@ int http_register_device(Device *dev, const char *data)
 	xmlDoc *doc = NULL;
 	xmlNode *root;
 	char *display = NULL;
-	int ret;
+	int ret = OBIX_ERR_SERVER_ERROR;
 
 #ifdef DEBUG
 	if (xml_is_valid_doc(data, NULL) == 0) {
@@ -426,7 +426,6 @@ int http_register_device(Device *dev, const char *data)
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc))) {
 		log_error("SignUp failed for Device %s on Connection %d",
 				  dev->name, conn->id);
-		ret = OBIX_ERR_SERVER_ERROR;
 		goto failed;
 	}
 
@@ -443,7 +442,6 @@ int http_register_device(Device *dev, const char *data)
 
 		if (!display || strstr(display, SERVER_ERRMSG_DEV_EXIST) == NULL) {
 			/* No display, or other types of error */
-			ret = OBIX_ERR_SERVER_ERROR;
 			goto failed;
 		}
 
@@ -453,8 +451,8 @@ int http_register_device(Device *dev, const char *data)
 	}
 
 	if (!(hd->href = (char *)xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF))) {
-		log_error("No href in the device contract returned from oBIX server");
-		ret = OBIX_ERR_NO_MEMORY;
+		log_error("No href in the device contract returned from oBIX server:\n%s",
+				  xml_dump_node(root));
 		goto failed;
 	}
 
