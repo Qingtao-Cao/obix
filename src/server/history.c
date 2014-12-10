@@ -1783,12 +1783,54 @@ void obix_hist_dispose(void)
 	_history = NULL;
 }
 
+/*
+ * All history irrelevant but possibly existing sub folders
+ * under the histories/ folder are enumerated here, they are
+ * skipped over during initialisation
+ *
+ * NOTE: there is no need to list regular files that may exist
+ * under histhories/ folder since they are ignored by default
+ */
+static const char *skipped_dirs[] = {
+	"lost+found",
+	NULL
+};
+
+static int is_skipped_dir(const char *dir)
+{
+	int i;
+
+	for (i = 0; skipped_dirs[i]; i++) {
+		if (strcmp(dir, skipped_dirs[i]) == 0) {
+			return 1;
+		}
+	}
+
+	/* Not on the black-list */
+	return 0;
+}
+
 static int hist_create_dev_wrapper(const char *parent_dir, const char *subdir,
 								   void *arg)	/* ignored */
 {
 	obix_hist_dev_t *dev;
-	char *indexpath;
+	struct stat statbuf;
+	char *indexpath, *path;
 	int ret = 0;
+
+	if (link_pathname(&path, parent_dir, subdir, NULL, NULL) < 0) {
+		return -1;
+	}
+
+	/* Skip over non-folder files, buggy or irrelevant sub folders */
+	if (lstat(path, &statbuf) < 0 ||
+		S_ISDIR(statbuf.st_mode) == 0 ||
+		is_skipped_dir(subdir) == 1) {
+		free(path);
+		log_debug("Skipping history irrelevant file: %s", subdir);
+		return 0;
+	}
+	free(path);
 
 	if (link_pathname(&indexpath, parent_dir, subdir,
 					  INDEX_FILENAME, INDEX_FILENAME_SUFFIX) < 0) {
