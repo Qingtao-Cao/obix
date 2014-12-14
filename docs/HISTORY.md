@@ -223,6 +223,25 @@ Be sure the hard drive is large enough to accommodate all potential log files be
 
 If generated log files and their indexes are to be merged with the existing history facility, make sure the merged index file is well-formatted and consistent with available log files.
 
+### No space on hard drive
+
+Assuming there is a soft link from /etc/obix/res/server/histories to /var/lib/obix/histories, follow steps can be used to setup a low disk space environment to test the robustness of the History subsystem when the disk space is running out:
+
+```
+	1. dd if=/dev/zero of=/tmp/test.img bs=1k count=60
+	2. sudo mke2fs -F -N 30 /tmp/test.img
+	3. sudo mount -o loop /tmp/test.img /var/lib/obix/histories
+	4. sudo chown -R lighttpd:lighttpd /var/lib/obix/histories
+```
+
+The first two commands create a regular file on the hard disk and format it as an ext2 filesystem. Note the size of the regular file is constrained as small as possible and the "-N" option for the mke2fs command is applied to further consume as much space as possible so that the remaining space is running out more quickly.
+
+The last two commands mount it to the location of the root of history facilities via a loop device and change its ownership to lighttpd so that the oBIX server can write to it successfully.
+
+Then run the oBIX server and the example adaptor as normal and about serveral minutes after, the space under histories/ is running out.
+
+Last but not least, if a real adaptor is used in such test such as the MGATE adaptor, then more number of inodes are needed. This can be done via the "-N" option. Suppose the MGATE adaptor will setup 1000 history facilities, then at least 3000 inodes are needed (one inode for each history facility folder, its index file and at least one data fragment file respectively). Otherwise the MGATE adaptor is likely unable to create all history facilities due to no available inode space on the hard drive even if noticeable disk space is still available ("df -i" command can be used to see the number of inodes left).
+
 ## Timezone Support
 
 ISO-9801 timezone definition has been supported by the history subsystem despite some practical limitation that has been imposed by C library strptime() API. Please refer to docs/timezone.md for more details.

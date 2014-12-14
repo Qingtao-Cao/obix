@@ -230,7 +230,7 @@ int obix_unregister_device(const int conn_id, const char *name)
 			if (list_empty(&dev->listeners) == 0) {
 				pthread_mutex_unlock(&dev->mutex);
 				pthread_mutex_unlock(&conn->mutex);
-				log_error("Device %s still have active listeners installed");
+				log_error("Device %s still have active listeners installed", name);
 				return OBIX_ERR_INVALID_STATE;
 			}
 			pthread_mutex_unlock(&dev->mutex);
@@ -699,8 +699,8 @@ static int obix_setup_connections_helper(xmlNode *node, void *arg1, void *arg2)
 	INIT_LIST_HEAD(&conn->list);
 	pthread_mutex_init(&conn->mutex, NULL);
 
-	if ((conn->id = xml_get_child_long(node, OBIX_OBJ_INT, CT_ID)) < 0 ||
-		!(type = xml_get_child_val(node, OBIX_OBJ_STR, CT_TYPE))) {
+	if ((conn->id = xml_get_child_long(node, CT_ID, NULL)) < 0 ||
+		!(type = xml_get_child_val(node, CT_TYPE, NULL))) {
 		log_error("Failed to get connection settings");
 		goto failed;
 	}

@@ -65,7 +65,7 @@ const char *HIST_AIN_TS_UND = "UNSPECIFIED";
 const char *HIST_OP_APPEND = "append";
 const char *HIST_OP_QUERY = "query";
 const char *HIST_INDEX = "index";
-const char *HIST_TS_INIT = "1970-01-01T0:0:0Z";
+const char *HIST_TS_INIT = "1970-01-01T00:00:00Z";
 const char *HIST_DATE_INIT = "1970-01-01";
 
 /*
