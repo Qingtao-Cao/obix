@@ -1753,16 +1753,17 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 	obix_mg_t *mg = mg_get_mg_bcm(bcm);
 	int timeout = 0;
 
-	while (mg_collect_aux(bcm) < 0) {
-		/*
-		 * If the current BCM is believed to have been off-lined,
-		 * then just re-try once
-		 */
-		if (bcm->off_line == 1) {
-			return;
-		}
+	/*
+	 * If the current BCM is believed to have been off-lined,
+	 * skip it over to avoid polluting logs with failure messages
+	 */
+	if (bcm->off_line == 1) {
+		return;
+	}
 
+	while (mg_collect_aux(bcm) < 0) {
 		bcm->timeout++;
+
 		if (timeout++ < mg->collector_max_timeout) {
 			sleep(mg->collector_sleep);
 		} else {
@@ -1780,6 +1781,7 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 	timeout = 0;
 	while (mg_collect_bm(bcm) < 0) {
 		bcm->timeout++;
+
 		if (timeout++ < mg->collector_max_timeout) {
 			sleep(mg->collector_sleep);
 		} else {
