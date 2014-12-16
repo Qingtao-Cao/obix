@@ -60,7 +60,7 @@ The oBIX contracts for BCM and CB devices and history facilities for each CB dev
 		<str name="device_href" val="/M1/DH1/A/"/>
 	</obj>
 
-In above example, all devices will have their history facilities created under "/obix/historyService/histories/M1/DH1/", where "M1" and "DH1" stands for the names of data centre and data hall respectively, and the BCM named "4A-1A" will have device contract for itself and all its CBs on-board created under "/obix/deviceRoot/M1/DH1/A/". As a result, its oBIX contract looks like below:
+In the above example, all devices have their history facilities created under "/obix/historyService/histories/M1/DH1/", where "M1" and "DH1" stands for the names of data centre and data hall respectively, and the BCM named "4A-1A" will have device contract for itself and all its CBs on-board created under "/obix/deviceRoot/M1/DH1/A/". As a result, its oBIX contract looks like the example below:
 
 	<obj name="4A-1A" href="/obix/deviceRoot/4A-1A" is="nextdc:VerisBCM">
 		<int name="SlaveID" href="SlaveID" val="1"/>
@@ -136,9 +136,9 @@ Similarly, history facilities of all CB devices on a BCM device are children of 
 Although BCM "4A-1A" doesn't have a history facility established, its name and names of ancestor data hall and data centre facilities are used to setup a hierarchy organisation of CBs' history facilities.
 
 
---4-- Handy Tools
+#4 Handy Tools
 
-The holding registers on a modbus slave can be directly accessed by modbus-cli tool as the following way:
+The holding registers on a modbus slave can be directly accessed by modbus-cli tool in the following way:
 
 	modbus read -s <slave ID> <master IP> <addr> <count>
 
