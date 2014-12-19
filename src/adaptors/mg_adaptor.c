@@ -60,6 +60,7 @@ static const char *XP_AC_FREQ_DEF = "/config/meta/misc/ac_freq_def";
 static const char *XP_DELAY_PER_REG = "/config/meta/misc/delay_per_reg";
 static const char *XP_CURL_TIMEOUT = "/config/meta/misc/curl_timeout";
 static const char *XP_CURL_BULKY = "/config/meta/misc/curl_bulky";
+static const char *XP_CURL_NOSIGNAL = "/config/meta/misc/curl_nosignal";
 
 static const char *XP_SN_ADDRESS = "/config/meta/reg_table/sn/address";
 static const char *XP_SN_COUNT = "/config/meta/reg_table/sn/count";
@@ -208,6 +209,7 @@ typedef struct obix_mg {
 	int delay_per_reg;
 	int curl_timeout;
 	int curl_bulky;
+	int curl_nosignal;
 
 	/* where to read static information of a BCM */
 	reg_tab_t sn;
@@ -582,7 +584,8 @@ static int mg_schedule_tasks(obix_mg_t *mg)
 		 * obix_updater only refreshs device status and append history
 		 * records, thus does not require a hugh quantum size.
 		 */
-		error = curl_ext_create(&bus->handle, mg->curl_bulky, mg->curl_timeout);
+		error = curl_ext_create(&bus->handle, mg->curl_bulky,
+								mg->curl_timeout, mg->curl_nosignal);
 		if (error != 0) {
 			log_error("Failed to create curl handle for %s", bus->name);
 			bus->handle = NULL;
@@ -639,11 +642,19 @@ static int mg_read_registers(mg_bcm_t *bcm, int addr, int nb, uint16_t *dest)
 	errno = 0;
 	rc = modbus_read_registers(ctx, addr - 1, nb, dest);
 	if (rc < 0 || rc != nb) {
-		log_error("Failed to read %d regs from %d on BCM %s, returned %d: %s",
-					nb, addr, bcm->name, rc, modbus_strerror(errno));
+		/*
+		 * Generate error messages only if the BCM has not been regarded
+		 * as off-lined in order to prevent polluting logs
+		 */
+		if (bcm->off_line == 0) {
+			log_error("Failed to read %d regs from %d on BCM %s, returned %d: %s",
+					  nb, addr, bcm->name, rc, modbus_strerror(errno));
+		}
+
 		return -1;
-	} else
-		return 0;
+	}
+
+	return 0;
 }
 
 static void mg_destroy_param(obix_mg_t *mg)
@@ -684,6 +695,7 @@ static int mg_setup_param(obix_mg_t *mg, xml_config_t *config)
 		(mg->delay_per_reg = xml_config_get_int(config, XP_DELAY_PER_REG)) < 0 ||
 		(mg->curl_timeout = xml_config_get_int(config, XP_CURL_TIMEOUT)) < 0 ||
 		(mg->curl_bulky = xml_config_get_int(config, XP_CURL_BULKY)) < 0 ||
+		(mg->curl_nosignal = xml_config_get_int(config, XP_CURL_NOSIGNAL)) < 0 ||
 		(mg->sn.address = xml_config_get_int(config, XP_SN_ADDRESS)) < 0 ||
 		(mg->sn.count = xml_config_get_int(config, XP_SN_COUNT)) < 0 ||
 		(mg->firmware.address = xml_config_get_int(config, XP_FIRMWARE_ADDRESS)) < 0 ||
@@ -1747,21 +1759,26 @@ static int mg_collect_bm(mg_bcm_t *bcm)
 /*
  * Refresh hardware status of one specific BCM, including AUX
  * and all BM on each of its panel.
+ *
+ * NOTE: try to access the current BCM regardless of whether it
+ * has been marked as off-line or not, so that it status could
+ * be updated and synchronised with oBIX server as soon as it has
+ * been re-connected without attendance.
  */
 static void mg_collector_task_helper(mg_bcm_t *bcm)
 {
 	obix_mg_t *mg = mg_get_mg_bcm(bcm);
 	int timeout = 0;
 
-	/*
-	 * If the current BCM is believed to have been off-lined,
-	 * skip it over to avoid polluting logs with failure messages
-	 */
-	if (bcm->off_line == 1) {
-		return;
-	}
-
 	while (mg_collect_aux(bcm) < 0) {
+		/*
+		 * If the current BCM is believed to have been off-lined,
+		 * then just re-try once
+		 */
+		if (bcm->off_line == 1) {
+			return;
+		}
+
 		bcm->timeout++;
 
 		if (timeout++ < mg->collector_max_timeout) {
@@ -1831,13 +1848,6 @@ static void mg_collector_task(void *arg)
 
 	list_for_each_entry(bcm, &bus->devices, list) {
 		pthread_mutex_lock(&bcm->mutex);
-
-		/*
-		 * Try to access the current BCM, regardless of whether it has
-		 * been marked as off-line or not, so that it states could be
-		 * updated and synchronized with oBIX server as soon as it has
-		 * been re-connected.
-		 */
 
 		while (bcm->being_read == 1)	/* obix_updater is working on this dev */
 			pthread_cond_wait(&bcm->wq, &bcm->mutex);
@@ -2115,16 +2125,15 @@ static void obix_updater_task(void *arg)
 
 	list_for_each_entry(bcm, &bus->devices, list) {
 		pthread_mutex_lock(&bcm->mutex);
-		while (bcm->being_written == 1)		/* mg_collector is working on this dev */
-			pthread_cond_wait(&bcm->rq, &bcm->mutex);
 
+		/* Skip current device if it has been marked as off-lined */
 		if (bcm->off_line == 1) {
-			/*
-			 * Skip current device if it has been marked as off-lined
-			 */
 			pthread_mutex_unlock(&bcm->mutex);
 			continue;
 		}
+
+		while (bcm->being_written == 1)		/* mg_collector is working on this dev */
+			pthread_cond_wait(&bcm->rq, &bcm->mutex);
 
 		bcm->being_read = 1;
 		pthread_mutex_unlock(&bcm->mutex);
@@ -2159,13 +2168,20 @@ static void mg_resurrect_dev(obix_mg_t *mg, int slave_id)
 	mg_modbus_t *bus;
 	mg_bcm_t *bcm;
 
-	log_debug("%d is brought alive", slave_id);
-
 	list_for_each_entry(bus, &mg->devices, list) {
 		list_for_each_entry(bcm, &bus->devices, list) {
 			if (bcm->slave_id != slave_id) {
 				continue;
 			}
+
+			if (bcm->off_line == 0) {
+				log_error("BCM %s (%d) is not marked as off-lined",
+						  bcm->name, slave_id);
+				return;
+			}
+
+			log_debug("BCM %s (%d) could be brought on-lined",
+					  bcm->name, slave_id);
 
 			pthread_mutex_lock(&bcm->mutex);
 			while (bcm->being_written == 1 || bcm->being_read == 1) {

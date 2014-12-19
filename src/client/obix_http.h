@@ -45,6 +45,7 @@ typedef struct
 	/* Attributes for the generic CURL handle */
 	int timeout;
 	int bulky;
+	int nosignal;
 
 	/* Polling intervals, and attributes for the long-poll intervals */
 	long poll_int;

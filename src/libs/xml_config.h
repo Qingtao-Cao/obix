@@ -39,6 +39,7 @@ extern const char *CT_LP_MIN;
 extern const char *CT_LP_MAX;
 extern const char *CT_CURL_TIMEOUT;
 extern const char *CT_CURL_BULKY;
+extern const char *CT_CURL_NOSIGNAL;
 
 typedef struct xml_config {
 	char *resdir;
