@@ -112,6 +112,12 @@ typedef struct
 	int timeout;
 
 	/*
+	 * Indicator whether to disable the use of signal in timeout
+	 * during DNS lookup
+	 */
+	int nosignal;
+
+	/*
 	 * Callbacks invoked by libcurl to copy data from application's
 	 * output buffer and to save received data from peer into
 	 * application's input buffer respectively
@@ -128,7 +134,7 @@ typedef struct
 int curl_ext_init(void);
 void curl_ext_dispose(void);
 
-int curl_ext_create(CURL_EXT **, const int, const int);
+int curl_ext_create(CURL_EXT **, const int, const int, const int);
 void curl_ext_free(CURL_EXT *);
 
 int curl_ext_get(CURL_EXT *, const char *);

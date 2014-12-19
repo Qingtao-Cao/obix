@@ -206,6 +206,7 @@ int http_setup_connection(xmlNode *node, Connection *conn)
 
 	if ((hc->timeout = xml_get_child_long(node, CT_CURL_TIMEOUT, NULL)) < 0 ||
 		(hc->bulky = xml_get_child_long(node, CT_CURL_BULKY, NULL)) < 0 ||
+		(hc->nosignal = xml_get_child_long(node, CT_CURL_NOSIGNAL, NULL)) < 0 ||
 		(hc->poll_int = xml_get_child_long(node, CT_POLL_INTERVAL, NULL)) < 0 ||
 		(hc->poll_min = xml_get_child_long(node, CT_LP_MIN, NULL)) < 0 ||
 		(hc->poll_max = xml_get_child_long(node, CT_LP_MAX, NULL)) < 0 ||
@@ -216,7 +217,7 @@ int http_setup_connection(xmlNode *node, Connection *conn)
 		goto failed;
 	}
 
-	if (curl_ext_create(&hc->handle, hc->bulky, hc->timeout) < 0) {
+	if (curl_ext_create(&hc->handle, hc->bulky, hc->timeout, hc->nosignal) < 0) {
 		log_error("Failed to setup CURL handle for connection %d", conn->id);
 		goto failed;
 	}
@@ -859,8 +860,8 @@ static int _http_create_watch(Device *dev)
 	 * The CURL handles for watch operations will never time out
 	 * but blocking to receive notifications from the oBIX server
 	 */
-	if (curl_ext_create(&hd->watch_handle, 0, 0) < 0 ||
-		curl_ext_create(&hd->poll_handle, 0, 0) < 0) {
+	if (curl_ext_create(&hd->watch_handle, 0, 0, 1) < 0 ||
+		curl_ext_create(&hd->poll_handle, 0, 0, 1) < 0) {
 		log_error("Failed to setup watch CURL handles for device %s",
 				  dev->name);
 		goto failed;

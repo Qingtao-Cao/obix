@@ -42,7 +42,24 @@
 				oBIX server
 			-->
 			<curl-timeout val="30" unit="sec"/>
+
+			<!--
+				Indicate the quantum size of CURL handle. If set as 1, each quantum
+				will occupy two consecutive pages. If set as 0, 1/4 of a page instead.
+				For applications that are likely to transfer huge amount of data then
+				1 should be used
+			-->
 			<curl-bulky val="0"/>
+
+			<!--
+				Indicate whether to disable the usage of signals to timeout during DNS
+				lookups in order to avoid a libcurl defect vulnerable on some platforms
+				that result in unexpected termination of application. For more information,
+				refer to the following link:
+
+				http://stackoverflow.com/questions/9191668/error-longjmp-causes-uninitialized-stack-frame
+			-->
+			<curl-nosignal val="1"/>
 
 			<!--
 				If the oBIX server supports long-poll watches, then below settings

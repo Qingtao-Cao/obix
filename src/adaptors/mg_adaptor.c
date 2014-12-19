@@ -60,6 +60,7 @@ static const char *XP_AC_FREQ_DEF = "/config/meta/misc/ac_freq_def";
 static const char *XP_DELAY_PER_REG = "/config/meta/misc/delay_per_reg";
 static const char *XP_CURL_TIMEOUT = "/config/meta/misc/curl_timeout";
 static const char *XP_CURL_BULKY = "/config/meta/misc/curl_bulky";
+static const char *XP_CURL_NOSIGNAL = "/config/meta/misc/curl_nosignal";
 
 static const char *XP_SN_ADDRESS = "/config/meta/reg_table/sn/address";
 static const char *XP_SN_COUNT = "/config/meta/reg_table/sn/count";
@@ -208,6 +209,7 @@ typedef struct obix_mg {
 	int delay_per_reg;
 	int curl_timeout;
 	int curl_bulky;
+	int curl_nosignal;
 
 	/* where to read static information of a BCM */
 	reg_tab_t sn;
@@ -582,7 +584,8 @@ static int mg_schedule_tasks(obix_mg_t *mg)
 		 * obix_updater only refreshs device status and append history
 		 * records, thus does not require a hugh quantum size.
 		 */
-		error = curl_ext_create(&bus->handle, mg->curl_bulky, mg->curl_timeout);
+		error = curl_ext_create(&bus->handle, mg->curl_bulky,
+								mg->curl_timeout, mg->curl_nosignal);
 		if (error != 0) {
 			log_error("Failed to create curl handle for %s", bus->name);
 			bus->handle = NULL;
@@ -692,6 +695,7 @@ static int mg_setup_param(obix_mg_t *mg, xml_config_t *config)
 		(mg->delay_per_reg = xml_config_get_int(config, XP_DELAY_PER_REG)) < 0 ||
 		(mg->curl_timeout = xml_config_get_int(config, XP_CURL_TIMEOUT)) < 0 ||
 		(mg->curl_bulky = xml_config_get_int(config, XP_CURL_BULKY)) < 0 ||
+		(mg->curl_nosignal = xml_config_get_int(config, XP_CURL_NOSIGNAL)) < 0 ||
 		(mg->sn.address = xml_config_get_int(config, XP_SN_ADDRESS)) < 0 ||
 		(mg->sn.count = xml_config_get_int(config, XP_SN_COUNT)) < 0 ||
 		(mg->firmware.address = xml_config_get_int(config, XP_FIRMWARE_ADDRESS)) < 0 ||

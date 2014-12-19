@@ -102,6 +102,7 @@
 			-->
 			<curl_timeout val="30" unit="sec"/>
 			<curl_bulky val="0"/>
+			<curl_nosignal val="1"/>
 		</misc>
 
 		<!--

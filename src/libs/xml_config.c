@@ -47,6 +47,7 @@ const char *CT_LP_MIN = "long-poll-min";
 const char *CT_LP_MAX = "long-poll-max";
 const char *CT_CURL_TIMEOUT = "curl-timeout";
 const char *CT_CURL_BULKY = "curl-bulky";
+const char *CT_CURL_NOSIGNAL = "curl-nosignal";
 
 #define ARRAY_LEN(a) (size_t) (sizeof(a) / sizeof(a[0]))
 
