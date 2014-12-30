@@ -1,20 +1,20 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  *
- * This file is part of obix-adaptors
+ * This file is part of obix.
  *
- * obix-adaptors is free software: you can redistribute it and/or modify
+ * obix is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * obix-adaptors is distributed in the hope that it will be useful,
+ * obix is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with obix-adaptors.  If not, see <http://www.gnu.org/licenses/>.
+ * along with obix. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -318,6 +318,12 @@ typedef struct mg_bcm {
 	 */
 	char *history_name;
 
+	/*
+	 * the flag used during clean up process to unregister those
+	 * devices that have actually been registered
+	 */
+	int registered;
+
 	/* starting slave ID of this device */
 	int slave_id;
 
@@ -428,6 +434,12 @@ typedef struct mg_bm {
 	 * thus can be used to name its history facility (if needed)
 	 */
 	char *history_name;
+
+	/*
+	 * the flag used during clean up process to unregister those
+	 * devices that have actually been registered
+	 */
+	int registered;
 
 	/* next time to append history record */
 	time_t htime;
@@ -1217,13 +1229,6 @@ failed:
 	return NULL;
 }
 
-static void mg_unregister_bm(mg_bm_t *bm)
-{
-	obix_unregister_device(OBIX_CONNECTION_ID, bm->history_name);
-
-	/* History records would always be preserved */
-}
-
 /*
  * Register a BM to oBIX server and have a history facility
  * setup for it
@@ -1257,14 +1262,16 @@ static int mg_register_bm(mg_bm_t *bm)
 	free(dev_data);
 
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to register BM %s", bm->name);
 		return ret;
+	} else {
+		bm->registered = 1;
 	}
 
 	ret = obix_get_history(NULL, OBIX_CONNECTION_ID, bm->history_name);
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to create a history facility for %s", bm->name);
-		mg_unregister_bm(bm);
+		log_error("Failed to create a history facility for %s on BCM %s",
+				  bm->name, bcm->name);
+		/* Clean up of the registered BM will be done before the program exists */
 	}
 
 	return ret;
@@ -1277,7 +1284,11 @@ static void mg_unregister_bcm(mg_bcm_t *bcm)
 
 	for (i = 0; i < MG_PANELS_PER_BCM; i++) {
 		list_for_each_entry(bm, &bcm->devices[i], list) {
-			mg_unregister_bm(bm);
+			if (bm->registered == 0) {
+				continue;
+			}
+
+			obix_unregister_device(OBIX_CONNECTION_ID, bm->history_name);
 		}
 	}
 
@@ -1432,20 +1443,21 @@ static int mg_register_bcm(obix_mg_t *mg, mg_bcm_t *bcm)
 	free(dev_data);
 
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to register BCM %s", bcm->name);
 		return ret;
+	} else {
+		bcm->registered = 1;
 	}
 
 	for (i = 0; i < MG_PANELS_PER_BCM; i++) {
 		list_for_each_entry(bm, &bcm->devices[i], list) {
 			if ((ret = mg_register_bm(bm)) != OBIX_SUCCESS) {
-				break;
+				/*
+				 * Return directly to avoid double cleanup, which is done
+				 * by the caller
+				*/
+				return ret;
 			}
 		}
-	}
-
-	if (ret != OBIX_SUCCESS) {
-		mg_unregister_bcm(bcm);
 	}
 
 	return ret;
@@ -1461,6 +1473,10 @@ static void mg_unregister_devices(obix_mg_t *mg)
 
 	list_for_each_entry(bus, &mg->devices, list) {
 		list_for_each_entry(bcm, &bus->devices, list) {
+			if (bcm->registered == 0) {
+				continue;
+			}
+
 			mg_unregister_bcm(bcm);
 		}
 	}
@@ -1499,11 +1515,14 @@ static int mg_register_devices(obix_mg_t *mg)
 		log_debug("Register devices on modbus %s", bus->name);
 		list_for_each_entry(bcm, &bus->devices, list) {
 			if ((ret = mg_register_bcm(mg, bcm)) != OBIX_SUCCESS) {
-				break;
+				goto failed;
 			}
 		}
 	}
 
+	/* Fall through */
+
+failed:
 	if (ret != OBIX_SUCCESS) {
 		mg_unregister_devices(mg);
 	}
