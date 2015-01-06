@@ -95,6 +95,7 @@ void xml_xpath_for_each_item(xmlNode *rootNode, const char *pattern,
  * @param	callback	A pointer to the function to call on each matching element
  * @param	arg1		A user-defined pointer to carry into each callback
  * @param	arg2		A user-defined pointer to carry into each callback
+ * @param	depth		A counter on the depth of recursive invocation
  *
  * @returns		0 if all possible callbacks executed return successfully, or a callback can
  *				elect to return -1 indicating that the for_each statement should break
@@ -107,7 +108,7 @@ void xml_xpath_for_each_item(xmlNode *rootNode, const char *pattern,
  */
 int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
 						   xml_item_cb_t callback,
-						   void *arg1, void *arg2);
+						   void *arg1, void *arg2, int depth);
 
 /**
  * Invokes @a callback for every possible child element starting at the node pointed to by

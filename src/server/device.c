@@ -684,7 +684,7 @@ static obix_dev_t *device_init(xmlNode *node, const xmlChar *href,
 	 * elements may be accessed
 	 */
 	dev->node = node;
-	xml_for_each_node_type(node, 0, device_setup_mapping, dev, NULL);
+	xml_for_each_node_type(node, 0, device_setup_mapping, dev, NULL, 0);
 
 	return dev;
 

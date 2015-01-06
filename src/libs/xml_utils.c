@@ -115,9 +115,10 @@ int xml_for_each_ancestor_or_self(xmlNode *start, xmlNode *stop,
  * with satisfactory type in the given subtree
  */
 int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
-						   xml_item_cb_t callback, void *arg1, void *arg2)
+						   xml_item_cb_t callback, void *arg1, void *arg2,
+						   int depth)
 {
-	xmlNode *nextNode = NULL;
+	xmlNode *sibling = NULL;
 	int ret = 0;
 
 	if (!rootNode) {
@@ -126,10 +127,14 @@ int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
 
 	do {
 		/*
-		 * Save the next node's pointer in case the callback function
+		 * NOTE: Only move on to siblings when the invocation depth
+		 * is greater than 0, so as to prevent trespassing on siblings
+		 * of the original given node
+		 *
+		 * Save the sibling's pointer in case the callback function
 		 * may delete the current node
 		 */
-		nextNode = rootNode->next;
+		sibling = (depth == 0) ? NULL : rootNode->next;
 
 		/* If type equals to 0 then skip the comparison of it */
 		if (type > 0 && rootNode->type != type) {
@@ -148,12 +153,13 @@ int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
 
 		if (rootNode != NULL) {
 			if ((ret = xml_for_each_node_type(rootNode->children, type,
-											  callback, arg1, arg2)) < 0) {
+											  callback, arg1, arg2,
+											  ++depth)) < 0) {
 				break;
 			}
 		}
 
-	} while ((rootNode = nextNode) != NULL);
+	} while ((rootNode = sibling) != NULL);
 
 	return ret;
 }
@@ -162,14 +168,14 @@ int xml_for_each_element(xmlNode *rootNode, xml_item_cb_t callback,
 						 void *arg1, void *arg2)
 {
 	return xml_for_each_node_type(rootNode, XML_ELEMENT_NODE,
-								  callback, arg1, arg2);
+								  callback, arg1, arg2, 0);
 }
 
 int xml_for_each_comment(xmlNode *rootNode, xml_item_cb_t callback,
 						 void *arg1, void *arg2)
 {
 	return xml_for_each_node_type(rootNode, XML_COMMENT_NODE,
-								  callback, arg1, arg2);
+								  callback, arg1, arg2, 0);
 }
 
 /**
