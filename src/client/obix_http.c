@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>		/* write */
+#include <math.h>		/* pow */
 #include "xml_config.h"
 #include "log_utils.h"
 #include "curl_ext.h"
@@ -83,7 +84,11 @@ static const char *OBIX_LOBBY_HISTORY_SERVICE_GET = "/get";
 static const char *WATCH_PWI_MIN = "min";
 static const char *WATCH_PWI_MAX = "max";
 
-static const char *INTERNAL_SERVER_ERROR = "500 - Internal Server Error";
+static const char *HTTP_ERR_500 = "500 - Internal Server Error";
+static const char *HTTP_ERR_503 = "503 - Service Not Available";
+
+/* The maximal number of times to retry a http request */
+static int HTTP_RETRY_MAX = 5;
 
 /*
  * Defines HTTP communication stack.
@@ -116,30 +121,63 @@ const Comm_Stack OBIX_HTTP_COMM_STACK = {
 };
 
 /*
- * Return 1 if the given node (normally the root node of the contract
- * returned from oBIX server) is an error contract, 0 otherwise
+ * Return 1 if the given response contains is an error contract
  *
  * NOTE: in case of oBIX server error, its host web (such as lighttpd
  * etc) server will return a html document
  */
 int is_err_contract(const xmlNode *root)
 {
-	char *contract = NULL;
+	char *contract = xml_dump_node(root);
 	int ret = 0;
 
 	if (xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
-		return 1;
+		ret = 1;
+		goto out;
 	}
 
 	if (xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_HTML) == 0 &&
-		(contract = xml_dump_node(root)) != NULL &&
-		strstr(contract, INTERNAL_SERVER_ERROR)) {
+		contract && strstr(contract, HTTP_ERR_500)) {
 		log_debug("%s, possibly because oBIX server:\n"
 				  "1. may have crashed, or\n"
 				  "2. may have reached resource limit, or\n"
 				  "3. is buggy and shutdown fastcgi channel unexpectedly\n"
 				  "See lighttpd's error.log and use \"strace -ff\" to analyse "
-				  "its behaviour!", INTERNAL_SERVER_ERROR);
+				  "its behaviour!", HTTP_ERR_500);
+		ret = 1;
+	}
+
+out:
+	if (contract) {
+		if (ret == 1) {
+			log_debug("Error contract returned from server:\n%s", contract);
+		}
+
+		free(contract);
+	}
+
+	return ret;
+}
+
+/*
+ * Return 1 if the given response contains a HTTP 503 type of error
+ */
+int is_service_unavailable(const xmlNode *root)
+{
+	char *contract = xml_dump_node(root);
+	static int printed = 0;
+	int ret = 0;
+
+	if (xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_HTML) == 0 &&
+		contract && strstr(contract, HTTP_ERR_503)) {
+		if (printed == 0) {
+			log_debug("%s, oBIX server too busy to handle more requests\n"
+					  "Report to its administrator to either:\n"
+					  "1. increase the backlog queue of the FCGX socket, or\n"
+					  "2. spawn more server threads", HTTP_ERR_503);
+			printed = 1;
+		}
+
 		ret = 1;
 	}
 
@@ -474,8 +512,8 @@ int http_register_device(Device *dev, const char *data)
 	Http_Device *hd;
 	xmlDoc *doc = NULL;
 	xmlNode *root;
-	char *contract;
 	int ret = OBIX_ERR_SERVER_ERROR;
+	int count = 0, delay;
 
 #ifdef DEBUG
 	if (xml_is_valid_doc(data, NULL) == 0) {
@@ -489,6 +527,11 @@ int http_register_device(Device *dev, const char *data)
 	}
 	memset(hd, 0, sizeof(Http_Device));
 
+again:
+	if (doc) {
+		xmlFreeDoc(doc);
+	}
+
 	/*
 	 * Connection.mutex must be grabbed during the communication
 	 * with the oBIX server to ensure no race conditions in the
@@ -501,8 +544,10 @@ int http_register_device(Device *dev, const char *data)
 	pthread_mutex_unlock(&hc->curl_mutex);
 
 	/*
-	 * If the same device owned by one client has been registered
-	 * already, the oBIX server won't return any error contract
+	 * If the device has been registered by the same client
+	 * already, the oBIX server won't return any error contract.
+	 * This happens when clients are terminated due to error
+	 * and then restarted
 	 */
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
 		is_err_contract(root) == 1) {
@@ -513,15 +558,25 @@ int http_register_device(Device *dev, const char *data)
 	}
 
 	if (!(hd->href = (char *)xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF))) {
-		log_error("Returned contract has no href for Device %s on Connection %d",
-				  dev->name, conn->id);
-		if ((contract = xml_dump_node(root)) != NULL) {
-			log_debug("Returned contract:\n%s", contract);
-			free(contract);
+		/* Retry if the service is temporarily not available */
+		if (is_service_unavailable(root) == 1) {
+			if (count < HTTP_RETRY_MAX) {
+				delay = pow(2, count++);
+				log_debug("Sleep %d seconds and retry", delay);
+				sleep(delay);
+				goto again;
+			} else {
+				log_error("Retry threshold (%d) reached, %s",
+						  count, HTTP_ERR_503);
+				ret = OBIX_ERR_SERVER_ERROR;
+				goto failed;
+			}
+		} else {
+			log_error("Response has no href for Device %s on Connection %d",
+					  dev->name, conn->id);
+			ret = OBIX_ERR_SERVER_ERROR;
+			goto failed;
 		}
-
-		ret = OBIX_ERR_SERVER_ERROR;
-		goto failed;
 	}
 
 	dev->priv = hd;
@@ -1351,7 +1406,7 @@ int http_get_history(CURL_EXT *user_handle, Device *dev)
 	xmlDoc *doc = NULL;
 	xmlNode *root;
 	char *buf, *href = NULL;
-	int len, ret;
+	int len, ret, count = 0, delay;
 
 	if (hd->hist_index) {	/* history facility already created */
 		return OBIX_SUCCESS;
@@ -1365,6 +1420,11 @@ int http_get_history(CURL_EXT *user_handle, Device *dev)
 	}
 	sprintf(buf, OBIX_HISTORY_GET_DOC, dev->name);
 
+again:
+	if (doc) {
+		xmlFreeDoc(doc);
+	}
+
 	handle->outputBuffer = buf;
 	if (!user_handle) {
 		pthread_mutex_lock(&hc->curl_mutex);
@@ -1373,15 +1433,35 @@ int http_get_history(CURL_EXT *user_handle, Device *dev)
 	if (!user_handle) {
 		pthread_mutex_unlock(&hc->curl_mutex);
 	}
-	free(buf);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
-		is_err_contract(root) == 1 ||
-		!(href = (char *)xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF))) {
+		is_err_contract(root) == 1) {
 		log_error("History.Get failed for Device %s on Connection %d",
 				  dev->name, conn->id);
 		ret = OBIX_ERR_SERVER_ERROR;
 		goto failed;
+	}
+
+	if (!(href = (char *)xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF))) {
+		/* Retry if the service is temporarily not available */
+		if (is_service_unavailable(root) == 1) {
+			if (count < HTTP_RETRY_MAX) {
+				delay = pow(2, count++);
+				log_debug("Sleep %d seconds and retry", delay);
+				sleep(delay);
+				goto again;
+			} else {
+				log_error("Retry threshold (%d) reached, %s",
+						  count, HTTP_ERR_503);
+				ret = OBIX_ERR_SERVER_ERROR;
+				goto failed;
+			}
+		} else {
+			log_error("Response has no href for Device %s on Connection %d",
+					  dev->name, conn->id);
+			ret = OBIX_ERR_SERVER_ERROR;
+			goto failed;
+		}
 	}
 
 	if (link_pathname(&hd->hist_append, hc->ip, href, HIST_OP_APPEND,
@@ -1426,6 +1506,7 @@ failed:
 		}
 	}
 
+	free(buf);
 	return ret;
 }
 
