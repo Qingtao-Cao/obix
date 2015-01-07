@@ -271,6 +271,7 @@ typedef struct hvsb_fdr {
 	char *name;
 	char *history_name;
 	char *href;
+	int registered;
 	bms_mtr_t kW;
 	bms_mtr_t kWh;
 	struct list_head list;
@@ -316,6 +317,7 @@ typedef struct msb_fdr {
 	char *name;
 	char *history_name;
 	char *href;
+	int registered;
 	bms_mtr_t kW;
 	bms_mtr_t kWh[MSB_FDR_KWH_MAX];
 	struct list_head list;
@@ -328,6 +330,7 @@ typedef struct bms_btank {
 	char *name;
 	char *history_name;
 	char *href;
+	int registered;
 	bms_mtr_t level;
 	struct list_head list;
 } bms_btank_t;
@@ -341,6 +344,7 @@ typedef struct bms_dtank {
 	char *name;
 	char *history_name;
 	char *href;
+	int registered;
 	bms_mtr_t levels[DTANK_LVL_MAX];
 	struct list_head list;
 } bms_dtank_t;
@@ -388,8 +392,14 @@ typedef struct bms_sb {
 	 */
 	char *history_name;
 
-	/* The href of the device's contract on oBIX server */
+	/* The href of the device's contract on the oBIX server */
 	char *href;
+
+	/*
+	 * Indicator whether the device has been registered properly
+	 * on the oBIX erver
+	 */
+	int registered;
 
 	/* The list of input and output feeders */
 	struct list_head fdrs[SB_FDR_LIST_MAX];
@@ -421,7 +431,7 @@ typedef struct bms_sb {
 	 * So far the supported callbacks include registering feeders'
 	 * contracts into that of the switch board and having them updated
 	 */
-	int (*for_each_fdr)(struct bms_sb *, fdr_cb_t, void *);
+	int (*for_each_fdr)(struct bms_sb *, fdr_cb_t);
 
 	/*
 	 * The operation to setup the in-memory history template
@@ -748,7 +758,7 @@ static void get_msb_fdr_kwh(bms_mtr_t *mtr, const int max, float *val)
 	*val += r1;
 }
 
-static int for_each_msb_fdr(bms_sb_t *sb, fdr_cb_t cb, void *arg)
+static int for_each_msb_fdr(bms_sb_t *sb, fdr_cb_t cb)
 {
 	float kw, kwh;
 	int ret = OBIX_SUCCESS, i;
@@ -761,7 +771,7 @@ static int for_each_msb_fdr(bms_sb_t *sb, fdr_cb_t cb, void *arg)
 			get_msb_fdr_kwh(n->kWh, MSB_FDR_KWH_MAX, &kwh);
 
 			if ((ret = cb(sb, n->name, n->href, n->history_name,
-						  kw, kwh, arg)) != OBIX_SUCCESS) {
+						  kw, kwh, &n->registered)) != OBIX_SUCCESS) {
 				return ret;
 			}
 		}
@@ -770,7 +780,7 @@ static int for_each_msb_fdr(bms_sb_t *sb, fdr_cb_t cb, void *arg)
 	return ret;
 }
 
-static int for_each_hvsb_fdr(bms_sb_t *sb, fdr_cb_t cb, void *arg)
+static int for_each_hvsb_fdr(bms_sb_t *sb, fdr_cb_t cb)
 {
 	float kw, kwh;
 	int ret = OBIX_SUCCESS, i;
@@ -783,7 +793,7 @@ static int for_each_hvsb_fdr(bms_sb_t *sb, fdr_cb_t cb, void *arg)
 			get_mtr_reading(&n->kWh, &kwh);
 
 			if ((ret = cb(sb, n->name, n->href, n->history_name,
-						  kw, kwh, arg)) != OBIX_SUCCESS) {
+						  kw, kwh, &n->registered)) != OBIX_SUCCESS) {
 				return ret;
 			}
 		}
@@ -1725,7 +1735,11 @@ static int bms_unregister_fdr(bms_sb_t *sb, const char *name,
 							  const char *href, const char *history_name,
 							  const float kw, const float kwh, void *arg)
 {
-	return obix_unregister_device(OBIX_CONNECTION_ID, history_name);
+	int *registered = (int *)arg;
+
+	return (*registered == 1) ? obix_unregister_device(OBIX_CONNECTION_ID,
+													   history_name) :
+								OBIX_SUCCESS;
 }
 
 /*
@@ -1744,21 +1758,27 @@ static void bms_unregister_bms(obix_bms_t *bms)
 
 	for (i = 0; i < BMS_SB_LIST_MAX; i++) {
 		list_for_each_entry(sb, &bms->sbs[i], list) {
-			if (sb->for_each_fdr(sb, bms_unregister_fdr, NULL) != OBIX_SUCCESS) {
-				log_error("Failed to unregister fdr on hvsb/msb %s",
-						  sb->history_name);
-			}
+			if (sb->registered == 1) {
+				if (sb->for_each_fdr(sb, bms_unregister_fdr) != OBIX_SUCCESS) {
+					log_error("Failed to unregister fdr on hvsb/msb %s",
+							  sb->history_name);
+				}
 
-			obix_unregister_device(OBIX_CONNECTION_ID, sb->history_name);
+				obix_unregister_device(OBIX_CONNECTION_ID, sb->history_name);
+			}
 		}
 	}
 
 	list_for_each_entry(btank, &bms->btanks, list) {
-		obix_unregister_device(OBIX_CONNECTION_ID, btank->history_name);
+		if (btank->registered == 1) {
+			obix_unregister_device(OBIX_CONNECTION_ID, btank->history_name);
+		}
 	}
 
 	list_for_each_entry(dtank, &bms->dtanks, list) {
-		obix_unregister_device(OBIX_CONNECTION_ID, dtank->history_name);
+		if (dtank->registered == 1) {
+			obix_unregister_device(OBIX_CONNECTION_ID, dtank->history_name);
+		}
 	}
 
 	obix_unregister_device(OBIX_CONNECTION_ID, bms->history_name);
@@ -1766,9 +1786,9 @@ static void bms_unregister_bms(obix_bms_t *bms)
 
 static int bms_register_fdr(bms_sb_t *sb, const char *name,
 							const char *href, const char *history_name,
-							const float kw, const float kwh,
-							void *arg)	/* arg == bms's address, not used yet */
+							const float kw, const float kwh, void *arg)
 {
+	int *registered = (int *)arg;
 	char *dev_data;
 	int len, ret;
 
@@ -1782,6 +1802,8 @@ static int bms_register_fdr(bms_sb_t *sb, const char *name,
 
 	ret = obix_register_device(OBIX_CONNECTION_ID, history_name, dev_data);
 	free(dev_data);
+
+	*registered = (ret == OBIX_SUCCESS) ? 1 : 0;
 
 	return ret;
 }
@@ -1806,12 +1828,15 @@ static int bms_register_sb_core(bms_sb_t *sb)
 	if (ret != OBIX_SUCCESS) {
 		log_error("Failed to register %s", sb->history_name);
 		return ret;
+	} else {
+		sb->registered = 1;
 	}
 
 	ret = obix_get_history(NULL, OBIX_CONNECTION_ID, sb->history_name);
 	if (ret != OBIX_SUCCESS) {
 		log_error("Failed to get history facility for %s", sb->history_name);
-		obix_unregister_device(OBIX_CONNECTION_ID, sb->history_name);
+
+		/* Clean up of registered device is done before the program exists */
 	}
 
 	return ret;
@@ -1828,9 +1853,10 @@ static int bms_register_sb(obix_bms_t *bms, bms_sb_t *sb, const int which)
 		return ret;
 	}
 
-	if ((ret = sb->for_each_fdr(sb, bms_register_fdr, bms)) != OBIX_SUCCESS) {
-		log_error("Failed to add fdrs on %s", sb->name);
-		obix_unregister_device(OBIX_CONNECTION_ID, sb->history_name);
+	if ((ret = sb->for_each_fdr(sb, bms_register_fdr)) != OBIX_SUCCESS) {
+		log_error("Failed to register fdrs on %s", sb->name);
+
+		/* Clean up of registered device is done before the program exists */
 	}
 
 	return ret;
@@ -1860,6 +1886,7 @@ static int bms_register_btank(obix_bms_t *bms, bms_btank_t *btank)
 		log_error("Failed to register %s", btank->name);
 	}
 
+	btank->registered = (ret == OBIX_SUCCESS) ? 1 : 0;
 	return ret;
 }
 
@@ -1890,6 +1917,7 @@ static int bms_register_dtank(obix_bms_t *bms, bms_dtank_t *dtank)
 		log_error("Failed to register %s", dtank->name);
 	}
 
+	dtank->registered = (ret == OBIX_SUCCESS) ? 1 : 0;
 	return ret;
 }
 
@@ -2258,7 +2286,7 @@ static int bms_update_sb(obix_bms_t *bms, bms_sb_t *sb, const int which)
 {
 	assert(which == BMS_SB_LIST_HVSB || which == BMS_SB_LIST_MSB);
 
-	return sb->for_each_fdr(sb, bms_update_fdr, NULL);
+	return sb->for_each_fdr(sb, bms_update_fdr);
 }
 
 static int bms_update_btank(obix_bms_t *bms, bms_btank_t *btank)
