@@ -136,23 +136,23 @@ static const unsigned char BMS_CSV_DELIM = CSV_TAB;
 static const char *SB_FDR_CONTRACT =
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
 "<obj name=\"%s\" href=\"%s\" is=\"nextdc:power_meter\">\r\n"
-"<real name=\"kW\" href=\"kW\" val=\"%.1f\" writable=\"true\"/>\r\n"
-"<real name=\"kWh\" href=\"kWh\" val=\"%.1f\" writable=\"true\"/>\r\n"
+"<real name=\"kW\" href=\"kW\" val=\"%.1f\"/>\r\n"
+"<real name=\"kWh\" href=\"kWh\" val=\"%.1f\"/>\r\n"
 "</obj>\r\n";
 
 static const char *BMS_BTANK_CONTRACT =
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
 "<obj name=\"%s\" href=\"%s\" is=\"nextdc:bulk_tank\">\r\n"
-"<int name=\"level\" href=\"level\" val=\"%d\" writable=\"true\"/>\r\n"
+"<int name=\"level\" href=\"level\" val=\"%d\"/>\r\n"
 "</obj>\r\n";
 
 static const char *BMS_DTANK_CONTRACT =
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
 "<obj name=\"%s\" href=\"%s\" is=\"nextdc:day_tank\">\r\n"
-"<str name=\"lvl_10\" href=\"lvl_10\" val=\"%s\" writable=\"true\"/>\r\n"
-"<str name=\"lvl_25\" href=\"lvl_25\" val=\"%s\" writable=\"true\"/>\r\n"
-"<str name=\"lvl_50\" href=\"lvl_50\" val=\"%s\" writable=\"true\"/>\r\n"
-"<str name=\"lvl_98\" href=\"lvl_98\" val=\"%s\" writable=\"true\"/>\r\n"
+"<str name=\"lvl_10\" href=\"lvl_10\" val=\"%s\"/>\r\n"
+"<str name=\"lvl_25\" href=\"lvl_25\" val=\"%s\"/>\r\n"
+"<str name=\"lvl_50\" href=\"lvl_50\" val=\"%s\"/>\r\n"
+"<str name=\"lvl_98\" href=\"lvl_98\" val=\"%s\"/>\r\n"
 "</obj>\r\n";
 
 /*
@@ -190,8 +190,8 @@ static const char *dtank_lvl[] = {
 
 static const char *BMS_SB_CONTRACT =
 "<obj name=\"%s\" href=\"%s\" is=\"nextdc:switchboard\">\r\n"
-"<list name=\"input_feeders\" href=\"input_feeders\" is=\"obix:list\" of=\"obix:obj nextdc:power_meter\" writable=\"true\"/>\r\n"
-"<list name=\"output_feeders\" href=\"output_feeders\" is=\"obix:list\" of=\"obix:obj nextdc:power_meter\" writable=\"true\"/>\r\n"
+"<list name=\"input_feeders\" href=\"input_feeders\" is=\"obix:list\" of=\"obix:obj nextdc:power_meter\"/>\r\n"
+"<list name=\"output_feeders\" href=\"output_feeders\" is=\"obix:list\" of=\"obix:obj nextdc:power_meter\"/>\r\n"
 "</obj>\r\n";
 
 /*
@@ -200,11 +200,11 @@ static const char *BMS_SB_CONTRACT =
  */
 static const char *BMS_MESN_CONTRACT =
 "<obj name=\"%s\" href=\"%s\" is=\"nextdc:mesn\">\r\n"
-"<abstime name=\"last_updated\" href=\"last_updated\" val=\"%s\" writable=\"true\"/>\r\n"
-"<list name=\"hv_switchboards\" href=\"hv_switchboards\" is=\"obix:list\" of=\"obix:obj nextdc:switchboard\" writable=\"true\"/>\r\n"
-"<list name=\"main_switchboards\" href=\"main_switchboards\" is=\"obix:list\" of=\"obix:obj nextdc:switchboard\" writable=\"true\"/>\r\n"
-"<list name=\"bulk_tanks\" href=\"bulk_tanks\" is=\"obix:list\" of=\"obix:obj nextdc:bulk_tank\" writable=\"true\"/>\r\n"
-"<list name=\"day_tanks\" href=\"day_tanks\" is=\"obix:list\" of=\"obix:obj nextdc:day_tank\" writable=\"true\"/>\r\n"
+"<abstime name=\"last_updated\" href=\"last_updated\" val=\"%s\"/>\r\n"
+"<list name=\"hv_switchboards\" href=\"hv_switchboards\" is=\"obix:list\" of=\"obix:obj nextdc:switchboard\"/>\r\n"
+"<list name=\"main_switchboards\" href=\"main_switchboards\" is=\"obix:list\" of=\"obix:obj nextdc:switchboard\"/>\r\n"
+"<list name=\"bulk_tanks\" href=\"bulk_tanks\" is=\"obix:list\" of=\"obix:obj nextdc:bulk_tank\"/>\r\n"
+"<list name=\"day_tanks\" href=\"day_tanks\" is=\"obix:list\" of=\"obix:obj nextdc:day_tank\"/>\r\n"
 "</obj>\r\n";
 
 static const char *BMS_MTIME = "last_updated";

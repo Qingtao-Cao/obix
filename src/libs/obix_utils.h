@@ -78,7 +78,6 @@ extern const char *OBIX_ATTR_OF;
 extern const char *OBIX_ATTR_HREF;
 extern const char *OBIX_ATTR_VAL;
 extern const char *OBIX_ATTR_NULL;
-extern const char *OBIX_ATTR_WRITABLE;
 extern const char *OBIX_ATTR_DISPLAY;
 extern const char *OBIX_ATTR_DISPLAY_NAME;
 extern const char *OBIX_ATTR_HIDDEN;

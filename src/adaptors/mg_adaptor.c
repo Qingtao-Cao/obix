@@ -483,37 +483,27 @@ static const char *MG_BCM_OFFLINED = "DEVICE OFFLINED";
 /*
  * oBIX contract of a Veris BCM, the name of each attribute must be
  * the same as those indicated above.
- *
- * Note,
- * 1. Any attribute that needs to be updated at the runtime would
- * have to be declared as writable, or otherwise oBIX server will
- * regard them as read-only.
- *
- * In particular, those static AUX information from serial number
- * to location string would have to be declared as writable as well
- * so that they also can be updated once relevant BCM is brought
- * on-line which used to be disconnected at program start-up.
  */
 static const char *OBIX_BCM_CONTRACT =
 "<obj name=\"%s\" href=\"/obix/deviceRoot%s%s/\" is=\"nextdc:veris-bcm\">\r\n"
 "<int name=\"SlaveID\" href=\"SlaveID\" val=\"%d\"/>\r\n"
-"<int name=\"SerialNumber\" href=\"SerialNumber\" val=\"0x%x\" writable=\"true\"/>\r\n"
-"<int name=\"Firmware\" href=\"Firmware\" val=\"0x%.8x\" writable=\"true\"/>\r\n"
-"<int name=\"Model\" href=\"Model\" val=\"%d\" writable=\"true\"/>\r\n"
-"<int name=\"CTConfig\" href=\"CTConfig\" val=\"%d\" writable=\"true\"/>\r\n"
-"<str name=\"Location\" href=\"Location\" val=\"%s\" writable=\"true\"/>\r\n"
-"<real name=\"ACFreq\" href=\"ACFreq\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltL-N\" href=\"VoltL-N\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltL-L\" href=\"VoltL-L\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltA\" href=\"VoltA\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltB\" href=\"VoltB\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltC\" href=\"VoltC\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kWh\" href=\"kWh\" displayName=\"Total kWh for 3 phases\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kW\" href=\"kW\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"CurrentAverage\" href=\"CurrentAverage\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"TotalCurrent\" href=\"TotalCurrent\" val=\"%f\" writable=\"true\"/>\r\n"
-"<abstime name=\"LastUpdated\" href=\"LastUpdated\" val=\"%s\" writable=\"true\"/>\r\n"
-"<bool name=\"Online\" href=\"OnLine\" val=\"%s\" writable=\"true\"/>\r\n"
+"<int name=\"SerialNumber\" href=\"SerialNumber\" val=\"0x%x\"/>\r\n"
+"<int name=\"Firmware\" href=\"Firmware\" val=\"0x%.8x\"/>\r\n"
+"<int name=\"Model\" href=\"Model\" val=\"%d\"/>\r\n"
+"<int name=\"CTConfig\" href=\"CTConfig\" val=\"%d\"/>\r\n"
+"<str name=\"Location\" href=\"Location\" val=\"%s\"/>\r\n"
+"<real name=\"ACFreq\" href=\"ACFreq\" val=\"%f\"/>\r\n"
+"<real name=\"VoltL-N\" href=\"VoltL-N\" val=\"%f\"/>\r\n"
+"<real name=\"VoltL-L\" href=\"VoltL-L\" val=\"%f\"/>\r\n"
+"<real name=\"VoltA\" href=\"VoltA\" val=\"%f\"/>\r\n"
+"<real name=\"VoltB\" href=\"VoltB\" val=\"%f\"/>\r\n"
+"<real name=\"VoltC\" href=\"VoltC\" val=\"%f\"/>\r\n"
+"<real name=\"kWh\" href=\"kWh\" displayName=\"Total kWh for 3 phases\" val=\"%f\"/>\r\n"
+"<real name=\"kW\" href=\"kW\" val=\"%f\"/>\r\n"
+"<real name=\"CurrentAverage\" href=\"CurrentAverage\" val=\"%f\"/>\r\n"
+"<real name=\"TotalCurrent\" href=\"TotalCurrent\" val=\"%f\"/>\r\n"
+"<abstime name=\"LastUpdated\" href=\"LastUpdated\" val=\"%s\"/>\r\n"
+"<bool name=\"Online\" href=\"OnLine\" val=\"%s\"/>\r\n"
 "<list name=\"Meters\" href=\"Meters\" of=\"nextdc:Meter\"/>\r\n"
 "</obj>\r\n";
 
@@ -531,11 +521,11 @@ static const char *mg_bm_attr[] = {
  */
 static const char *OBIX_BM_CONTRACT =
 "<obj name=\"%s\" href=\"/obix/deviceRoot%s%s/Meters/%s/\" is=\"nextdc:veris-meter\">\r\n"
-"<real name=\"kWh\" href=\"kWh\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kW\" href=\"kW\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"V\" href=\"V\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"PF\" href=\"PF\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"I\" href=\"I\" val=\"%f\" writable=\"true\"/>\r\n"
+"<real name=\"kWh\" href=\"kWh\" val=\"%f\"/>\r\n"
+"<real name=\"kW\" href=\"kW\" val=\"%f\"/>\r\n"
+"<real name=\"V\" href=\"V\" val=\"%f\"/>\r\n"
+"<real name=\"PF\" href=\"PF\" val=\"%f\"/>\r\n"
+"<real name=\"I\" href=\"I\" val=\"%f\"/>\r\n"
 "</obj>\r\n";
 
 static void mg_collector_task(void *);

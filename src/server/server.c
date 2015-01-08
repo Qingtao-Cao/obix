@@ -643,8 +643,6 @@ xmlNode *handlerSignUp(obix_request_t *request, const char *overrideUri,
 		}
 	}
 
-	xmlUnsetProp(input, BAD_CAST OBIX_ATTR_WRITABLE);
-
 	/*
 	 * An extra copy of the input node can be avoided for the signUp
 	 * handler. However, both read and write handlers would benefit

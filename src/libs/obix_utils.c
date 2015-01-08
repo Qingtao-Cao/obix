@@ -45,7 +45,6 @@ const char *OBIX_ATTR_NAME = "name";
 const char *OBIX_ATTR_HREF = "href";
 const char *OBIX_ATTR_VAL = "val";
 const char *OBIX_ATTR_NULL = "null";
-const char *OBIX_ATTR_WRITABLE = "writable";
 const char *OBIX_ATTR_DISPLAY = "display";
 const char *OBIX_ATTR_DISPLAY_NAME = "displayName";
 const char *OBIX_ATTR_HIDDEN = "hidden";
