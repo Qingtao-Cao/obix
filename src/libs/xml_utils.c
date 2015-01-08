@@ -27,11 +27,13 @@
 #include <ctype.h>		/* isblank */
 #include <string.h>		/* strlen */
 #include <sys/uio.h>	/* writev */
+#include <errno.h>
 #include "xml_utils.h"
 #include "obix_utils.h"
 #include "log_utils.h"
 
 const char *XML_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+const const int XML_HEADER_LEN = 38;
 const char *XML_VERSION = "1.0";
 
 /*
@@ -720,24 +722,35 @@ int xml_is_valid_href(xmlChar *href)
  *
  * Return > 0 on success, < 0 otherwise
  */
-int xml_write_file(const char *path, const char *data, int size)
+int xml_write_file(const char *path, int flags, const char *data, int size)
 {
 	struct iovec iov[2];
 	int fd;
 	int ret = -1;
 
 	iov[0].iov_base = (char *)XML_HEADER;
-	iov[0].iov_len = strlen(XML_HEADER);
+	iov[0].iov_len = XML_HEADER_LEN;
 	iov[1].iov_base = (char *)data;
 	iov[1].iov_len = size;
 
 	/*
-	 * NOTE: no O_TRUNC option so that even if the write attempt failed
-	 * due to lack of disk space, the original content won't be erased
-	 * right at the time of open!
+	 * NOTE: without the usage of O_TRUNC, the latest file size must be
+	 * explicitly setup in order to get rid of any leftover of previous
+	 * snapshot, otherwise the updated XML file will become mal-formed!
 	 */
-	if ((fd = open(path, O_RDWR | O_SYNC)) >= 0) {
-		ret = writev(fd, iov, 2);
+	if ((fd = open(path, flags)) >= 0) {
+		errno = 0;
+		if ((ret = writev(fd, iov, 2)) < 0) {
+			log_error("Failed to write into %s due to %s",
+					  path, strerror(errno));
+		} else {
+			errno = 0;
+			if (ftruncate(fd, size + XML_HEADER_LEN) < 0) {
+				log_warning("Failed to truncate %s due to %s",
+							path, strerror(errno));
+			}
+		}
+
 		close(fd);
 	}
 

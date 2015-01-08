@@ -167,6 +167,20 @@ extern const char *XML_FILENAME_SUFFIX;
 #define HIST_REC_TS_MAX_LEN				20
 #define HIST_REC_DATE_MAX_LEN			10
 
+/*
+ * Flags used when opening XML files on the hard drive
+ *
+ * No O_TRUNC so that even if the write attempt failed due to
+ * lack of disk space, the original content won't be erased
+ * right at the time of open!
+ *
+ * No O_SYNC for devices' persistent files since they are
+ * constantly updated by adaptors whereas the default one
+ * requires write-through to the hard drive
+ */
+#define OPEN_FLAG_ASYNC		(O_RDWR)
+#define OPEN_FLAG_SYNC		(O_RDWR | O_SYNC)
+
 int str_to_long(const char *str, long *val);
 int str_to_float(const char *str, float *val);
 

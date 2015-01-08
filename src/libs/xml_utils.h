@@ -34,6 +34,7 @@
 #define XML_PARSE_OPTIONS_COMMON	(XML_PARSE_NONET | XML_PARSE_NOBLANKS)
 
 extern const char *XML_HEADER;
+extern const int XML_HEADER_LEN;
 extern const char *XML_VERSION;
 
 /**
@@ -181,6 +182,6 @@ int xml_is_valid_href(xmlChar *);
 
 xmlNode *xml_create_ref_node(xmlNode *src, const xmlChar *href);
 
-int xml_write_file(const char *path, const char *data, int size);
+int xml_write_file(const char *path, int flags, const char *data, int size);
 
 #endif	/* _XML_UTILS_H_ */

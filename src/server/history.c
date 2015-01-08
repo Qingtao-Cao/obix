@@ -885,7 +885,8 @@ static void hist_flush_index(obix_hist_dev_t *dev)
 		return;
 	}
 
-	if (xml_write_file(dev->indexpath, data, strlen(data)) < 0) {
+	if (xml_write_file(dev->indexpath, OPEN_FLAG_SYNC,
+					   data, strlen(data)) < 0) {
 		log_error("Failed to save %s on hard drive", dev->devhref);
 	}
 
@@ -1800,7 +1801,8 @@ static int create_dev_helper(const char *dev_id,
 		goto creat_failed;
 	}
 
-	if (xml_write_file(indexpath, INDEX_SKELETON, strlen(INDEX_SKELETON)) > 0) {
+	if (xml_write_file(indexpath, OPEN_FLAG_SYNC,
+					   INDEX_SKELETON, strlen(INDEX_SKELETON)) > 0) {
 		if ((*dev = hist_create_dev(dev_id, indexpath)) != NULL) {
 			ret = 0;
 		}

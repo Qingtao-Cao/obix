@@ -410,7 +410,7 @@ static int __device_write_meta(obix_dev_t *dev)
 	}
 
 	len = sprintf(buf, DEVICE_META_CONTRACT, dev->owner_id, dev->href);
-	if (xml_write_file(dev->meta, buf, len) < 0) {
+	if (xml_write_file(dev->meta, OPEN_FLAG_SYNC, buf, len) < 0) {
 		log_error("Failed to write meta file at %s", dev->meta);
 		ret = ERR_NO_MEM;
 
@@ -494,7 +494,7 @@ static int __device_write_file(obix_dev_t *dev, time_t now)
 		return ERR_NO_MEM;
 	}
 
-	if (xml_write_file(dev->file, buf, strlen(buf)) < 0) {
+	if (xml_write_file(dev->file, OPEN_FLAG_ASYNC, buf, strlen(buf)) < 0) {
 		log_error("Failed to write device file at %s", dev->file);
 		ret = ERR_NO_MEM;
 	}
