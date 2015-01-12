@@ -31,16 +31,25 @@
 	<listen-socket val="/var/run/lighttpd/obix.fcgi.socket-0"/>
 
 	<!--
-		The depth of the listen queue of the FCGI listen socket, that is, the
-		maximal number of FCGI requests that the server can handle in parallel.
+		The depth of the backlog queue of the FCGX listen socket, specifically,
+		the depth of the ESTABLISHED queue of the listen socket on Linux
+		(separate from the SYN RECEIVED queue). If the oBIX server can't consume
+		(via accept() system call) requests from the backlog queue fast enough
+		and the queue becomes full, the Linux kernel will reject newly arrived
+		requests resulting in clients got HTTP 503 "Service Not Available" type
+		of error.
 
-		NOTE: a FCGI request encapsulates an established TCP connection, which
-		is closed when the FCGI request is destroyed.
+		A FCGX request encapsulates an established TCP connection, which is
+		closed when the FCGX request is destroyed. Therefore the maximal number
+		of requests the oBIX server can handle in parallel is also decided by
+		the limitation on the maximal number of open file descriptors.
 
-		NOTE: the depth of the backlog queue should not be smaller than the
-		number of oBIX server threads
+		NOTE: According to experiments the real depth of the backlog queue eqauls
+		to the parameter passed to listen() system call plus 1. But as long as the
+		oBIX server supports multi-threads the backlog queue is normally empty so
+		its depth won't make much difference.
 	-->
-	<listen-backlog val="0"/>
+	<listen-backlog val="512"/>
 
 	<!--
 		Mandatory tag, defining maximum number of oBIX server threads for long-poll
