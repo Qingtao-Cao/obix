@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
  *
  * This file is part of oBIX.
  *
@@ -23,6 +23,44 @@
 
 #include "obix_request.h"
 
+/*
+ * Descriptor for the FCGX channel
+ */
+typedef struct obix_fcgi {
+	/*
+	 * The open file descriptor of the FCGX listening socket that
+	 * oBIX server threads accept simualtaneously
+	 */
+	int fd;
+
+	/*
+	 * The number of server threads handling different requests
+	 * in parallel, excluding those watch threads that handle
+	 * watch.pollChanges requests in asynchronous manner
+	 */
+	int sync_threads;
+
+	/* The array of pthread_t for above sync threads */
+	pthread_t *id;
+
+	/*
+	 * Method used by a server thread to send response back for
+	 * the given request
+	 *
+	 * NOTE: each FCGX request represents a separate established
+	 * connection between the web server and the oBIX server, that's
+	 * how FCGX supports multiplex communication concurrently
+	 */
+	void (*send_response)(obix_request_t *);
+
+#ifdef SYNC_FCGX_ACCEPT
+	/* The mutex to prevent races on accept(), needed on some platform */
+	pthread_mutex_t mutex;
+#endif
+} obix_fcgi_t;
+
+extern obix_fcgi_t *__fcgi;
+
 typedef enum fcgi_env {
 	FCGI_ENV_REQUEST_URI = 0,
 	FCGI_ENV_REQUEST_METHOD,
@@ -32,5 +70,7 @@ typedef enum fcgi_env {
 } fcgi_env_t;
 
 char *obix_fcgi_get_requester_id(obix_request_t *request);
+
+void obix_fcgi_request_destroy(FCGX_Request *request);
 
 #endif

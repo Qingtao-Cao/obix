@@ -23,21 +23,15 @@
 #include <string.h>
 #include <pthread.h>
 #include "log_utils.h"
+#include "obix_fcgi.h"
 #include "obix_utils.h"
 #include "obix_request.h"
 #include "xml_utils.h"
 
-static obix_request_listener _request_listener = NULL;
-
-void obix_request_set_listener(obix_request_listener listener)
-{
-	_request_listener = listener;
-}
-
 void obix_request_send_response(obix_request_t *request)
 {
-	if (_request_listener) {
-		_request_listener(request);
+	if (__fcgi && __fcgi->send_response) {
+		__fcgi->send_response(request);
 	}
 }
 
@@ -81,58 +75,6 @@ void obix_request_destroy_response_item(response_item_t *item)
 	}
 
 	free(item);
-}
-
-/**
- * Finish, close and release the given request
- */
-void obix_fcgi_request_destroy(FCGX_Request *request)
-{
-	if (!request) {
-		return;
-	}
-
-	FCGX_Finish_r(request);
-	FCGX_Free(request, 1);
-
-	/*
-	 * FCGX_Free is not sufficient to release the malloced
-	 * request. Otherwise memory leaks.
-	 */
-	free(request);
-}
-
-/**
- * Create a brand-new FCGI Request, initialize it and listen on
- * FCGI channel until a request has been successfully accepted
- */
-FCGX_Request *obix_fcgi_request_create(int listen_socket)
-{
-	FCGX_Request *request;
-	int error;
-
-	if (!(request = (FCGX_Request *)malloc(sizeof(FCGX_Request)))) {
-		log_error("Failed to create FCGI Request structure");
-		return NULL;
-	}
-
-	if ((FCGX_InitRequest(request, listen_socket, 0)) != 0) {
-		log_error("Failed to initialize the FCGI request");
-		goto failed;
-	}
-
-	if ((error = FCGX_Accept_r(request)) == 0) {
-		return request;
-	}
-
-	log_error("Failed to accept FCGI request, returned %d: %s",
-			  error, strerror(error * -1));
-
-	/* Fall through */
-
-failed:
-	obix_fcgi_request_destroy(request);
-	return NULL;
 }
 
 void obix_request_destroy_response_items(obix_request_t *request)

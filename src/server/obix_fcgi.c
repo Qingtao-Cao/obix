@@ -31,14 +31,17 @@
 #include "xml_utils.h"
 
 /*
- * This macro will be enabled in the debug version image built for
- * test purpose. The oBIX server will shut down after receiving
- * a certain amount of requests so as to have valgrind check its
- * memory usage during the shutdown procedure.
+ * This macro will be enabled in the debug version image built for test purpose.
+ * The oBIX server threads will shut down after receiving a certain amount of
+ * FCGX requests so as to have valgrind validate whether they can exit cleanly.
  */
 #ifdef DEBUG_VALGRIND
 #define MAX_REQUESTS_SERVED		(-1)
 #endif
+
+#undef SYNC_FCGX_ACCEPT
+
+obix_fcgi_t *__fcgi;
 
 static char *fcgi_envp[] = {
 	[FCGI_ENV_REQUEST_URI] = "REQUEST_URI",
@@ -125,10 +128,23 @@ static void obix_fcgi_exit(void)
 	FCGX_ShutdownPending();
 	FCGX_Finish();
 
+	if (__fcgi) {
+#ifdef SYNC_FCGX_ACCEPT
+		pthread_mutex_destroy(&__fcgi->mutex);
+#endif
+
+		if (__fcgi->id) {
+			free(__fcgi->id);
+		}
+
+		free(__fcgi);
+		__fcgi = NULL;
+	}
+
 	log_debug("FCGI connection has been shutdown");
 }
 
-void obix_fcgi_sendResponse(obix_request_t *request)
+static void obix_fcgi_send_response(obix_request_t *request)
 {
 	FCGX_Request *fcgiRequest = request->request;
 	response_item_t *item, *n;
@@ -214,49 +230,77 @@ failed:
 /*
  * Initialise the FCGX channel
  *
- * Return the listening socket fd on success, < 0 on errors
+ * Return the address of an obix_fcgi_t structure
  */
-static int obix_fcgi_init(xml_config_t *config)
+static obix_fcgi_t *obix_fcgi_init(xml_config_t *config)
 {
+	obix_fcgi_t *fcgi;
 	char *sock;
-	int fd, backlog, ret;
-
-	obix_request_set_listener(obix_fcgi_sendResponse);
-
-	if ((ret = FCGX_Init()) != 0) {
-		log_error("Failed to initialize FCGI channel: %d", ret);
-		return -1;
-	}
+	int backlog, ret, sync_threads;
 
 	if (!(sock = xml_config_get_str(config, XP_LISTEN_SOCKET)) ||
-		(backlog = xml_config_get_int(config, XP_LISTEN_BACKLOG)) < 0) {
-		log_error("Failed to get server settings");
+		(backlog = xml_config_get_int(config, XP_LISTEN_BACKLOG)) < 0 ||
+		(sync_threads = xml_config_get_int(config, XP_SYNC_THREADS)) < 0) {
+		log_error("Failed to get server's FCGX settings");
 		goto failed;
 	}
 
-	fd = FCGX_OpenSocket(sock, backlog);
-	free(sock);
+	if (!(fcgi = (obix_fcgi_t *)malloc(sizeof(obix_fcgi_t))) ||
+		!(fcgi->id = (pthread_t *)malloc(sizeof(pthread_t) * sync_threads))) {
+		log_error("Failed to allocate an obix_fcgi_t structure");
+		goto mem_failed;
+	}
 
-	if (fd < 0) {
-		log_error("Failed to create FCGI listen socket");
-		goto failed;
+	fcgi->sync_threads = sync_threads;
+	fcgi->send_response = obix_fcgi_send_response;
+
+#ifdef SYNC_FCGX_ACCEPT
+	pthread_mutex_init(&fcgi->mutex, NULL);
+#endif
+
+	if ((ret = FCGX_Init()) != 0) {
+		log_error("Failed to initialize FCGX channel: %d", ret);
+		goto init_failed;
+	}
+
+	if ((fcgi->fd = FCGX_OpenSocket(sock, backlog)) < 0) {
+		log_error("Failed to create FCGX listen socket");
+		goto fcgi_failed;
 	}
 
 	if ((ret = obix_server_init(config)) < 0) {
 		log_error("Failed to initialise oBIX server");
-		goto failed;
+		goto fcgi_failed;
 	}
 
-	log_debug("oBIX server thread communicates on fd %d, and \"sudo ls -l "
-			  "/proc/%u/fd\" illustrates how it uses open files", fd, get_tid());
+	log_debug("\"/proc/%u/fd\" and strace illustrate how server threads "
+			  "use FCGX listen socket and established connections", get_tid());
 
-	return fd;
+	free(sock);
+	return fcgi;
 
-failed:
+fcgi_failed:
 	FCGX_ShutdownPending();
 	FCGX_Finish();
 
-	return -1;
+init_failed:
+#ifdef SYNC_FCGX_ACCEPT
+	pthread_mutex_destroy(&fcgi->mutex);
+#endif
+
+	free(fcgi->id);
+
+mem_failed:
+	if (fcgi) {
+		free(fcgi);
+	}
+
+failed:
+	if (sock) {
+		free(sock);
+	}
+
+	return NULL;
 }
 
 /**
@@ -377,6 +421,54 @@ static void obix_handle_request(obix_request_t *request)
 	}
 }
 
+void obix_fcgi_request_destroy(FCGX_Request *request)
+{
+	if (!request) {
+		return;
+	}
+
+	FCGX_Finish_r(request);
+	FCGX_Free(request, 1);
+
+	free(request);
+}
+
+static FCGX_Request *obix_fcgi_request_create(obix_fcgi_t *fcgi)
+{
+	FCGX_Request *request;
+	int ret;
+
+	if (!(request = (FCGX_Request *)malloc(sizeof(FCGX_Request)))) {
+		log_error("Failed to create FCGX Request structure");
+		return NULL;
+	}
+
+	if ((FCGX_InitRequest(request, fcgi->fd, 0)) != 0) {
+		log_error("Failed to initialize the FCGX request");
+		goto failed;
+	}
+
+#ifdef SYNC_FCGX_ACCEPT
+	pthread_mutex_lock(&__fcgi->mutex);
+#endif
+	ret = FCGX_Accept_r(request);
+#ifdef SYNC_FCGX_ACCEPT
+	pthread_mutex_unlock(&__fcgi->mutex);
+#endif
+
+	if (ret == 0) {
+		return request;
+	}
+
+	log_error("Failed to accept FCGX request, returned %d", ret);
+
+	/* Fall through */
+
+failed:
+	obix_fcgi_request_destroy(request);
+	return NULL;
+}
+
 /*
  * The payload for each oBIX server thread, which is basically
  * accepting pending FCGI request and invoking a proper handle to
@@ -390,10 +482,11 @@ static void obix_handle_request(obix_request_t *request)
  * to pass in a pointer to a common mutex that all threads need
  * to compete to grab during the invocation of accept().
  */
-static void payload(int fd)
+static void *payload(void *arg)
 {
 	FCGX_Request *fcgiRequest = NULL;
 	obix_request_t *request = NULL;
+	obix_fcgi_t *fcgi = (obix_fcgi_t *)arg;
 
 #ifdef DEBUG_VALGRIND
 	int count = 0;
@@ -403,13 +496,14 @@ static void payload(int fd)
 
 #ifdef DEBUG_VALGRIND
 		if ((MAX_REQUESTS_SERVED > 0) && (count++ == MAX_REQUESTS_SERVED)) {
-			log_debug("Threshold %d reached, exiting...", MAX_REQUESTS_SERVED);
+			log_debug("Threshold %d reached, [%u] exiting...",
+					  MAX_REQUESTS_SERVED, get_tid());
 			fcgiRequest = NULL;		/* avoid double-free */
 			break;
 		}
 #endif
 
-		if (!(fcgiRequest = obix_fcgi_request_create(fd))) {
+		if (!(fcgiRequest = obix_fcgi_request_create(fcgi))) {
 			log_error("Failed to create FCGI Request structure");
 			break;
 		}
@@ -431,15 +525,17 @@ static void payload(int fd)
 	if (fcgiRequest) {
 		obix_fcgi_request_destroy(fcgiRequest);
 	}
+
+	return NULL;
 }
 
 /**
- * Entry point of oBIX server, as a FCGI application
+ * Entry point of the oBIX server
  */
 int main(int argc, char **argv)
 {
 	xml_config_t *config;
-	int fd;
+	int i;
 
 	if (argc != 2) {
 		printf("Usage: %s <resource-dir>\n"
@@ -463,12 +559,22 @@ int main(int argc, char **argv)
 		goto log_failed;
 	}
 
-	if ((fd = obix_fcgi_init(config)) < 0) {
-		log_error("Failed to initialise FCGX");
+	if (!(__fcgi = obix_fcgi_init(config))) {
+		log_error("Failed to initialise FCGX channel");
 		goto log_failed;
 	}
 
-	payload(fd);
+	for (i = 0; i < __fcgi->sync_threads; i++) {
+		if (pthread_create(__fcgi->id + i, NULL, payload, (void *)__fcgi) != 0) {
+			log_warning("Failed to start thread%d", i);
+		}
+	}
+
+	for (i = 0; i < __fcgi->sync_threads; i++) {
+		if (pthread_join(__fcgi->id[i], NULL) != 0) {
+			log_warning("Failed to join thread%d and it could be left zombie", i);
+		}
+	}
 
 	obix_fcgi_exit();
 

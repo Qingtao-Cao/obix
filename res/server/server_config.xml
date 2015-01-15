@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-	Copyright (c) 2013-2014 Qingtao Cao <harry.cao@nextdc.com>
+	Copyright (c) 2013-2015 Qingtao Cao <harry.cao@nextdc.com>
 	Copyright (c) 2009 Andrey Litvinov
 
 	This file is part of oBIX.
@@ -28,7 +28,7 @@
 		plus suffixed by "-0" so that the host web server (such as lighttpd)
 		can connect to it and raise FCGI requests.
 	-->
-	<listen-socket val="/var/run/lighttpd/obix.fcgi.socket-0"/>
+	<listen_socket val="/var/run/lighttpd/obix.fcgi.socket-0"/>
 
 	<!--
 		The depth of the backlog queue of the FCGX listen socket, specifically,
@@ -49,14 +49,23 @@
 		oBIX server supports multi-threads the backlog queue is normally empty so
 		its depth won't make much difference.
 	-->
-	<listen-backlog val="512"/>
+	<listen_backlog val="5"/>
+
+	<!--
+		Mandatory tag, defining the maximum number of oBIX server threads that
+		accept and handle FCGX requests in parallel
+
+		NOTE: Administrators are highly recommended to tune this value according
+		to the workload in their specific environment
+	-->
+	<sync_threads val="20"/>
 
 	<!--
 		Mandatory tag, defining maximum number of oBIX server threads for long-poll
 		tasks that run in parallel. Raise this limitation if constantly run into
 		warnings that changes may have not been collected in a timely manner
 	-->
-	<poll-threads val="10"/>
+	<poll_threads val="2"/>
 
 	<!--
 		Mandatory tag, defining the size of the hash table and the cache of the
@@ -68,8 +77,8 @@
 		miss outweighs cache hit because oBIX server tends to be busy answering
 		requests from different clients resulting in the cache constantly flushed
 	-->
-	<dev-table-size val="1024"/>
-	<dev-cache-size val="4"/>
+	<dev_table_size val="1024"/>
+	<dev_cache_size val="4"/>
 
 	<!--
 		How often should the Device subsystem backup device contracts onto hard
@@ -78,7 +87,7 @@
 		NOTE: it's not necessary and not efficient at all to update a device's
 		persistent file on the hard drive whenever oBIX client changes it
 	-->
-	<dev-backup-period val="300" unit="sec"/>
+	<dev_backup_period val="300" unit="sec"/>
 
 	<!--
 		Configuration of the logging system. The only obligatory tag is <level> 

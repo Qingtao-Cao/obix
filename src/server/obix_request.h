@@ -131,16 +131,10 @@ void obix_request_append_response_item(obix_request_t *, response_item_t *);
 
 int obix_request_add_response_xml_header(obix_request_t *resp);
 
-void obix_request_set_listener(obix_request_listener);
-
 void obix_request_send_response(obix_request_t *);
 
 long obix_request_get_response_len(obix_request_t *);
 
 int obix_request_get_response_items(obix_request_t *);
-
-void obix_fcgi_request_destroy(FCGX_Request *);
-
-FCGX_Request *obix_fcgi_request_create(int);
 
 #endif
