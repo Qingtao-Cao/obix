@@ -1,6 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -45,11 +44,14 @@ typedef struct obix_request {
 	 * In most cases handlers won't bother to set it up and the
 	 * decoded request_uri will be used.
 	 */
-	char *response_uri;
+	unsigned char *response_uri;
 
 	/*
 	 * The FastCGI requested URI, that is, the href on the oBIX
 	 * server that has been requested.
+	 *
+	 * NOTE: its type is not "xmlChar *" due to the type of the
+	 * pointer returned by FCGX_GetParam()
 	 *
 	 * NOTE: the batch mechanism will further redirect each sub
 	 * batch command to relevant facility as specified by the

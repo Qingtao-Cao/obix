@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -30,7 +30,7 @@
 extern const char *XP_LISTEN_SOCKET;
 extern const char *XP_LISTEN_BACKLOG;
 extern const char *XP_POLL_THREADS;
-extern const char *XP_SYNC_THREADS;
+extern const char *XP_MULTI_THREADS;
 extern const char *XP_DEV_TABLE_SIZE;
 extern const char *XP_DEV_CACHE_SIZE;
 extern const char *XP_DEV_BACKUP_PERIOD;

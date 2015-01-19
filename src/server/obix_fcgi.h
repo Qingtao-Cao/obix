@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -38,7 +38,7 @@ typedef struct obix_fcgi {
 	 * in parallel, excluding those watch threads that handle
 	 * watch.pollChanges requests in asynchronous manner
 	 */
-	int sync_threads;
+	int multi_threads;
 
 	/* The array of pthread_t for above sync threads */
 	pthread_t *id;
@@ -53,10 +53,8 @@ typedef struct obix_fcgi {
 	 */
 	void (*send_response)(obix_request_t *);
 
-#ifdef SYNC_FCGX_ACCEPT
 	/* The mutex to prevent races on accept(), needed on some platform */
 	pthread_mutex_t mutex;
-#endif
 } obix_fcgi_t;
 
 extern obix_fcgi_t *__fcgi;

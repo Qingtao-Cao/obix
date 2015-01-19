@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -62,8 +62,8 @@ typedef enum errcode {
 	ERR_DEVICE_CHILDREN,
 
 	/* Error codes specific for the Watch subsystem */
-	ERR_WATCH_UNSUPPORTED_HREF,
 	ERR_WATCH_NO_SUCH_URI,
+	ERR_WATCH_NO_MONITORED_URI,
 
 	/* Error codes specific for the History subsystem */
 	ERR_HISTORY_DEVID,

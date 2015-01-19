@@ -1,6 +1,6 @@
 /* *****************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
+ * Copyright (c) 2014 Tyler Watson
  *
  * This file is part of oBIX.
  *
@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -46,89 +46,37 @@ extern const char *XML_VERSION;
  * defined below with xmldb_dom_action_t
  */
 typedef enum {
-	XML_COPY_EXCLUDE_HIDDEN = 1,
-	XML_COPY_EXCLUDE_META = (1 << 1),
-	XML_COPY_EXCLUDE_COMMENTS = (1 << 2)
-} xml_copy_exclude_flags_t;
+	EXCLUDE_HIDDEN = 1,
+	EXCLUDE_META = (1 << 1),
+	EXCLUDE_COMMENTS = (1 << 2)
+} xml_copy_flags_t;
 
-xmlNode *xml_copy(const xmlNode *src, xml_copy_exclude_flags_t flag);
+typedef enum obix_root {
+	OBIX_BATCH = 0,
+	OBIX_DEVICE,
+	OBIX_WATCH,
+	OBIX_HISTORY
+} obix_root_t;
 
-/**
- * Prototype describing the callback function that gets called once for every
- * node in the DOM tree when being called by @a xml_for_each_node, or
- * @a xml_for_each_node_type.
- *
- * @param	node	A pointer's pointer to the current item in the DOM tree
- * @param	arg1	A pointer to a user-defined structure to be passed in
- * @param	arg2	A pointer to a user-defined structrure to be passed in
- *
- * @returns	Return -1 if @a xml_for_each_node is to break execution and return,
- *			or another value otherwise.  The calling function will always return
- *			the value returned from it's last callback iteration.
- *
- * @remarks	If callbacks are to unlink and free nodes from the tree that was pointed
- *			to by @a node, they MUST point @a node to NULL after deleting, to prevent
- *			the caller from deferencing the node they just freed.  Do NOT free
- *			@a node without pointing it to NULL.
- */
+typedef struct href_info {
+	const xmlChar *root;
+	const int len;
+} href_info_t;
+
+extern href_info_t obix_roots[];
+
+int is_given_type(const xmlChar *href, obix_root_t type);
+
+int is_str_identical(const xmlChar *str1, const xmlChar *str2, const int lenient);
+
+xmlNode *xml_copy(const xmlNode *src, xml_copy_flags_t flag);
+
 typedef int (*xml_item_cb_t)(xmlNode **item, void *arg1, void *arg2);
 
-/**
- * Prototype of the callback function invoked by xml_xpath_for_each_item
- * on each matching node.
- *
- * Note,
- * 1. The arg0 would always point to the current matching node
- */
-typedef void (*xpath_item_cb_t)(xmlNode *node, void *arg1, void *arg2);
-
-
-void xml_xpath_for_each_item(xmlNode *rootNode, const char *pattern,
-							 xpath_item_cb_t cb, void *arg1, void *arg2);
-
-
-/**
- * Invokes @a callback for every possible node starting at @a rootNode, and matching
- * @a type.  @a type may be set to 0 to invoke the callback on any node in
- * the document, no matter what type it is.
- *
- * @param	rootNode	A pointer to the rootNode to start matching from
- * @param	callback	A pointer to the function to call on each matching element
- * @param	arg1		A user-defined pointer to carry into each callback
- * @param	arg2		A user-defined pointer to carry into each callback
- * @param	depth		A counter on the depth of recursive invocation
- *
- * @returns		0 if all possible callbacks executed return successfully, or a callback can
- *				elect to return -1 indicating that the for_each statement should break
- *				execution and not process any further callbacks.
- *
- * @remarks		IMPORTANT:  If a callback is to free an xmlNode at any point, it MUST set
- *				the pointer to NULL, to avoid this function attempting to dereference freed
- *				memory.  If your callbacks xmlFreeNode() any node at any time, set that pointer
- *				to NULL.
- */
 int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
 						   xml_item_cb_t callback,
 						   void *arg1, void *arg2, int depth);
 
-/**
- * Invokes @a callback for every possible child element starting at the node pointed to by
- * @a rootNode.
- *
- * @param	rootNode	A pointer to the rootNode to start matching from
- * @param	callback	A pointer to the function to call on each matching element
- * @param	arg1		A user-defined pointer to carry into each callback
- * @param	arg2		A user-defined pointer to carry into each callback
- *
- * @returns		0 if all possible callbacks executed return successfully, or a callback can
- *				elect to return -1 indicating that the for_each statement should break
- *				execution and not process any further callbacks
- *
- * @remarks		IMPORTANT:  If a callback is to free an xmlNode at any point, it MUST set
- *				the pointer to NULL, to avoid this function attempting to dereference freed
- *				memory.  If your callbacks xmlFreeNode() any node at any time, set that pointer
- *				to NULL.
- */
 int xml_for_each_element(xmlNode *rootNode, xml_item_cb_t callback,
 					     void *arg1, void *arg2);
 
@@ -168,20 +116,12 @@ void xml_remove_children(xmlNode *parent);
 int xml_is_valid_doc(const char *, const char *);
 #endif
 
-/*
- * Return 1 if the given href is valid, 0 otherwise including
- * the following cases:
- *  . empty string;
- *  . a single "/";
- *  . containing any "." (".." inclusive) in any position;
- *  . starting with any whitespace characters, but they are allowed
- *	  in the middle;
- *  . containing more than one consecutive slashes in any position.
- */
-int xml_is_valid_href(xmlChar *);
+int xml_is_valid_href(const xmlChar *);
 
 xmlNode *xml_create_ref_node(xmlNode *src, const xmlChar *href);
 
 int xml_write_file(const char *path, int flags, const char *data, int size);
+
+void xml_setup_private(xmlNode *node, void *arg);
 
 #endif	/* _XML_UTILS_H_ */

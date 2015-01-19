@@ -1,6 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -129,9 +128,7 @@ static void obix_fcgi_exit(void)
 	FCGX_Finish();
 
 	if (__fcgi) {
-#ifdef SYNC_FCGX_ACCEPT
 		pthread_mutex_destroy(&__fcgi->mutex);
-#endif
 
 		if (__fcgi->id) {
 			free(__fcgi->id);
@@ -172,8 +169,8 @@ static void obix_fcgi_send_response(obix_request_t *request)
 	 * allocate a string for the decoded one, then no content-location header
 	 * could ever be provided
 	 */
-	response_uri = (request->response_uri != NULL) ?
-					request->response_uri : request->request_decoded_uri;
+	response_uri = (request->response_uri) ? (char *)request->response_uri :
+											 request->request_decoded_uri;
 	if (response_uri &&
 		FCGX_FPrintF(fcgiRequest->out, HTTP_CONTENT_LOCATION,
 					 response_uri) == EOF) {
@@ -236,27 +233,24 @@ static obix_fcgi_t *obix_fcgi_init(xml_config_t *config)
 {
 	obix_fcgi_t *fcgi;
 	char *sock;
-	int backlog, ret, sync_threads;
+	int backlog, ret, multi_threads;
 
 	if (!(sock = xml_config_get_str(config, XP_LISTEN_SOCKET)) ||
 		(backlog = xml_config_get_int(config, XP_LISTEN_BACKLOG)) < 0 ||
-		(sync_threads = xml_config_get_int(config, XP_SYNC_THREADS)) < 0) {
+		(multi_threads = xml_config_get_int(config, XP_MULTI_THREADS)) < 0) {
 		log_error("Failed to get server's FCGX settings");
 		goto failed;
 	}
 
 	if (!(fcgi = (obix_fcgi_t *)malloc(sizeof(obix_fcgi_t))) ||
-		!(fcgi->id = (pthread_t *)malloc(sizeof(pthread_t) * sync_threads))) {
+		!(fcgi->id = (pthread_t *)malloc(sizeof(pthread_t) * multi_threads))) {
 		log_error("Failed to allocate an obix_fcgi_t structure");
 		goto mem_failed;
 	}
 
-	fcgi->sync_threads = sync_threads;
+	fcgi->multi_threads = multi_threads;
 	fcgi->send_response = obix_fcgi_send_response;
-
-#ifdef SYNC_FCGX_ACCEPT
 	pthread_mutex_init(&fcgi->mutex, NULL);
-#endif
 
 	if ((ret = FCGX_Init()) != 0) {
 		log_error("Failed to initialize FCGX channel: %d", ret);
@@ -303,25 +297,6 @@ failed:
 	return NULL;
 }
 
-/**
- * Reads a pre-defined chunk size (by default 2 KiB) from the FastCGI channel
- * pointed to by @a request and parses the XML document sent from the client
- * in 2 kiB chunks.
- *
- * @param	request	A pointer to the FastCGI request structure containing bytes
- *					received from the client
- * @returns		A pointer to the XML document parsed as a result of the stream,
- *				or NULL if no valid XML document could be understood from the client.
- * @remark		This is an allocating function.  It's up to the caller to free the memory
- *				returned from this function with calls to xmlFree().
- *
- * NOTE: By default a XML parser context manipulates its internal
- * dictionary to cache up strings in a parsed document for sake of
- * performance. However, if part of the parsed document is added
- * into the global DOM tree, e.g., in signUp handler, they should
- * be copied so as to ensure the global DOM tree independent from
- * any thread-specific XML parser dictionary
- */
 static xmlDoc *obix_fcgi_read(FCGX_Request *request)
 {
 	static const int chunkSize = 2048; /** read 2KiB chunks */
@@ -564,13 +539,13 @@ int main(int argc, char **argv)
 		goto log_failed;
 	}
 
-	for (i = 0; i < __fcgi->sync_threads; i++) {
+	for (i = 0; i < __fcgi->multi_threads; i++) {
 		if (pthread_create(__fcgi->id + i, NULL, payload, (void *)__fcgi) != 0) {
 			log_warning("Failed to start thread%d", i);
 		}
 	}
 
-	for (i = 0; i < __fcgi->sync_threads; i++) {
+	for (i = 0; i < __fcgi->multi_threads; i++) {
 		if (pthread_join(__fcgi->id[i], NULL) != 0) {
 			log_warning("Failed to join thread%d and it could be left zombie", i);
 		}

@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of obix.
@@ -236,8 +236,8 @@ static int example_setup_param(example_dev_t *dev, xml_config_t *config)
 
 	if (link_pathname(&dev->history_name, dev->history_root, NULL,
 					  dev->name, NULL) < 0 ||
-		link_pathname(&dev->href, OBIX_DEVICE_ROOT, dev->parent_href,
-					  dev->name, NULL) < 0) {
+		link_pathname(&dev->href, (char *)obix_roots[OBIX_DEVICE].root,
+					  dev->parent_href, dev->name, NULL) < 0) {
 		log_error("Failed to assemble BMS device href or history_name");
 		ret = OBIX_ERR_NO_MEMORY;
 		goto failed;

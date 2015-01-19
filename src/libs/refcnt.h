@@ -18,19 +18,22 @@
  *
  * *****************************************************************************/
 
-#ifndef _HISTORY_H_
-#define _HISTORY_H_
+#ifndef _REFCNT_H
+#define _REFCNT_H
 
-#include <libxml/tree.h>
-#include "obix_request.h"
+#include <pthread.h>
 
-int obix_hist_init(const char *resdir);
-void obix_hist_dispose(void);
+typedef struct refcnt {
+	int count;
+	pthread_mutex_t mutex;
+	pthread_cond_t wq;
+} refcnt_t;
 
-xmlNode *handlerHistoryGet(obix_request_t *request, const xmlChar *uri, xmlNode *input);
-xmlNode *handlerHistoryAppend(obix_request_t *request, const xmlChar *uri, xmlNode *input);
-xmlNode *handlerHistoryQuery(obix_request_t *request, const xmlChar *uri, xmlNode *input);
+void refcnt_init(refcnt_t *refcnt);
+void refcnt_cleanup(refcnt_t *refcnt);
+void refcnt_get(refcnt_t *refcnt);
+void refcnt_put(refcnt_t *refcnt);
+void refcnt_sync(refcnt_t *refcnt);
+int refcnt_read(refcnt_t *refcnt);
 
-xmlNode *hist_copy_uri(const xmlChar *href, xml_copy_flags_t flag);
-
-#endif	/* _HISTORY_H_ */
+#endif

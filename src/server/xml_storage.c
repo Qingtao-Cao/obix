@@ -1,6 +1,6 @@
 /* *****************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
+ * Copyright (c) 2014 Tyler Watson
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -27,7 +27,6 @@
 #include <libgen.h>
 #include <libxml/tree.h>
 #include <libxml/parser.h>
-#include <libxml/xpath.h>
 #include "xml_config.h"
 #include "xml_utils.h"
 #include "obix_utils.h"
@@ -41,15 +40,15 @@
  * System stubs manipulated by oBIX server, which are basically
  * template for relevant oBIX contracts
  */
-const char *obix_sys_stubs[] = {
-	[ERROR_STUB] = "/sys/error-stub/",
-	[FATAL_ERROR_STUB] = "/sys/fatal-error-stub/",
-	[WATCH_STUB] = "/sys/watch-stub/",
-	[WATCH_OUT_STUB] = "/sys/watch-out-stub/",
-	[BATCH_OUT_STUB] = "/sys/batch-out-stub/",
-	[HIST_DEV_STUB] = "/sys/hist-dev-stub/",
-	[HIST_ABS_STUB] = "/sys/hist-abstract-stub/",
-	[HIST_AOUT_STUB] = "/sys/hist-aout-stub/",
+static const xmlChar *obix_sys_stubs[] = {
+	[ERROR_STUB] = (xmlChar *)"/sys/error-stub/",
+	[FATAL_ERROR_STUB] = (xmlChar *)"/sys/fatal-error-stub/",
+	[WATCH_STUB] = (xmlChar *)"/sys/watch-stub/",
+	[WATCH_OUT_STUB] = (xmlChar *)"/sys/watch-out-stub/",
+	[BATCH_OUT_STUB] = (xmlChar *)"/sys/batch-out-stub/",
+	[HIST_DEV_STUB] = (xmlChar *)"/sys/hist-dev-stub/",
+	[HIST_ABS_STUB] = (xmlChar *)"/sys/hist-abstract-stub/",
+	[HIST_AOUT_STUB] = (xmlChar *)"/sys/hist-aout-stub/",
 };
 
 static const char *SERVER_DB_DIR_CORE = "core";
@@ -165,13 +164,10 @@ out:
  * Sets the href attribute of every single node in the given
  * subtree relative, that is, not preceded or followed by
  * any slashes.
- *
- * @param node		A pointer to xmlNode structure containing
- *					a fully allocated oBIX Object
  */
 xmlNode *xmldb_set_relative_href(xmlNode *node)
 {
-	if (node != NULL) {
+	if (node) {
 		xml_for_each_element(node, xmldb_set_relative_href_helper, NULL, NULL);
 	}
 
@@ -229,17 +225,17 @@ int xmldb_add_child(xmlNode *parent, xmlNode *node,
 }
 
 /**
- * Copy a node, unlink the copy from the original document.
+ * Copy a node from the global DOM tree and unlink the copy from
+ * the original document
  *
  * In case the orig points to NULL, then duplicate a "null" object.
  * This happens when the monitored object of a watch_item_t has
- * been deleted.
+ * been deleted
  *
  * Anyway, a "null" object will help notify clients that relevant
- * object does not exist any more.
+ * object does not exist any more
  */
-xmlNode *xmldb_copy_node_legacy(const xmlNode *orig,
-								xml_copy_exclude_flags_t flag)
+xmlNode *xmldb_copy_node(const xmlNode *orig, xml_copy_flags_t flag)
 {
 	xmlNode *node;
 
@@ -252,23 +248,15 @@ xmlNode *xmldb_copy_node_legacy(const xmlNode *orig,
 	return node;
 }
 
-xmlNode *xmldb_copy_node(const xmlNode *node, xml_copy_exclude_flags_t flag)
-{
-	return (node->_private) ? device_copy_node(node, flag) :
-							  xmldb_copy_node_legacy(node, flag);
-}
-
 /**
  * Get a copy from the specified system template and remove
  * the href from it, which is useless to oBIX clients
  */
 xmlNode *xmldb_copy_sys(sys_stubs_t which)
 {
-	xmlNode *root = xmlDocGetRootElement(_storage);
-	xmlNode *node, *copy;
+	xmlNode *copy;
 
-	if (!(node = xmldb_get_node_legacy(root, (xmlChar *)obix_sys_stubs[which])) ||
-		!(copy = xmldb_copy_node_legacy(node, 0))) {
+	if (!(copy = xmldb_copy_uri(obix_sys_stubs[which], 0))) {
 		log_error("Failed to copy from %s", obix_sys_stubs[which]);
 		return NULL;
 	}
@@ -294,7 +282,7 @@ void xmldb_delete_node(xmlNode *node, xmldb_dom_action_t action)
 
 	xml_delete_node(node);
 
-	if ((action & DOM_DELETE_EMPTY_WATCH_PARENT) > 0 &&
+	if ((action & DELETE_EMPTY_ANCESTORS_WATCH) > 0 &&
 		parent != NULL &&
 		xmlChildElementCount(parent) == 0) {
 		xmldb_delete_node(parent, 0);
@@ -381,7 +369,7 @@ static void list_href_dispose(list_href_t *item)
 	free(item);
 }
 
-static int xmldb_node_path_legacy_helper(xmlNode **current,
+static int xmldb_node_path_helper(xmlNode **current,
 										 void *arg1, void *arg2)
 {
 	xmlNode *node = *current;
@@ -420,8 +408,8 @@ static int xmldb_node_path_legacy_helper(xmlNode **current,
  * Note,
  * 1. Callers should release the URI string once done with it
  */
-xmlChar *xmldb_node_path_legacy(xmlNode *start, xmlNode *top_node,
-								const xmlChar *top_href)
+xmlChar *xmldb_node_path(xmlNode *start, xmlNode *top_node,
+						 const xmlChar *top_href)
 {
 	list_href_t head, *item, *n;
 	char *href = NULL;
@@ -433,7 +421,7 @@ xmlChar *xmldb_node_path_legacy(xmlNode *start, xmlNode *top_node,
 	}
 
 	if (xml_for_each_ancestor_or_self(start, top_node,
-									  xmldb_node_path_legacy_helper,
+									  xmldb_node_path_helper,
 									  &head, NULL) < 0) {
 		goto failed;
 	}
@@ -462,130 +450,7 @@ out:
 	return head.href;
 }
 
-xmlChar *xmldb_node_path(xmlNode *node)
-{
-	return (node->_private) ? device_node_path(node->_private, node) :
-					xmldb_node_path_legacy(node, NULL, (const xmlChar *)"/");
-}
-
-#ifdef DEBUG
-/**
- * Iterates through the request environment pointed to by @a response and inserts
- * all the request environment variables as child nodes to the environment root node
- * pointed to by @a environmentRoot.
- *
- * @param request	    A pointer to the @a oBIX Request object that holds request
- *                          information.
- * @returns                 A pointer to the newly created obix:List XML subtree
- *                          with all the FastCGI variables listed as <str>'s in it,
- *                          or NULL if an error occurred.
- * @remark                  This is an allocating function.  It's up to the caller
- *                          to free the memory returned from this function with xmlFree().
- */
-static xmlNode *xmldb_fcgi_var_list(obix_request_t *request)
-{
-	char **envp;
-	xmlNode *envList = NULL;
-	xmlNode *curEnvNode = NULL;
-
-	if (!(envList = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_LIST, NULL))) {
-		log_error("Failed to allocate the oBIX:List contract");
-		return NULL;
-	}
-
-	if (xmlSetProp(envList, BAD_CAST OBIX_ATTR_IS,
-				   BAD_CAST "obix:FastCGIEnvironment") == NULL ||
-		xmlSetProp(envList, BAD_CAST OBIX_ATTR_OF,
-				   BAD_CAST "obix:Str") == NULL) {
-		log_error("Failed to set attributes on the environment list.");
-		goto failed;
-	}
-
-	for (envp = request->request->envp; *envp != NULL; ++envp) {
-		if (!(curEnvNode = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_STR, NULL))) {
-			log_error("Failed to allocate the oBIX:str value for FCGI variable");
-			break;
-		}
-
-		if (xmlSetProp(curEnvNode, BAD_CAST OBIX_ATTR_VAL, BAD_CAST *envp) == NULL) {
-			log_error("Failed to set the \"val\" attribute");
-			break;
-		}
-
-		if (xmldb_add_child(envList, curEnvNode, 0, 0) != 0) {
-			log_error("Failed to add the child str node to the environment list.");
-			break;
-		}
-	}
-
-	if (*envp == NULL) {	/* Successfully reaching the end of env list */
-		return envList;
-	}
-
-	if (curEnvNode) {
-		xmlFreeNode(curEnvNode);
-	}
-
-failed:
-	xmlFreeNode(envList);
-
-	return NULL;
-}
-
-xmlNode *xmldb_dump(obix_request_t *request)
-{
-	xmlNode *dump = NULL;
-	xmlNode *fcgiVarList = NULL;
-	xmlNode *storageCopy = NULL;
-
-	if (!(dump = xmlNewNode(NULL, BAD_CAST OBIX_OBJ))) {
-		log_error("Failed to allocate a XML node to build up response");
-		goto failed;
-	}
-
-	xmlSetProp(dump, BAD_CAST OBIX_ATTR_IS, BAD_CAST "obix:EnvironmentDump");
-
-	if (!(fcgiVarList = xmldb_fcgi_var_list(request))) {
-		log_error("Failed to return the FASTCGI environment contract");
-		goto failed;
-	}
-
-	if (!(storageCopy =
-			xml_copy(xmlDocGetRootElement(_storage),
-					 XML_COPY_EXCLUDE_COMMENTS | XML_COPY_EXCLUDE_HIDDEN))) {
-		log_error("Failed to copy the XML storage");
-		goto storage_failed;
-	}
-
-	if (xmldb_add_child(dump, fcgiVarList, 0, 0) != 0 ||
-		xmldb_add_child(dump, storageCopy, 0, 0) != 0) {
-		log_error("Failed to add children to the output element");
-	} else {
-		return dump;	/* Success */
-	}
-
-	/* Failure */
-
-	xmlFreeNode(storageCopy);
-
-storage_failed:
-	xmlFreeNode(fcgiVarList);
-
-failed:
-	if (dump) {
-		xmlFreeNode(dump);
-	}
-
-	return xmldb_fatal_error();
-}
-
-char *xmlDebugDumpNode(const xmlNode *node)
-{
-	return (node != NULL) ? xml_dump_node(node) : NULL;
-}
-#endif
-
-static int xmldb_get_node_legacy_helper(const char *token,
+static int xmldb_get_node_core_helper(const char *token,
 										void *arg1, void *arg2)
 {
 	xmlNode **node = (xmlNode **)arg1;		/* arg2 is ignored */
@@ -597,39 +462,85 @@ static int xmldb_get_node_legacy_helper(const char *token,
 	return 0;
 }
 
-xmlNode *xmldb_get_node_legacy(xmlNode *start, const xmlChar *href)
+/*
+ * Get a node with a specific href in the given subtree
+ */
+xmlNode *xmldb_get_node_core(xmlNode *start, const xmlChar *href)
 {
 	xmlNode *node = start;
 
 	if (for_each_str_token(STR_DELIMITER_SLASH, (const char *)href,
-						   xmldb_get_node_legacy_helper, &node, NULL) < 0) {
+						   xmldb_get_node_core_helper, &node, NULL) < 0) {
 		node = NULL;
 	}
 
 	return node;
 }
 
+/*
+ * Get a particular node with the given href from the global
+ * DOM tree
+ *
+ * IMPORTANT: if a node resides in a volatile object such as
+ * a device contract or a watch object, holding its reference
+ * invites race condition with other threads trying to delete
+ * it!
+ *
+ * Therefore exert carefulness when invoking this function,
+ * it should be used to return addresses of static nodes ONLY
+ */
 xmlNode *xmldb_get_node(const xmlChar *href)
 {
-	obix_dev_t *dev;
 	xmlNode *root = xmlDocGetRootElement(_storage);
-	xmlNode *node = NULL;
 
-	if (xmlStrcmp(href, BAD_CAST "/") == 0) {
-		return root;
+	return (xmlStrcmp(href, BAD_CAST "/") == 0) ?
+				root : xmldb_get_node_core(root, href);
+}
+
+/*
+ * Copy a node with the given href from the global DOM tree
+ *
+ * Return the copy's pointer on success, NULL otherwise
+ *
+ * NOTE: Callers should only manipulate this function for static
+ * objects that won't be deleted or written into, such as common
+ * facilities of the global DOM tree
+ */
+xmlNode *xmldb_copy_uri(const xmlChar *href, xml_copy_flags_t flags)
+{
+	xmlNode *root, *node, *copy = NULL;
+
+	root = xmlDocGetRootElement(_storage);
+
+	if ((node = xmldb_get_node_core(root, href)) != NULL) {
+		copy = xmldb_copy_node(node, flags);
 	}
 
-	if (is_device_href(href) == 0 || is_device_root_href(href) == 1) {
-		return xmldb_get_node_legacy(root, href);
+	return copy;
+}
+
+/*
+ * Update the val attribute of the node with given href in the
+ * global DOM tree
+ *
+ * Return 0 for success, > 0 for error codes
+ *
+ * NOTE: Callers should only manipulate this function for static
+ * objects that won't be deleted, such as common facilities of
+ * the global DOM tree
+ */
+int xmldb_update_uri(const xmlChar *href, const xmlChar *val)
+{
+	xmlNode *node;
+	int ret = 0;
+
+	if (!(node = xmldb_get_node(href))) {
+		ret = ERR_NO_SUCH_URI;
+	} else if (!xmlSetProp(node, BAD_CAST OBIX_ATTR_VAL, val)) {
+		ret = ERR_NO_MEM;
 	}
 
-	/* href points to a device node */
-	if ((dev = device_search(href)) != NULL ||
-		(dev = device_search_parent(href)) != NULL) {
-		node = device_get_node(dev, href);
-	}
-
-	return node;
+	return ret;
 }
 
 static int xmldb_create_ancestors_helper(const char *token, void *arg1,
@@ -640,10 +551,9 @@ static int xmldb_create_ancestors_helper(const char *token, void *arg1,
 	xmlNode *node;
 
 	if (!(node = xml_find_child(parent, NULL, OBIX_ATTR_HREF, token))) {
-
 		if (*type == STUB_NORMAL) {
 			node = xmlNewNode(NULL, BAD_CAST OBIX_OBJ);
-		} else  if (*type == STUB_HISTORY) {
+		} else if (*type == STUB_HISTORY) {
 			node = xmldb_copy_sys(HIST_DEV_STUB);
 		}
 
@@ -695,17 +605,13 @@ static xmlNode *xmldb_create_ancestors(const xmlChar *href,
  *
  * return 0 on success, > 0 for error codes
  */
-int xmldb_put_node_legacy(xmlNode *node, xmldb_dom_action_t action)
+int xmldb_put_node(xmlNode *node, const xmlChar *href,
+				   xmldb_dom_action_t action)
 {
 	xmlNode *parentNode = NULL;
-	xmlChar *href = NULL;
 	xmlChar *parentHref = NULL;
 	xmldb_stub_type_t type = STUB_NORMAL;
 	int ret = 0;
-
-	if (!(href = xmlGetProp(node, BAD_CAST OBIX_ATTR_HREF))) {
-		return ERR_NO_HREF;
-	}
 
 	if (xml_is_valid_href(href) == 0) {
 		ret = ERR_INVALID_HREF;
@@ -719,12 +625,12 @@ int xmldb_put_node_legacy(xmlNode *node, xmldb_dom_action_t action)
 	}
 
 	if (!(parentNode = xmldb_get_node(parentHref))) {
-		if ((action & (DOM_CREATE_ANCESTORS_WATCH |
-					   DOM_CREATE_ANCESTORS_HISTORY)) == 0) {
+		if ((action & (CREATE_ANCESTORS_WATCH |
+					   CREATE_ANCESTORS_HISTORY)) == 0) {
 			ret = ERR_NO_SUCH_URI;
 			goto failed;
 		} else {
-			if ((action & DOM_CREATE_ANCESTORS_HISTORY) > 0) {
+			if ((action & CREATE_ANCESTORS_HISTORY) > 0) {
 				type = STUB_HISTORY;
 			}
 
@@ -742,10 +648,6 @@ int xmldb_put_node_legacy(xmlNode *node, xmldb_dom_action_t action)
 failed:
 	if (parentHref) {
 		xmlFree(parentHref);
-	}
-
-	if (href) {
-		xmlFree(href);
 	}
 
 	return ret;
@@ -818,7 +720,7 @@ static int xmldb_reparent_children(xmlNode *from, xmlNode *to,
 			 * parser dictionary
 			 */
 			if (dict_used == 1) {
-				if (!(copy = xml_copy(child, XML_COPY_EXCLUDE_COMMENTS))) {
+				if (!(copy = xml_copy(child, EXCLUDE_COMMENTS))) {
 					return ERR_NO_MEM;
 				}
 			} else {	/* no dictionary used, from tree is standalone */
@@ -890,7 +792,7 @@ static int xmldb_load_files_helper(const char *dir, const char *file, void *arg)
 			goto failed;
 		}
 	} else {
-		if (xmldb_put_node_legacy(root, 0) != 0) {
+		if (xmldb_put_node(root, href, 0) != 0) {
 			log_error("Failed to add root node from %s "
 					  "into the XML database.", path);
 			/*
@@ -1038,65 +940,14 @@ void obix_xmldb_dispose(void)
 }
 
 /*
- * Update the val attribute of the target node
+ * Get the value of the "op" attribute of the meta node
+ * in the given node, such as <meta op="xx"/>
  *
- * Return 0 for success, > 0 for error codes
+ * Return 0 on success, > 0 for error code
  */
-int xmldb_update_node(xmlNode *input, xmlNode *target, const char *href)
-{
-	xmlChar *newValue = NULL;
-	char *href_src, *href_dst, *href_copy;
-	int ret = 0;
-
-	/* check on href only if provided */
-	href_src = (char *)xmlGetProp(input, BAD_CAST OBIX_ATTR_HREF);
-	if (href_src) {
-		if (!(href_copy = strdup(href))) {
-			free(href_src);
-			return ERR_NO_MEM;
-		}
-
-		href_dst = (slash_preceded(href_src) == 1) ? href_copy : basename(href_copy);
-
-		ret = strcmp(href_dst, href_src);
-		free(href_src);
-		free(href_copy);
-
-		if (ret != 0) {
-			return ERR_INVALID_HREF;
-		}
-	}
-
-	if (!(newValue = xmlGetProp(input, BAD_CAST OBIX_ATTR_VAL))) {
-		return ERR_NO_MEM;
-	}
-
-	/*
-	 * TODO:
-	 * The sanity check on data types should be enforced here
-	 */
-	if (xmlStrcmp(input->name, BAD_CAST OBIX_OBJ_BOOL) == 0 &&
-		xmlStrcmp(newValue, BAD_CAST XML_TRUE) != 0 &&
-		xmlStrcmp(newValue, BAD_CAST XML_FALSE) != 0) {
-		xmlFree(newValue);
-		return ERR_INVALID_OBJ;
-	}
-
-	if (target->_private) {
-		ret = device_update_node(target, newValue);
-	} else if (!xmlSetProp(target, BAD_CAST OBIX_ATTR_VAL, newValue)) {
-		ret = ERR_NO_MEM;
-	}
-
-	xmlFree(newValue);
-	return ret;
-}
-
-int xmldb_get_op_id_legacy(const xmlNode *node, long *id)
+int xmldb_get_op_id_core(const xmlNode *node, long *id)
 {
 	xmlNode *meta;
-
-	*id = 0;
 
 	if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_OP) != 0) {
 		return ERR_NO_OP_NODE;
@@ -1115,9 +966,117 @@ int xmldb_get_op_id_legacy(const xmlNode *node, long *id)
  * Get the value of the "op" meta node from the given node
  *
  * Return 0 on success, > 0 for error code
+ *
+ * NOTE: this function should only be used on non-removable,
+ * static nodes. Otherwise subsystem specific ones must be
+ * used instead to prevent race conditions
  */
-int xmldb_get_op_id(const xmlNode *node, long *id)
+int xmldb_get_op_id(const xmlChar *uri, long *id)
 {
-	return (node->_private) ? device_get_op_id(node, id) :
-							  xmldb_get_op_id_legacy(node, id);
+	xmlNode *node;
+	int ret = ERR_NO_SUCH_URI;
+
+	if ((node = xmldb_get_node(uri)) != NULL) {
+		ret = xmldb_get_op_id_core(node, id);
+	}
+
+	return ret;
 }
+
+#ifdef DEBUG
+static xmlNode *xmldb_fcgi_var_list(obix_request_t *request)
+{
+	char **envp;
+	xmlNode *envList = NULL;
+	xmlNode *curEnvNode = NULL;
+
+	if (!(envList = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_LIST, NULL))) {
+		log_error("Failed to allocate the oBIX:List contract");
+		return NULL;
+	}
+
+	if (xmlSetProp(envList, BAD_CAST OBIX_ATTR_IS,
+				   BAD_CAST "obix:FastCGIEnvironment") == NULL ||
+		xmlSetProp(envList, BAD_CAST OBIX_ATTR_OF,
+				   BAD_CAST "obix:Str") == NULL) {
+		log_error("Failed to set attributes on the environment list.");
+		goto failed;
+	}
+
+	for (envp = request->request->envp; *envp != NULL; ++envp) {
+		if (!(curEnvNode = xmlNewDocNode(_storage, NULL, BAD_CAST OBIX_OBJ_STR, NULL))) {
+			log_error("Failed to allocate the oBIX:str value for FCGI variable");
+			break;
+		}
+
+		if (xmlSetProp(curEnvNode, BAD_CAST OBIX_ATTR_VAL, BAD_CAST *envp) == NULL) {
+			log_error("Failed to set the \"val\" attribute");
+			break;
+		}
+
+		if (xmldb_add_child(envList, curEnvNode, 0, 0) != 0) {
+			log_error("Failed to add the child str node to the environment list.");
+			break;
+		}
+	}
+
+	if (*envp == NULL) {	/* Successfully reaching the end of env list */
+		return envList;
+	}
+
+	if (curEnvNode) {
+		xmlFreeNode(curEnvNode);
+	}
+
+failed:
+	xmlFreeNode(envList);
+
+	return NULL;
+}
+
+xmlNode *xmldb_dump(obix_request_t *request)
+{
+	xmlNode *dump = NULL;
+	xmlNode *fcgiVarList = NULL;
+	xmlNode *storageCopy = NULL;
+
+	if (!(dump = xmlNewNode(NULL, BAD_CAST OBIX_OBJ))) {
+		log_error("Failed to allocate a XML node to build up response");
+		goto failed;
+	}
+
+	xmlSetProp(dump, BAD_CAST OBIX_ATTR_IS, BAD_CAST "obix:EnvironmentDump");
+
+	if (!(fcgiVarList = xmldb_fcgi_var_list(request))) {
+		log_error("Failed to return the FASTCGI environment contract");
+		goto failed;
+	}
+
+	if (!(storageCopy = xml_copy(xmlDocGetRootElement(_storage),
+								 EXCLUDE_COMMENTS | EXCLUDE_HIDDEN))) {
+		log_error("Failed to copy the XML storage");
+		goto storage_failed;
+	}
+
+	if (xmldb_add_child(dump, fcgiVarList, 0, 0) != 0 ||
+		xmldb_add_child(dump, storageCopy, 0, 0) != 0) {
+		log_error("Failed to add children to the output element");
+	} else {
+		return dump;	/* Success */
+	}
+
+	/* Failure */
+
+	xmlFreeNode(storageCopy);
+
+storage_failed:
+	xmlFreeNode(fcgiVarList);
+
+failed:
+	if (dump) {
+		xmlFreeNode(dump);
+	}
+
+	return xmldb_fatal_error();
+}
+#endif

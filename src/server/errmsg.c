@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -25,7 +25,7 @@ err_msg_t server_err_msg[] = {
 	/* Generic error codes */
 	[ERR_NO_INPUT] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "Missing input device contract"
+		.msgs = "Missing input contract"
 	},
 	[ERR_NO_HREF] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
@@ -73,7 +73,7 @@ err_msg_t server_err_msg[] = {
 	},
 	[ERR_INVALID_STATE] = {
 		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "The requested device/facility is being shutting down, abort write attempt"
+		.msgs = "The requested device/facility is being shutting down, abort access"
 	},
 	[ERR_INVALID_OBJ] = {
 		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
@@ -121,11 +121,11 @@ err_msg_t server_err_msg[] = {
 	},
 
 	/* Error codes specific for the Watch subsystem */
-	[ERR_WATCH_UNSUPPORTED_HREF] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "Provided href can't be watched upon"
-	},
 	[ERR_WATCH_NO_SUCH_URI] = {
+		.type = OBIX_CONTRACT_ERR_BAD_URI,
+		.msgs = "Provided href does not point to a valid watch object"
+	},
+	[ERR_WATCH_NO_MONITORED_URI] = {
 		.type = OBIX_CONTRACT_ERR_BAD_URI,
 		.msgs = "Provided href is not monitored by relevant watch object"
 	},

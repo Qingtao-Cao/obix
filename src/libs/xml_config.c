@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -34,7 +34,7 @@ static const char *XP_LOG_FACILITY = "/config/log/facility";
  */
 const char *XP_LISTEN_SOCKET = "/config/listen_socket";
 const char *XP_LISTEN_BACKLOG = "/config/listen_backlog";
-const char *XP_SYNC_THREADS = "/config/sync_threads";
+const char *XP_MULTI_THREADS = "/config/multi_threads";
 const char *XP_POLL_THREADS = "/config/poll_threads";
 const char *XP_DEV_TABLE_SIZE = "/config/dev_table_size";
 const char *XP_DEV_CACHE_SIZE = "/config/dev_cache_size";

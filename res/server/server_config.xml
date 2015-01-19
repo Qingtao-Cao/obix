@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-	Copyright (c) 2013-2015 Qingtao Cao <harry.cao@nextdc.com>
+	Copyright (c) 2013-2015 Qingtao Cao
 	Copyright (c) 2009 Andrey Litvinov
 
 	This file is part of oBIX.
@@ -58,7 +58,7 @@
 		NOTE: Administrators are highly recommended to tune this value according
 		to the workload in their specific environment
 	-->
-	<sync_threads val="20"/>
+	<multi_threads val="10"/>
 
 	<!--
 		Mandatory tag, defining maximum number of oBIX server threads for long-poll

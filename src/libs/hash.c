@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -101,7 +101,9 @@ static void hash_destroy_head(hash_head_t *head)
 {
 	hash_node_t *node, *n;
 
-	tsync_shutdown(&head->sync);
+	if (tsync_shutdown_entry(&head->sync) < 0) {
+		return;
+	}
 
 	list_for_each_entry_safe(node, n, &head->head, list) {
 		list_del(&node->list);
@@ -113,12 +115,12 @@ static void hash_destroy_head(hash_head_t *head)
 	/* Hash heads are released along with the entire hash table */
 }
 
-hash_table_t *hash_init_table(unsigned int size, hash_ops_t *op)
+hash_table_t *hash_init_table(unsigned int size, hash_table_ops_t *op)
 {
 	hash_table_t *tab;
 	int i;
 
-	if (size == 0 || !op || !op->get || !op->cmp) {
+	if (size == 0 || !op) {
 		return NULL;
 	}
 
@@ -159,7 +161,7 @@ void hash_destroy_table(hash_table_t *tab)
 	free(tab);
 }
 
-const void *hash_search(hash_table_t *tab, const unsigned char *key)
+void *hash_search(hash_table_t *tab, const unsigned char *key)
 {
 	const void *item = NULL;
 	hash_head_t *head;
@@ -169,22 +171,23 @@ const void *hash_search(hash_table_t *tab, const unsigned char *key)
 		return NULL;
 	}
 
-	head = &tab->table[tab->op->get(key, tab->size)];
+	head = &tab->table[tab->op->compute(key, tab->size)];
 
 	if (tsync_reader_entry(&head->sync) < 0) {
 		return NULL;
 	}
 
 	list_for_each_entry(node, &head->head, list) {
-		if (tab->op->cmp(key, node) == 1) {
+		if (tab->op->compare(key, node) == 1) {
 			item = node->item;
+			tab->op->get((void *)item);
 			break;
 		}
 	}
 
 	tsync_reader_exit(&head->sync);
 
-	return item;
+	return (void *)item;
 }
 
 void hash_del(hash_table_t *tab, const unsigned char *key)
@@ -196,14 +199,14 @@ void hash_del(hash_table_t *tab, const unsigned char *key)
 		return;
 	}
 
-	head = &tab->table[tab->op->get(key, tab->size)];
+	head = &tab->table[tab->op->compute(key, tab->size)];
 
 	if (tsync_writer_entry(&head->sync) < 0) {
 		return;
 	}
 
 	list_for_each_entry_safe(node, n, &head->head, list) {
-		if (tab->op->cmp(key, node) == 1) {
+		if (tab->op->compare(key, node) == 1) {
 			list_del(&node->list);
 			free(node);
 			head->count--;
@@ -229,14 +232,14 @@ int hash_add(hash_table_t *tab, const unsigned char *key, void *item)
 		return -1;
 	}
 
-	head = &tab->table[tab->op->get(key, tab->size)];
+	head = &tab->table[tab->op->compute(key, tab->size)];
 
 	if (tsync_writer_entry(&head->sync) < 0) {
 		return -1;
 	}
 
 	list_for_each_entry(node, &head->head, list) {
-		if (tab->op->cmp(key, node) == 1) {
+		if (tab->op->compare(key, node) == 1) {
 			/* Already added, return success */
 			goto out;
 		}

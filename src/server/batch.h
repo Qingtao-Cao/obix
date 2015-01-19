@@ -1,6 +1,6 @@
 /* *****************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
+ * Copyright (c) 2014 Tyler Watson
  *
  * This file is part of oBIX.
  *
@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -25,6 +25,6 @@
 #include <libxml/tree.h>
 #include "obix_request.h"
 
-xmlNode *handlerBatch(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerBatch(obix_request_t *request, const xmlChar *uri, xmlNode *input);
 
 #endif

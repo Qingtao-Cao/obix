@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -70,5 +70,6 @@ int tsync_writer_entry(tsync_t *sync);
 void tsync_writer_exit(tsync_t *sync);
 int tsync_reader_entry(tsync_t *sync);
 void tsync_reader_exit(tsync_t *sync);
-void tsync_shutdown(tsync_t *sync);
+int tsync_shutdown_entry(tsync_t *sync);
+void tsync_shutdown_revoke(tsync_t *sync);
 #endif

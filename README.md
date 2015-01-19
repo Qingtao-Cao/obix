@@ -2,8 +2,7 @@
 
 Providing oBIX Server and client implementation for C language
  
-Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]    
-Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]    
+Copyright (c) 2013-2015 Qingtao Cao [qingtao.cao.au@gmail.com]
 Copyright (c) 2009 Andrey Litvinov [litvinov.andrey@gmail.com]
  
 oBIX is free software licensed under the GPLv3+ License. The text for this license can be found in the COPYING file. Also it's worthwhile to mention that the src/libs/list.h file comes from Linux kernel source tree and thus is under the GPLv2 License.
@@ -22,7 +21,7 @@ C oBIX Server is a stand-alone application intended for storing building automat
 
 Devices are connected to the server through oBIX adaptors. These adaptors are separate applications that speak hardware-specific language to obtain data from hardware and convert into oBIX format. The server provides the same interface for oBIX adaptors and oBIX clients (e.g., UI management application).
 
-The main difference between this oBIX Server and other available implementations (such as oFMS http://www.stok.fi/eng/ofms/index.html or oX http://obix-server.sourceforge.net) is it is written in C and can be run on cheap low-resource platforms and more importantly, faster.
+This oBIX server is stable, fast and scale very well. One of the main difference between it and other available implementations (such as oFMS http://www.stok.fi/eng/ofms/index.html or oX http://obix-server.sourceforge.net) is it is written in C and has tiny footprint and therefore can be run on cheap low-resource platforms. 
 
 The list of currently implemented oBIX features includes:
  - Read, write, invoke and delete requests handling
@@ -31,14 +30,15 @@ The list of currently implemented oBIX features includes:
  - HTTP protocol binding
  - Device subsystem
  - Watch subsystem
- - History subsystem.
+ - History subsystem
+ - Multi-thread support
 
 There are a lot of useful markdown documents under docs/ about use cases, tips and insights of implemented features on the oBIX server.
 
-The list of things that are NOT yet supported (the gap with oBIX 1.1 spec):
+The list of things in oBIX 1.1 specification that are NOT yet supported:
  - Alarms
  - Feeds
- - Writable points (simple writable objects can be used instead)
+ - Writable points
  - Permission based degradation
  - Localisation
  - SOAP binding
@@ -61,9 +61,9 @@ This project has been created for running on Linux platforms. It was tested on v
 Other Linux distributions for embedded devices were not tested but may possibly be used if all project dependencies are satisfied.
 
 The project has the following libraries or packages dependencies:
- - libcsv (for BMS adaptor)
- - libmodbus-devel (for MGATE adaptor)
- - libcurl
+ - libcsv (for BMS adaptor only)
+ - libmodbus-devel (for MGATE adaptor only)
+ - libcurl (for adaptors and other client side applications only)
  - fcgi-devel
  - libxml2-devel
  - glibc-devel
@@ -199,8 +199,6 @@ The default install path for documentation is /usr/share/doc/obix. To change thi
     
 See redhat/obix.spec for further details.
 
-
-
 **RPM build**
 
 Fedora/RHEL systems can use the specfile redhat/obix.spec, and create a local tarball from git. In this example there is a local git tag named "1.0":
@@ -314,4 +312,4 @@ The "-o cat" option helps highlight the actual message by suppressing meta data 
 
 * If obix-fcgi binary failed to find libobix.so, its path can be specified in the "bin-environment" setting of the obix-fcgi.conf file.
 
-* If the oBIX server oops on the fly, gdb can be used to attach to a running instance of the obix-fcgi binary and capture the calltrace on the spot.
+* If the oBIX server oops on the fly, gdb can be used to attach to a running instance of the obix-fcgi binary and capture the calltrace on the spot. One example of how gdb is used to debug multi-thread related problems can be found at docs/MULTI_THREADS.md

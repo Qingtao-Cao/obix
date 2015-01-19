@@ -1,6 +1,8 @@
+# Multi-thread support
+
 The multi-thread support feature is crucial for the oBIX Server to meet performance and scalability requirements. If oBIX server can't consume requests from the FCGI listening socket and its backlog queue is full, newly arrived FCGI requests are simply rejected resulting in relevant client applications receiving HTTP 503 "Service Not Available" type of error. Obviously the more number of oBIX adaptors sending requests concurrently, or the more time-consuming a request is (e.g., when disk I/O is further triggered), the more likely such situation happens.
 
-The solution lies in multi-thread support, that is, multiple server threads are spawned to accept and handle FCGI requests in parallel. As a matter of fact, an accepted FCGI request is a wrapper structure of an established TCP connection, through which relevant server thread can send back responses separate from others.
+The solution lies in multi-thread support, that is, multiple server threads are spawned at start-up to accept and handle FCGI requests in parallel. As a matter of fact, an accepted FCGI request is a wrapper structure of an established TCP connection, through which relevant server thread can send back responses separate from others.
 
 # Observation of multi-thread behaviour
 
@@ -153,3 +155,115 @@ $ head obix.*
 ```
 
 In above example, for each thread the fd[4] is the UNIX socket file (/var/run/lighttpd/obix.fcgi.socket-0) that oBIX server threads listen on in parallel. From the start timestamp and duration of the accept() system call, we can tell that each thread accepts and establishes connections simultaneously.
+
+# Debugging multi-thread related problems
+
+Generally speaking concurrency issues are hard to reproduce and analyse. To start with, try to reduce the number of server threads via the "multi_threads" configuration option while still able to reproduce the problem and enable the "DEBUG_TSYNC" macro in libs/tsync.c file.
+
+## Server threads' calltrace
+
+When a synchronisation issue occurs such as a thread is slept forever on a POSIX pthread conditional, gdb can be used to attach to each server thread to peek its calltrace.
+
+The polling threads' calltrace may look like below:
+
+(gdb) bt
+#0  pthread_cond_wait@@GLIBC_2.3.2 () at ../nptl/sysdeps/unix/sysv/linux/x86_64/pthread_cond_wait.S:185
+#1  0x000000000040f1d4 in poll_thread_task (arg=0x2626ee0) at /work/obix/src/server/watch.c:1827
+#2  0x0000003c78e07c65 in start_thread (arg=0x7fdb36e62700) at pthread_create.c:308
+#3  0x0000003c786f5b9d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:113
+(gdb)
+
+They are running the poll_thread_task loop and sleep on a pthread conditional when there is no outstanding watch poll task to handle.
+
+Moreover, common server threads may enter the following calltrace while being blocked by glibc accept() API to wait for an established FCGX requests:
+
+```
+(gdb) bt
+#0  0x0000003c78e0e34d in accept () at ../sysdeps/unix/syscall-template.S:81
+#1  0x0000003c7a20794e in OS_Accept (listen_sock=4, fail_on_intr=0, webServerAddrs=0x0) at os_unix.c:1166
+#2  0x0000003c7a20593c in FCGX_Accept_r (reqDataPtr=0x7fdb280008c0) at fcgiapp.c:2196
+#3  0x000000000040a876 in obix_fcgi_request_create (fcgi=0x25fe7c0) at /work/obix/src/server/obix_fcgi.c:429
+#4  0x000000000040a8f2 in payload (arg=0x25fe7c0) at /work/obix/src/server/obix_fcgi.c:481
+#5  0x0000003c78e07c65 in start_thread (arg=0x7fdb36626700) at pthread_create.c:308
+#6  0x0000003c786f5b9d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:113
+(gdb) 
+```
+
+When synchronisation issues emerge server threads may deadlock with others or never get waken up properly. Once upon a time there was a defect in a tsync.c API resulting in server threads running signOff handlers blocked indefinitely. Relevant calltrace looks like below:
+
+```
+(gdb) bt
+#0  pthread_cond_wait@@GLIBC_2.3.2 () at ../nptl/sysdeps/unix/sysv/linux/x86_64/pthread_cond_wait.S:185
+#1  0x00007f96731a510d in tsync_reader_entry (sync=0xc2d3118) at /work/obix/src/libs/tsync.c:160
+#2  0x0000000000412b02 in device_notify_watches (dev=0xc2d3080, node=0xee7950)
+    at /work/obix/src/server/device.c:1030
+#3  0x0000000000413092 in device_del (href=0x7f9664003f80 "/obix/deviceRoot/example", 
+    requester_id=0x7f966400a470 "UNDEFINED:UNDEFINED", sign_off=1) at /work/obix/src/server/device.c:1228
+#4  0x000000000040be6f in handlerSignOff (request=0x7f96640079a0, uri=0x7f9664009c90 "/obix/signOff", 
+    input=0x7f9664004160) at /work/obix/src/server/server.c:497
+#5  0x000000000040c267 in obix_server_invoke (request=0x7f96640079a0, overrideUri=0x0, input=0x7f9664004160)
+    at /work/obix/src/server/server.c:678
+#6  0x000000000040c31b in obix_server_handlePOST (request=0x7f96640079a0, input=0x7f966400a490)
+    at /work/obix/src/server/server.c:691
+#7  0x000000000040a77e in obix_handle_request (request=0x7f96640079a0) at /work/obix/src/server/obix_fcgi.c:390
+#8  0x000000000040a95e in payload (arg=0xeca7c0) at /work/obix/src/server/obix_fcgi.c:491
+#9  0x0000003c78e07c65 in start_thread (arg=0x7f9672156700) at pthread_create.c:308
+#10 0x0000003c786f5b9d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:113
+(gdb)
+```
+
+Above server thread has unregistered relevant device successfully but needs to notify any wathces monitoring the parent device before return. To this end, it needs to enter the "read region" of the parent device to find all watches, that's where it got blocked.
+
+However, gdb further reveals that at this moment the number of writers on the parent device were as a matter of fact zero:
+
+```
+(gdb) fr 1
+#1  0x00007f96731a510d in tsync_reader_entry (sync=0xc2d3118) at /work/obix/src/libs/tsync.c:160
+160                     pthread_cond_wait(&sync->rq, &sync->mutex);
+(gdb) p *sync
+$1 = {being_shutdown = 0, readers = 1, writers = 0, running_readers = 0, running_writers = 0, rq = {__data = {
+      __lock = 0, __futex = 3, __total_seq = 2, __wakeup_seq = 1, __woken_seq = 1, __mutex = 0xc2d31c0, 
+      __nwaiters = 2, __broadcast_seq = 0}, 
+    __size = "\000\000\000\000\003\000\000\000\002\000\000\000\000\000\000\000\001\000\000\000\000\000\000\000\001\000\000\000\000\000\000\000\300\061-\f\000\000\000\000\002\000\000\000\000\000\000", 
+    __align = 12884901888}, wq = {__data = {__lock = 0, __futex = 4, __total_seq = 2, __wakeup_seq = 2, 
+      __woken_seq = 2, __mutex = 0xc2d31c0, __nwaiters = 0, __broadcast_seq = 0}, 
+    __size = "\000\000\000\000\004\000\000\000\002\000\000\000\000\000\000\000\002\000\000\000\000\000\000\000\002\000\000\000\000\000\000\000\300\061-\f", '\000' <repeats 11 times>, __align = 17179869184}, swq = {
+    __data = {__lock = 0, __futex = 0, __total_seq = 0, __wakeup_seq = 0, __woken_seq = 0, __mutex = 0x0, 
+      __nwaiters = 0, __broadcast_seq = 0}, __size = '\000' <repeats 47 times>, __align = 0}, mutex = {
+    __data = {__lock = 0, __count = 0, __owner = 0, __nusers = 1, __kind = 0, __spins = 0, __list = {
+        __prev = 0x0, __next = 0x0}}, __size = '\000' <repeats 12 times>, "\001", '\000' <repeats 26 times>, 
+    __align = 0}}
+(gdb)
+```
+
+If there is no writers, this server thread (a reader) can enter the "read region" successfully and immediately. So the only explanation is that this reader has been blocked by a writer but never got properly waken up when that writer exited. Turned out tsync_writer_exit() failed to wake up all blocked readers but just one of them.
+
+## Synchronisation debug logs
+
+When "DEBUG_TSYNC" macro is enabled, tsync.c APIs can throw out relevant debug information whenever a critial region is entered or exited. For example, following command:
+
+	$ ./signUp & ./signOff  & ./signUp & ./signOff
+
+will have shell fork four different sub shells to execute different scripts simultaneously, the oBIX server threads could output following logs (Note, the order in which sub shells run is uncertain):
+
+```
+/work/obix/src/server/server.c(507): SignOff "/obix/deviceRoot/example" : Provided href doesn't point to a valid device
+/work/obix/src/libs/tsync.c(125): [32338] Writer entered, writers = 1, readers = 0 (0xdfd3078)
+/work/obix/src/libs/tsync.c(116): [32339] New Writer waiting for existing writers = 2, readers = 0 (0xdfd3078)
+/work/obix/src/libs/tsync.c(116): [32341] New Writer waiting for existing writers = 3, readers = 0 (0xdfd3078)
+/work/obix/src/libs/tsync.c(165): [32338] Writer exited, writers = 2, readers = 0 (0xdfd3078)
+/work/obix/src/libs/tsync.c(185): [32338] Reader begin sleeping, writers = 2, readers = 1 (0xdfd3078)
+/work/obix/src/libs/tsync.c(125): [32339] Writer entered, writers = 2, readers = 1 (0xdfd3078)
+/work/obix/src/libs/tsync.c(165): [32339] Writer exited, writers = 1, readers = 1 (0xdfd3078)
+/work/obix/src/libs/tsync.c(185): [32339] Reader begin sleeping, writers = 1, readers = 2 (0xdfd3078)
+/work/obix/src/libs/tsync.c(125): [32341] Writer entered, writers = 1, readers = 2 (0xdfd3078)
+/work/obix/src/libs/tsync.c(165): [32341] Writer exited, writers = 0, readers = 2 (0xdfd3078)
+/work/obix/src/libs/tsync.c(194): [32341] Reader entered, writers = 0, readers = 3, running_readers = 1 (0xdfd3078)
+/work/obix/src/libs/tsync.c(226): [32341] Reader exited, writers = 0, readers = 2, running_readers = 0 (0xdfd3078)
+/work/obix/src/libs/tsync.c(194): [32339] Reader entered, writers = 0, readers = 2, running_readers = 1 (0xdfd3078)
+/work/obix/src/libs/tsync.c(226): [32339] Reader exited, writers = 0, readers = 1, running_readers = 0 (0xdfd3078)
+/work/obix/src/libs/tsync.c(194): [32338] Reader entered, writers = 0, readers = 1, running_readers = 1 (0xdfd3078)
+/work/obix/src/libs/tsync.c(226): [32338] Reader exited, writers = 0, readers = 0, running_readers = 0 (0xdfd3078)
+```
+
+How to decode above logs with each server thread's behaviour is a homework left for developers :-)

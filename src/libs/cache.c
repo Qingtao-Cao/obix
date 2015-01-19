@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -20,7 +20,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "obix_utils.h"
+#include "xml_utils.h"
 #include "cache.h"
 
 /*
@@ -108,8 +108,7 @@ static void __cache_update(cache_t *c, const unsigned char *href,
 	int loc;
 
 	/* Try to minimise duplicate but not traverse the entire cache */
-	if (is_str_identical((const char *)c->items[0].href,
-						 (const char *)href) == 1) {
+	if (is_str_identical(c->items[0].href, href, 1) == 1) {
 		pthread_mutex_unlock(&c->mutex);
 		return;
 	}
@@ -137,7 +136,8 @@ void cache_update(cache_t *c, const unsigned char *href, const void *item)
 	pthread_mutex_unlock(&c->mutex);
 }
 
-const void *cache_search(cache_t *c, const unsigned char *href)
+const void *cache_search(cache_t *c, const unsigned char *href,
+						 void (*get)(void *))
 {
 	const void *item;
 	int i;
@@ -162,8 +162,7 @@ const void *cache_search(cache_t *c, const unsigned char *href)
 			continue;
 		}
 
-		if (is_str_identical((const char *)c->items[i].href,
-							 (const char *)href) == 1) {
+		if (is_str_identical(c->items[i].href, href, 1) == 1) {
 #ifdef DEBUG
 			c->hit++;
 #endif
@@ -175,6 +174,13 @@ const void *cache_search(cache_t *c, const unsigned char *href)
 			if (i > 0) {
 				__cache_update(c, c->items[i].href, c->items[i].item);
 			}
+
+			/*
+			 * Atomically increase the reference count for relevant
+			 * structure before returning its address
+			 */
+			get((void *)item);
+
 			pthread_mutex_unlock(&c->mutex);
 			return item;
 		}

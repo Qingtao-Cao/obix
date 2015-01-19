@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 /*
@@ -39,7 +39,6 @@
 #include <time.h>			/* clock_gettime */
 #include <errno.h>
 #include <libxml/tree.h>
-#include <libxml/xpath.h>
 #include "obix_request.h"
 #include "xml_storage.h"
 #include "log_utils.h"
@@ -51,6 +50,8 @@
 #include "ptask.h"
 #include "device.h"
 #include "errmsg.h"
+#include "refcnt.h"
+#include "tsync.h"
 
 /*
  * Descriptor of all watch objects on the oBIX server
@@ -65,24 +66,26 @@ typedef struct watch_set {
 	/* All watch objects' queue */
 	struct list_head watches;
 
-	/* The mutex to protect the whole data structure */
-	pthread_mutex_t mutex;
-} watch_set_t;
+	/* Pointing to the root node of the Watch subsystem */
+	xmlNode *node;
 
+	/* Synchronisation facility in multi-thread environment */
+	tsync_t sync;
+} obix_watch_set_t;
 
 /*
  * Descriptor of the watch object
  */
-typedef struct watch {
+typedef struct obix_watch {
 	/* ID of the current watch object */
 	int id;
 
 	/*
-	 * Absolute URI of the current watch object, which will also
+	 * Absolute href of the current watch object, which will also
 	 * be used to set the HTTP Content-Location header in the
 	 * response to pollChanges and pollRefresh requests
 	 */
-	char *uri;
+	xmlChar *href;
 
 	/* Pointing to watch object's DOM node */
 	xmlNode *node;
@@ -94,31 +97,16 @@ typedef struct watch {
 	int changed;
 
 	/*
-	 * Indicator of whether any threads(handling Watch.Delete requests or
-	 * leasing unattended watches) would like to delete the watch.
-	 *
-	 * Used to synchronise among deletion threads.
-	 */
-	int is_shutdown;
-
-	/*
-	 * The reference count of current watch object, any thread except
-	 * the lease thread that holds a pointer to current watch object
-	 * will have its reference count increased by 1.
-	 *
-	 * Note,
-	 * 1. Any watch user must protect itself by calling get_watch(or
-	 * the like) before accessing it and put_watch(or the like) once
-	 * is done with it, so as to prevent the watch from being deleted
-	 * by other thread.
-	 */
-	int refcnt;
-
-	/*
 	 * Polling tasks on this watch object. Multiple oBIX clients
 	 * may like to share one same watch object.
 	 */
 	struct list_head tasks;
+
+	/*
+	 * The mutex to protect above poll tasks queue when the "write region"
+	 * became unusable because of marked as shutdown
+	 */
+	pthread_mutex_t mutex;
 
 	/*
 	 * The number of poll tasks for this watch. The changes indicators
@@ -137,26 +125,22 @@ typedef struct watch {
 	/* Joining all watches list */
 	struct list_head list;
 
-	/* Waiting queue between the deletion request and polling thread */
-	pthread_cond_t wq;
-
 	/*
-	 * The mutex to protect the whole data structure
-	 *
-	 * Note,
-	 * 1. If unable to avoid the situation to grab more than one
-	 * mutex, ALWAYS grab a watch's mutex first before that of
-	 * global backlog or watchset to avoid ABBA type of deadlock
+	 * Synchronisation facility to manage the life-cycle of the
+	 * watch descriptor itself
 	 */
-	pthread_mutex_t mutex;
-} watch_t;
+	refcnt_t refcnt;
+
+	/* Synchronisation facility in multi-thread environment */
+	tsync_t sync;
+} obix_watch_t;
 
 /*
  * Descriptor of a monitored object for a watch object
  */
-typedef struct watch_item {
-	/* The absolute URI/HREF of the monitored object */
-	char *uri;
+typedef struct obix_watch_item {
+	/* The absolute href of the monitored object */
+	xmlChar *href;
 
 	/* Pointing to the monitored object in the DOM tree */
 	xmlNode *node;
@@ -176,8 +160,7 @@ typedef struct watch_item {
 
 	/* Joining the queue of watch->items */
 	struct list_head list;
-} watch_item_t;
-
+} obix_watch_item_t;
 
 /**
  * Descriptor of the backlog of all pending poll tasks
@@ -229,7 +212,7 @@ typedef struct poll_backlog {
  */
 typedef struct poll_task {
 	/* Accompanied watch object */
-	watch_t *watch;
+	obix_watch_t *watch;
 
 	/*
 	 * When this task should be handled in the future.
@@ -261,7 +244,7 @@ typedef struct poll_task {
 } poll_task_t;
 
 static poll_backlog_t *backlog;
-static watch_set_t *watchset;
+static obix_watch_set_t *watchset;
 
 /* 2^32 = 4,294,967,296, containing 10 digits */
 #define WATCH_ID_MAX_BITS	10
@@ -271,7 +254,10 @@ static watch_set_t *watchset;
 
 /* Template of the watch object URI */
 static const char *WATCH_URI_TEMPLATE = "/obix/watchService/%d/watch%d/";
-static const char *WATCH_ID_PREFIX = "watch";
+static const xmlChar *WATCH_ID_PREFIX = (xmlChar *)"watch";
+static const int WATCH_ID_PREFIX_LEN = 5;
+
+static const xmlChar *WATCH_SERVICE_MAKE = (xmlChar *)"/obix/watchService/make/";
 
 /* The value of the name attribute of the root node of the watchIn contract */
 static const char *WATCH_IN_HREFS = "hrefs";
@@ -295,59 +281,13 @@ static const int MAX_WATCHES_PER_FOLDER = 64;
 static const char *WATCH_MIN = "min";
 static const char *WATCH_MAX = "max";
 static const char *WATCH_LEASE = "lease";
+static const char *WATCH_PWI = "pollWaitInterval";
 
 /*
- * Patterns used by xmlXPathEval to identify a number of
- * matching nodes in a given DOM tree
+ * The minimal waiting period of a long poll request,
+ * in milliseconds
  */
-
-/*
- * Any watch meta children of the given node
- *
- * Note,
- * 1. Only the subtree of the current node instead of the global
- * DOM tree should be searched upon
- */
-static const char *XP_WATCH_METAS = "./meta[@watch_id]";
-
-/*
- * Any ancestor node including itself that have at least one
- * watch meta installed
- */
-static const char *XP_WATCH_ANCESTOR_OR_SELF =
-"./ancestor-or-self::*[child::meta[@watch_id]]";
-
-/*
- * Any descendant node including itself that have at least one
- * watch meta installed
- */
-static const char *XP_WATCH_DESCENDANT_OR_SELF =
-"./descendant-or-self::*[child::meta[@watch_id]]";
-
-/*
- * The lease node of the current watch object, as in
- *
- *	<reltime name="lease"/>
- *
- * Note,
- * 1. Since the watch object is in the global DOM tree and
- * context->node has been set as the watch object, the xpath
- * expression should use a relative format
- */
-static const char *XP_WATCH_LEASE =
-"./reltime[@name='lease']";
-
-/*
- * The minimal poll wait interval setting of the current watch object
- */
-static const char *XP_WATCH_PWI_MIN =
-"./obj[@name='pollWaitInterval']/reltime[@name='min']";
-
-/*
- * The maximal poll wait interval setting of the current watch object
- */
-static const char *XP_WATCH_PWI_MAX =
-"./obj[@name='pollWaitInterval']/reltime[@name='max']";
+static const long WATCH_POLL_INTERVAL_MIN = 100;
 
 static void *poll_thread_task(void *arg);
 
@@ -357,225 +297,190 @@ static void *poll_thread_task(void *arg);
  */
 static const int DEF_THREAD_COUNT = 10;
 
-/**
- * Find a watch item that monitors the object with the specified
- * URI in the given watch object
- *
- * Return the watch item pointer on success, NULL if not found.
- *
- * Note,
- * 1. Callers should have grabbed watch->mutex
- */
-static watch_item_t *__get_watch_item(watch_t *watch, const char *uri)
+static void watch_get(obix_watch_t *watch)
 {
-	watch_item_t *item;
-
-	list_for_each_entry(item, &watch->items, list) {
-		if (is_str_identical(item->uri, uri) == 1) {
-			return item;
-		}
-	}
-
-	return NULL;
+	refcnt_get(&watch->refcnt);
 }
 
-/**
- * Find a watch item that monitors the object with the specified
- * URI or its parent in the given watch object.
- *
- * Return the watch item pointer on success, NULL if not found.
- *
- * Note,
- * 1. Callers should have grabbed watch->mutex
- */
-static watch_item_t *__get_watch_item_or_parent(watch_t *watch, const char *uri)
+static void watch_put(obix_watch_t *watch)
 {
-	watch_item_t *item;
-
-	list_for_each_entry(item, &watch->items, list) {
-		if (is_str_identical(item->uri, uri) == 1 ||
-			strncmp(item->uri, uri, strlen(item->uri)) == 0) {
-			return item;
-		}
-	}
-
-	return NULL;
+	refcnt_put(&watch->refcnt);
 }
 
-static watch_item_t *get_watch_item_or_parent(watch_t *watch, const char *uri)
+/*
+ * Return 1 if the given href points to the common operation to create
+ * a watch object, 0 otherwise
+ */
+int is_watch_service_make_href(const xmlChar *href)
 {
-	watch_item_t *item;
+	return is_str_identical(href, WATCH_SERVICE_MAKE, 1);
+}
 
-	pthread_mutex_lock(&watch->mutex);
-	item = __get_watch_item_or_parent(watch, uri);
-	pthread_mutex_unlock(&watch->mutex);
+/*
+ * Search for a subnode with the given href in the specified
+ * watch object
+ *
+ * NOTE: Callers must have entered either "read region" or
+ * "write region" of the relevant watch object
+ */
+static xmlNode *__watch_get_node_core(obix_watch_t *watch, const xmlChar *href)
+{
+	xmlNode *node;
 
-	return item;
+	if (is_str_identical(watch->href, href, 1) == 1) {
+		node = watch->node;
+	} else {
+		node = xmldb_get_node_core(watch->node, href + xmlStrlen(watch->href));
+	}
+
+	return node;
 }
 
 /**
  * Get the descriptor of a watch object with the specified ID
  */
-static watch_t *get_watch_helper(long id)
+static obix_watch_t *watch_search_helper(long id)
 {
-	watch_t *watch;
+	obix_watch_t *watch;
 
-	pthread_mutex_lock(&watchset->mutex);
+	if (tsync_reader_entry(&watchset->sync) < 0) {
+		return NULL;
+	}
+
 	list_for_each_entry(watch, &watchset->watches, list) {
 		if (watch->id == id) {
 			/* Increase refcnt before returning a reference */
-			watch->refcnt++;
-
-#ifdef DEBUG_REFCNT
-			log_debug("[%u] Watch%d refcnt increased to %d",
-					  get_tid(), watch->id, watch->refcnt);
-#endif
-
-			pthread_mutex_unlock(&watchset->mutex);
+			watch_get(watch);
+			tsync_reader_exit(&watchset->sync);
 			return watch;
 		}
 	}
 
-	pthread_mutex_unlock(&watchset->mutex);
+	tsync_reader_exit(&watchset->sync);
 	return NULL;
 }
 
-static void __put_watch(watch_t *);
-static void put_watch(watch_t *);
+/**
+ * Get the watch object ID from the given URI
+ *
+ * Return >=0 on success, -1 on failure
+ */
+static int watch_get_id(const xmlChar *href)
+{
+	const xmlChar *start;
+	int ret;
+	long val;
+
+	if (!href || is_given_type(href, OBIX_WATCH) == 0) {
+		return -1;
+	}
+
+	/* A watch object URI must be longer than "/obix/watchService/" */
+	if (xmlStrlen(href) <= obix_roots[OBIX_WATCH].len) {
+		return -1;
+	}
+
+	href += obix_roots[OBIX_WATCH].len;
+
+	if (!(start = xmlStrstr(href, WATCH_ID_PREFIX))) {
+		return -1;
+	}
+
+	start += WATCH_ID_PREFIX_LEN;
+
+	ret = str_to_long((char *)start, &val);
+
+	return (ret == 0) ? val : ret;
+}
+
+/**
+ * Get the descriptor of a watch object with the specified URI
+ * and increase its reference count
+ *
+ * Return the watch descriptor on success, NULL otherwise
+ */
+static obix_watch_t *watch_search(const xmlChar *href)
+{
+	int id = watch_get_id(href);
+
+	return (id >= 0) ? watch_search_helper(id) : NULL;
+}
 
 /**
  * Insert all poll tasks related with one watch into the
  * list_active queue, if they has not been appended there yet
  *
- * Note,
- * 1. Polling threads only work on backlog->list_active queue or
+ * NOTE: polling threads only work on backlog->list_active queue or
  * the expired tasks at the beginning of backlog->list_all queue,
  * it's more efficient to add poll tasks to list_active queue
- * than to have them expired and moved to beginning of list_all.
- * 2. Callers should hold watch->mutex
+ * than to have them expired and moved to beginning of list_all
+ *
+ * NOTE: callers have gained exclusive access to relevant watch
+ * object by entered its "write region" or marked it as shutdown
  */
-static void __notify_watch_tasks(watch_t *watch)
+static void __watch_notify_tasks(obix_watch_t *watch)
 {
 	poll_task_t *task;
 
-	if (list_empty(&watch->tasks) == 0) {
-		pthread_mutex_lock(&backlog->mutex);
-		list_for_each_entry(task, &watch->tasks, list_watch) {
-			if (task->list_active.prev == &task->list_active) {
-				list_add_tail(&task->list_active, &backlog->list_active);
-			}
-		}
-		pthread_cond_signal(&backlog->wq);
-		pthread_mutex_unlock(&backlog->mutex);
+	if (list_empty(&watch->tasks) == 1) {
+		return;
 	}
+
+	pthread_mutex_lock(&backlog->mutex);
+	list_for_each_entry(task, &watch->tasks, list_watch) {
+		if (task->list_active.prev == &task->list_active) {
+			list_add_tail(&task->list_active, &backlog->list_active);
+		}
+	}
+	pthread_cond_signal(&backlog->wq);
+	pthread_mutex_unlock(&backlog->mutex);
 }
 
 /**
  * Notify a watch object of the change event on the given node
  */
-static void xmldb_notify_watch(xmlNode *meta, xmlNode *parent, WATCH_EVT event)
+void watch_notify_watches(long id, xmlNode *monitored, WATCH_EVT event)
 {
-	xmlChar *uri;
-	watch_t *watch;
-	watch_item_t *item;
-	long id;
+	obix_watch_t *watch;
+	obix_watch_item_t *item;
 
-	/* Sanity check of a watch meta */
-	if (xmlStrcmp(meta->name, BAD_CAST OBIX_OBJ_META) != 0) {
-		log_error("Not a watch meta");
+	if (!(watch = watch_search_helper(id))) {
+		log_warning("Dangling watch meta for watch%d", id);
 		return;
 	}
 
-	if ((id = xml_get_long(meta, OBIX_META_ATTR_WATCH_ID)) < 0) {
-		log_error("Failed to get watch ID from relevant watch meta");
+	if (tsync_writer_entry(&watch->sync) < 0) {
+		log_error("Watch%d being shutdown", id);
 		return;
 	}
 
-	if (!(watch = get_watch_helper(id))) {
-		log_warning("No watch descriptor found for watch%d", id);
-		return;
-	}
+	list_for_each_entry(item, &watch->items, list) {
+		if (item->node == monitored) {
+			/*
+			 * The watch item should not be removed along with the deleted
+			 * monitored object so that polling threads and watch.pollRefresh
+			 * handler will have a chance to harvest a null object
+			 *
+			 * Moreover, if the watch.add handler is to monitor the same
+			 * device contract later (after being signed up again) the nullified
+			 * watch item will get removed so as to make room for the new one
+			 */
+			if (event == WATCH_EVT_NODE_DELETED) {
+				item->node = item->meta = NULL;
+			}
 
-	if (!(uri = xmldb_node_path(parent))) {
-		log_warning("Failed to get absolute URI of the monitored node");
-		return;
-	}
+			item->count++;
+			watch->changed = 1;
+			__watch_notify_tasks(watch);
 
-	/*
-	 * Find and change a matching watch_item_t should be done
-	 * in an atomic manner
-	 */
-	pthread_mutex_lock(&watch->mutex);
-	if (!(item = __get_watch_item(watch, (const char *)uri))) {
-		log_warning("%s has not watched upon %s", watch->uri, uri);
-	} else {
-		/*
-		 * The watch item should not be deleted along with the monitored
-		 * object that has been deleted so that polling threads will have
-		 * a chance to harvest a null object
-		 */
-		if (event == WATCH_EVT_NODE_DELETED) {
-			item->node = item->meta = NULL;
+			log_debug("[%u] Notified watch%d of %s", get_tid(),
+					  watch->id, item->href);
 		}
-
-		item->count++;
-		watch->changed = 1;
-		__notify_watch_tasks(watch);
-
-		log_debug("[%u] Notified watch%d of %s", get_tid(),
-				  watch->id, item->uri);
 	}
 
-	/* Decrease the watch reference count now that it has been dealt with */
-	__put_watch(watch);
-	pthread_mutex_unlock(&watch->mutex);
+	tsync_writer_exit(&watch->sync);
 
-	xmlFree(uri);
-}
-
-static void xmldb_notify_watch_wrapper(xmlNode *meta, void *arg1, void *arg2)
-{
-	xmlNode *parent = (xmlNode *)arg1;
-	WATCH_EVT event = *(WATCH_EVT *)arg2;
-
-	xmldb_notify_watch(meta, parent, event);
-}
-
-/**
- * Notify all watches that may have been monitoring
- * the same given node
- */
-static void xmldb_notify_watches_helper(xmlNode *targeted, void *arg1, void *arg2)
-{
-	/* arg1 is ignored */
-
-	xml_xpath_for_each_item(targeted, XP_WATCH_METAS,
-							xmldb_notify_watch_wrapper, targeted, arg2);
-}
-
-/**
- * Notify relevant watches of what had happened
- */
-void xmldb_notify_watches(xmlNode *node, WATCH_EVT event)
-{
-	const char *xp = NULL;
-
-	switch (event) {
-	case WATCH_EVT_NODE_CHANGED:
-		xp = XP_WATCH_ANCESTOR_OR_SELF;
-		break;
-	case WATCH_EVT_NODE_DELETED:
-		xp = XP_WATCH_DESCENDANT_OR_SELF;
-		break;
-	default:
-		log_error("Failed to notify watches due to bad event");
-		break;
-	}
-
-	if (xp) {
-		xml_xpath_for_each_item(node, xp, xmldb_notify_watches_helper,
-								NULL, (void *)&event);
-	}
+	watch_put(watch);
 }
 
 static void fill_watch_out(xmlNode *watch_out, xmlNode *child)
@@ -597,158 +502,235 @@ static void fill_watch_out(xmlNode *watch_out, xmlNode *child)
 }
 
 /*
- * Delete a watch meta node and release the watch item descriptor
- *
- * NOTE: callers should have held watch->mutex
+ * Callers should ensure the to-be-deleted watch item has been
+ * de-queued from relevant watch object, or not added in the
+ * first place
  */
-static void __delete_watch_item(watch_item_t *item)
+static void watch_item_cleanup(obix_watch_item_t *item)
 {
-	/*
-	 * The watch meta may have been deleted along with
-	 * its parent device contract and device_del() ensures
-	 * relevant watch meta references are nullified
-	 */
-	if (item->meta) {
-		device_delete_node(item->meta);
+	if (!item) {
+		return;
 	}
 
-	free(item->uri);
+	/*
+	 * NOTE: The watch meta node may have been deleted along
+	 * with the monitored device contract and device_del()
+	 * ensures the de-association with relevant watch item
+	 *
+	 * NOTE: Callers should have ensured that the watch meta
+	 * node already de-associated with the monitored device
+	 * contract, which needs to be done in the "write region"
+	 * of the monitored device contract
+	 */
+	if (item->meta) {
+		xmlFreeNode(item->meta);
+	}
+
+	if (item->href) {
+		xmlFree(item->href);
+	}
+
 	free(item);
+}
+
+static obix_watch_item_t *watch_item_init(int watch_id, const xmlChar *href)
+{
+	obix_watch_item_t *item;
+	char buf[WATCH_ID_MAX_BITS];
+
+	if (!(item = (obix_watch_item_t *)malloc(sizeof(obix_watch_item_t)))) {
+		return NULL;
+	}
+
+	memset(item, 0, sizeof(obix_watch_item_t));
+	sprintf(buf, "%d", watch_id);
+
+	if (!(item->meta = xmlNewNode(NULL, BAD_CAST OBIX_OBJ_META)) ||
+		!xmlSetProp(item->meta, BAD_CAST OBIX_META_ATTR_WATCH_ID, BAD_CAST buf) ||
+		!(item->href = xmlStrdup(href))) {
+		goto failed;
+	}
+
+	INIT_LIST_HEAD(&item->list);
+	return item;
+
+failed:
+	watch_item_cleanup(item);
+	return NULL;
+}
+
+/*
+ * NOTE: Callers should have gained exclusive access to relevant
+ * watch object by entered its "write region" or marked it as shutdown
+ */
+static void __watch_delete_item_core(obix_watch_t *watch,
+									 obix_watch_item_t *item)
+{
+	list_del(&item->list);
+
+	if (item->href && item->meta) {
+		if (device_unlink_single_node(item->href, item->meta, 0) > 0) {
+			log_error("Failed to unlink watch meta node for %s from watch%d",
+					  item->href, watch->id);
+		} else {
+			log_debug("Watch item for %s deleted from watch%d",
+					  item->href, watch->id);
+		}
+	}
+
+	watch_item_cleanup(item);
 }
 
 /**
  * Delete the specified watch item from the watch object
+ * and fill in the watchOut contract with relevant result
  */
-static void delete_watch_item(watch_t *watch, const char *uri,
+static void watch_delete_item(obix_watch_t *watch, const xmlChar *href,
 							  xmlNode *watch_out)
 {
-	watch_item_t *item;
+	obix_watch_item_t *item;
 	xmlNode *node;
-	int ret = ERR_WATCH_NO_SUCH_URI;
+	int ret = ERR_WATCH_NO_MONITORED_URI;
 
-	pthread_mutex_lock(&watch->mutex);
-	list_for_each_entry(item, &watch->items, list) {
-		if (is_str_identical(item->uri, uri) == 1) {
-			ret = 0;
-			list_del(&item->list);
-			__delete_watch_item(item);
-			log_debug("Item for %s deleted from watch%d", uri, watch->id);
-			break;
-		}
-	}
-	pthread_mutex_unlock(&watch->mutex);
-
-	node = (ret == 0) ? obix_obj_null(BAD_CAST uri) :
-						obix_server_generate_error(uri, server_err_msg[ret].type,
-										"Watch.delete", server_err_msg[ret].msgs);
-
-	fill_watch_out(watch_out, node);
-
-}
-
-static int create_watch_item_helper(watch_t *watch, xmlNode *node,
-									const char *uri)
-{
-	watch_item_t *item = NULL;
-	char buf[WATCH_ID_MAX_BITS];
-	int ret = 0;
-
-	if (get_watch_item_or_parent(watch, uri)) {
-		log_debug("watch%d already monitoring %s or its parent",
-				  watch->id, uri);
-		return 0;
-	}
-
-	sprintf(buf, "%d", watch->id);
-
-	if (!(item = (watch_item_t *)malloc(sizeof(watch_item_t))) ||
-		!(item->uri = strdup(uri)) ||
-		!(item->meta = xmlNewNode(NULL, BAD_CAST OBIX_OBJ_META)) ||
-		!xmlSetProp(item->meta, BAD_CAST OBIX_META_ATTR_WATCH_ID, BAD_CAST buf)) {
-		ret = ERR_NO_MEM;
+	if (tsync_writer_entry(&watch->sync) < 0) {
+		ret = ERR_INVALID_STATE;
 		goto failed;
 	}
 
-	item->node = node;
-	item->count = 0;
-	INIT_LIST_HEAD(&item->list);
-
-	if ((ret = device_add_node(node, item->meta)) == 0) {
-		pthread_mutex_lock(&watch->mutex);
-		list_add_tail(&item->list, &watch->items);
-		pthread_mutex_unlock(&watch->mutex);
-
-		log_debug("Item for %s created for watch%d", uri, watch->id);
+	list_for_each_entry(item, &watch->items, list) {
+		if (is_str_identical(item->href, href, 1) == 1) {
+			__watch_delete_item_core(watch, item);
+			ret = 0;
+			break;
+		}
 	}
+
+	tsync_writer_exit(&watch->sync);
 
 	/* Fall through */
 
 failed:
-	if (ret > 0 && item) {
-		if (item->uri) {
-			free(item->uri);
+	node = (ret == 0) ? obix_obj_null(href) :
+						obix_server_generate_error(href, server_err_msg[ret].type,
+										"Watch.delete", server_err_msg[ret].msgs);
+
+	fill_watch_out(watch_out, node);
+}
+
+/**
+ * Find a watch item that monitors the object with the specified
+ * URI or its parent in the given watch object.
+ *
+ * Return the watch item pointer on success, NULL if not found.
+ */
+static obix_watch_item_t *__get_watch_item_or_parent(obix_watch_t *watch,
+													 const xmlChar *href)
+{
+	obix_watch_item_t *item, *n;
+
+	list_for_each_entry_safe(item, n, &watch->items, list) {
+		if (is_str_identical(item->href, href, 1) == 1) {
+			/*
+			 * If the watch item has been nullified due to the removal
+			 * of monitored device contract, delete it so that a new
+			 * watch item can be created to monitor the same device again
+			 */
+			if (!item->meta && !item->node) {
+				__watch_delete_item_core(watch, item);
+				item = NULL;
+			}
+
+			return item;
 		}
 
-		if (item->meta) {
-			xmlFreeNode(item->meta);
+		if (xmlStrncmp(item->href, href, xmlStrlen(item->href)) == 0) {
+			/* Monitoring its parent href */
+			return item;
 		}
-
-		free(item);
 	}
 
-	return ret;
+	return NULL;
 }
 
 /**
  * Create a watch item for the given watch object to monitor the object
  * as specified by the current sub-node of an obix:watchIn contract,
  * also fill in the watchOut contract with the content of the monitored
- * object.
+ * object
+ *
+ * NOTE: only device contracts are allowed to be monitored by watches
  */
-static void create_watch_item(watch_t *watch, const char *uri,
+static void watch_create_item(obix_watch_t *watch, const xmlChar *href,
 							  xmlNode *watch_out)
 {
-	xmlNode *node, *copy = NULL;
+	xmlNode *copy = NULL;
+	obix_watch_item_t *item = NULL, *existed = NULL;
 	int ret = 0;
 
-	if (!uri) {
-		ret = ERR_NO_HREF;
-		goto failed;
-	}
-
-	if (is_device_href((xmlChar *)uri) == 0 ||
-		!(node = xmldb_get_node((xmlChar *)uri))) {
+	if (!(copy = device_copy_uri(href, EXCLUDE_META))) {
 		ret = ERR_DEVICE_NO_SUCH_URI;
 		goto failed;
 	}
 
-	if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_OP) == 0 ||
-		xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_META) == 0) {
-		ret = ERR_WATCH_UNSUPPORTED_HREF;
-		goto failed;
-	}
-
-	if ((ret = create_watch_item_helper(watch, node, uri)) != 0) {
-		goto failed;
-	}
-
-	if (!(copy = xmldb_copy_node(node, XML_COPY_EXCLUDE_META)) ||
-		!xmlSetProp(copy, BAD_CAST OBIX_ATTR_HREF, BAD_CAST uri)) {
+	if (!xmlSetProp(copy, BAD_CAST OBIX_ATTR_HREF, href)) {
 		ret = ERR_NO_MEM;
+		goto failed;
+	}
+
+	if (!(item = watch_item_init(watch->id, href))) {
+		log_error("Failed to allocate a new obix_watch_item_t for %s", href);
+		ret = ERR_NO_MEM;
+		goto failed;
+	}
+
+	/*
+	 * "find + insert" should be done atomically to avoid races when
+	 * multiple threads trying to add a watch item on the same node
+	 * simultaneously
+	 */
+	if (tsync_writer_entry(&watch->sync) < 0) {
+		ret = ERR_INVALID_STATE;
+		goto failed;
+	}
+
+	if (!(existed = __get_watch_item_or_parent(watch, href))) {
+		/*
+		 * No need to backup the monitored device's persistent file
+		 * with the addition of a watch meta node
+		 */
+		if ((ret = device_link_single_node(href, item->meta, &item->node, 0)) > 0) {
+			tsync_writer_exit(&watch->sync);
+			log_error("Failed to add watch meta node under %s", href);
+			goto failed;
+		}
+
+		list_add_tail(&item->list, &watch->items);
+	}
+
+	tsync_writer_exit(&watch->sync);
+
+	if (existed) {
+		log_debug("watch%d already monitoring %s or its parent",
+				  watch->id, href);
+		watch_item_cleanup(item);
 	}
 
 	/* Fall through */
 
 failed:
 	if (ret > 0) {
-		log_error("%s : %s", (uri) ? uri : "(Not available)",
+		log_error("%s : %s", (href) ? href : (xmlChar *)"(Not available)",
 				  server_err_msg[ret].msgs);
+
+		if (item) {
+			watch_item_cleanup(item);
+		}
 
 		if (copy) {
 			xmlFreeNode(copy);
 		}
 
-		copy = obix_server_generate_error(uri, server_err_msg[ret].type,
+		copy = obix_server_generate_error(href, server_err_msg[ret].type,
 									  "Watch.add", server_err_msg[ret].msgs);
 	}
 
@@ -758,100 +740,95 @@ failed:
 /**
  * Get the value of the val attribute of a obix:reltime node
  */
-static void get_time_helper(xmlNode *node, void *arg1, void *arg2)
+static long get_time_helper(xmlNode *node)
 {
-	long *time = (long *)arg1;	/* arg2 is ignored */
+	long time = 0;
 	xmlChar *val;
-	int error;
 
-	if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_RELTIME) != 0 ||
-		!(val = xmlGetProp(node, BAD_CAST OBIX_ATTR_VAL))) {
-		return;
+	if ((val = xmlGetProp(node, BAD_CAST OBIX_ATTR_VAL)) != NULL) {
+		if (obix_reltime_to_long((const char *)val, &time) != 0) {
+			time = 0;
+		}
+
+		xmlFree(val);
 	}
 
-	error = obix_reltime_to_long((const char *)val, time);
-	xmlFree(val);
-
-	if (error != 0) {
-		*time = 0;
-	}
+	return time;
 }
 
 /**
  * Get time relevant settings of the given watch object.
  *
- * Note,
- * 1. A watch's lease time should solely be determined by
+ * NOTE: a watch's lease time should solely be determined by
  * oBIX server's watch subsystem without any involvement of
  * its user, and it will be reset whenever the watch has been
  * accessed with a valid parameter.
  */
-static void get_time(xmlNode *watch_node, const char *name, long *time)
+static long get_time(xmlNode *watch_node, const char *name)
 {
-	/*
-	 * Just in case no matching node found or error occurs
-	 */
-	*time = 0;
+	xmlNode *lease, *pwi, *max, *min;
+	long time = 0;
 
-	if (strcmp(name, WATCH_MIN) == 0) {
-		xml_xpath_for_each_item(watch_node, XP_WATCH_PWI_MIN,
-								get_time_helper, time, NULL);
+	if (strcmp(name, WATCH_LEASE) == 0) {
+		if ((lease = xml_find_child(watch_node, OBIX_OBJ_RELTIME,
+									OBIX_ATTR_HREF, WATCH_LEASE)) != NULL) {
+			if ((time = get_time_helper(lease)) <= 0) {
+				time = WATCH_LEASE_DEF;
+			}
+		}
 	} else if (strcmp(name, WATCH_MAX) == 0) {
-		xml_xpath_for_each_item(watch_node, XP_WATCH_PWI_MAX,
-								get_time_helper, time, NULL);
-	} else if (strcmp(name, WATCH_LEASE) == 0) {
-		xml_xpath_for_each_item(watch_node, XP_WATCH_LEASE,
-								get_time_helper, time, NULL);
-
-		if (*time == 0) {
-			*time = WATCH_LEASE_DEF;
+		if ((pwi = xml_find_child(watch_node, OBIX_OBJ,
+								  OBIX_ATTR_HREF, WATCH_PWI)) != NULL &&
+			(max = xml_find_child(pwi, OBIX_OBJ_RELTIME,
+								  OBIX_ATTR_HREF, WATCH_MAX)) != NULL) {
+			time = get_time_helper(max);
+		}
+	} else if (strcmp(name, WATCH_MIN) == 0) {
+		if ((pwi = xml_find_child(watch_node, OBIX_OBJ,
+								  OBIX_ATTR_HREF, WATCH_PWI)) != NULL &&
+			(min = xml_find_child(pwi, OBIX_OBJ_RELTIME,
+								  OBIX_ATTR_HREF, WATCH_MIN)) != NULL) {
+			time = get_time_helper(min);
 		}
 	}
+
+	return time;
 }
 
-/**
- * Delete an already dequeued watch object
- *
- * If the watch's reference count is not 0, other threads are accessing
- * it as well, the current thread(either handling Watch.Delete
- * requests or the lease thread) needs to wait until others are done
- * with the watch before it can be safely removed.
- *
- * Since long poll mechanism has not been stipulated by oBIX spec at all,
- * it should not impose side-effect on the attempt to delete existing
- * watch. To this end, polling threads are waken up to handle poll tasks
- * associated with the to-be-deleted watch as soon as possible.
+/*
+ * Release a watch descriptor once it has been marked as
+ * being shutdown
  */
-static void delete_watch_helper(watch_t *watch)
+static void __watch_dispose(obix_watch_t *watch)
 {
-	watch_item_t *item, *n;
+	obix_watch_item_t *item, *n;
 
-	pthread_mutex_lock(&watch->mutex);
-	while (watch->refcnt > 0) {
-#ifdef DEBUG_REFCNT
-		log_debug("[%u] Needs to wait until Watch%d refcnt(%d) dropped to 0",
-				  get_tid(), watch->id, watch->refcnt);
-#endif
-
-		__notify_watch_tasks(watch);
-		pthread_cond_wait(&watch->wq, &watch->mutex);
+	if (!watch) {
+		return;
 	}
 
-	/* Free every watch item descriptor and relevant meta tag */
+	/*
+	 * Wait for the completion of any other users on the watch object,
+	 * such as relevant poll tasks
+	 */
+	refcnt_sync(&watch->refcnt);
+
 	list_for_each_entry_safe(item, n, &watch->items, list) {
-		list_del(&item->list);
-		__delete_watch_item(item);
+		__watch_delete_item_core(watch, item);
 	}
-	pthread_mutex_unlock(&watch->mutex);
 
-	xmldb_delete_node(watch->node, DOM_DELETE_EMPTY_WATCH_PARENT);
+	if (watch->href) {
+		xmlFree(watch->href);
+	}
 
+	if (watch->id >= 0) {
+		bitmap_put_id(watchset->map, watch->id);
+	}
+
+	tsync_cleanup(&watch->sync);
+	refcnt_cleanup(&watch->refcnt);
 	pthread_mutex_destroy(&watch->mutex);
-	pthread_cond_destroy(&watch->wq);
 
-	bitmap_put_id(watchset->map, watch->id);
-
-	free(watch->uri);
 	free(watch);
 }
 
@@ -864,230 +841,32 @@ static void delete_watch_helper(watch_t *watch)
  * ptask_cancel(..., wait = 1) as soon as possible. BTW, this watch
  * have been dequeued by THAT thread already.
  *
- * Note,
- * 1. Thanks to the fact that threads handling Watch.Delete requests
+ * NOTE: thanks to the fact that threads handling Watch.Delete requests
  * will wait for relevant lease tasks to be finished in the first place,
  * it's safe for the latter to hold a pointer to relevant watch object.
  */
 static void delete_watch_task(void *arg)
 {
-	watch_t *watch = (watch_t *)arg;
+	obix_watch_t *watch = (obix_watch_t *)arg;
 
-	pthread_mutex_lock(&watch->mutex);
-	if (watch->is_shutdown == 1) {
-		pthread_mutex_unlock(&watch->mutex);
+	if (tsync_shutdown_entry(&watch->sync) < 0) {
 		return;
 	}
-	pthread_mutex_unlock(&watch->mutex);
 
-	/* Otherwise, delete the watch by ourselves */
-	pthread_mutex_lock(&watchset->mutex);
-	list_del(&watch->list);
-	pthread_mutex_unlock(&watchset->mutex);
+	if (tsync_writer_entry(&watchset->sync) == 0) {
+		xmldb_delete_node(watch->node, DELETE_EMPTY_ANCESTORS_WATCH);
+		list_del(&watch->list);
+		tsync_writer_exit(&watchset->sync);
+	}
 
-	delete_watch_helper(watch);
+	__watch_dispose(watch);
 }
 
-static watch_t *create_watch(void)
-{
-	watch_t *watch;
-	long lease;
-
-	if (!(watch = (watch_t *)malloc(sizeof(watch_t)))) {
-		log_error("Failed to allocate watch_t");
-		return NULL;
-	}
-	memset(watch, 0, sizeof(watch_t));
-
-	if ((watch->id = bitmap_get_id(watchset->map)) < 0) {
-		log_error("Failed to get an ID for current watch object");
-		goto failed;
-	}
-
-	if (!(watch->uri = (char *)malloc(strlen(WATCH_URI_TEMPLATE) +
-									  (WATCH_ID_MAX_BITS - 2) * 2 + 1))) {
-		log_error("Failed to allocate URI string for a watch object");
-		goto failed;
-	}
-	sprintf(watch->uri, WATCH_URI_TEMPLATE,
-			watch->id / MAX_WATCHES_PER_FOLDER, watch->id);
-
-	if (!(watch->node = xmldb_copy_sys(WATCH_STUB))) {
-		goto copy_node_failed;
-	}
-
-	if ((xmlSetProp(watch->node, BAD_CAST OBIX_ATTR_HREF,
-					BAD_CAST watch->uri) == NULL)) {
-		log_error("Failed to set watch's href as %s", watch->uri);
-		goto dom_failed;
-	}
-
-	/*
-	 * Automatically create any missing ancestors for watch objects,
-	 * since there are a 2-level hierarchy for watch service and
-	 * their direct parent nodes may not exist yet
-	 */
-	if (xmldb_put_node_legacy(watch->node, DOM_CREATE_ANCESTORS_WATCH) != 0) {
-		log_error("Failed to register %s node to DOM tree", watch->uri);
-		goto dom_failed;
-	}
-
-	get_time(watch->node, WATCH_LEASE, &lease);
-	INIT_LIST_HEAD(&watch->tasks);
-	INIT_LIST_HEAD(&watch->items);
-	INIT_LIST_HEAD(&watch->list);
-	pthread_mutex_init(&watch->mutex, NULL);
-	pthread_cond_init(&watch->wq, NULL);
-
-	watch->lease_tid = ptask_schedule(watchset->lease_thread,
-									  delete_watch_task,
-									  watch, lease, 1);
-	if (watch->lease_tid < 0) {
-		log_error("Failed to register a lease task for %s", watch->uri);
-		delete_watch_helper(watch);
-		return NULL;
-	}
-
-	/* Finally, enlist the new watch into global list */
-	pthread_mutex_lock(&watchset->mutex);
-	list_add_tail(&watch->list, &watchset->watches);
-	pthread_mutex_unlock(&watchset->mutex);
-
-	return watch;
-
-dom_failed:
-	xmlFreeNode(watch->node);
-
-copy_node_failed:
-	free(watch->uri);
-
-failed:
-	if (watch->id >= 0) {
-		bitmap_put_id(watchset->map, watch->id);
-	}
-
-	free(watch);
-	return NULL;
-}
-
-static void reset_lease_time(watch_t *watch)
+static void reset_lease_time(obix_watch_t *watch)
 {
 	if (watch->lease_tid > 0) {
 		ptask_reset(watchset->lease_thread, watch->lease_tid);
 	}
-}
-
-/**
- * Get the ID of the given watch object
- *
- * Return >=0 on success, -1 on failure
- */
-static int get_watch_id(const char *uri)
-{
-	char *start;
-	int ret;
-	long val;
-
-	if (strncmp(uri, OBIX_WATCH_SERVICE, OBIX_WATCH_SERVICE_LEN) != 0) {
-		return -1;
-	}
-	uri += OBIX_WATCH_SERVICE_LEN;
-
-	if (!(start = strstr(uri, WATCH_ID_PREFIX))) {
-		return -1;
-	}
-	start += strlen(WATCH_ID_PREFIX);
-
-	ret = str_to_long(start, &val);
-
-	return (ret == 0) ? val : ret;
-}
-
-/**
- * Get the descriptor of a watch object with the specified URI
- * and increase its reference count
- *
- * Return the watch descriptor on success, NULL otherwise
- */
-static watch_t *get_watch(const char *uri)
-{
-	int id = get_watch_id(uri);
-
-	return (id >= 0) ? get_watch_helper(id) : NULL;
-}
-
-/**
- * Decrease the watches reference count and signal potential
- * deletion thread
- *
- * Note,
- * 1. Callers should hold watch->mutex
- */
-static void __put_watch(watch_t *watch)
-{
-	if (--watch->refcnt == 0) {
-		pthread_cond_signal(&watch->wq);
-	}
-
-#ifdef DEBUG_REFCNT
-	log_debug("[%u] Watch%d refcnt decreased to %d",
-			  get_tid(), watch->id, watch->refcnt);
-#endif
-}
-
-/**
- * Decrease the watches reference count and signal potential
- * deletion thread
- */
-static void put_watch(watch_t *watch)
-{
-	pthread_mutex_lock(&watch->mutex);
-	__put_watch(watch);
-	pthread_mutex_unlock(&watch->mutex);
-}
-
-
-/**
- * Get the descriptor of a watch object with the specified URI
- * and remove it from the global watchset->watches queue.
- *
- * Return the watch descriptor on success, NULL otherwise
- *
- * Note,
- * 1, The find and delete operations must be executed altogether
- * in an atomic manner in response to delete requests, otherwise
- * race conditions among deleting thread ensue
- */
-static watch_t *dequeue_watch(const char *uri)
-{
-	watch_t *watch, *n;
-	long id;
-
-	if (!uri) {
-		return NULL;
-	}
-
-	if ((id = get_watch_id(uri)) < 0) {
-        log_error("Failed to get watch ID from %s", uri);
-		return NULL;
-	}
-
-	pthread_mutex_lock(&watchset->mutex);
-	list_for_each_entry_safe(watch, n, &watchset->watches, list) {
-		if (watch->id == id) {
-			list_del(&watch->list);
-			pthread_mutex_unlock(&watchset->mutex);
-
-			pthread_mutex_lock(&watch->mutex);
-			watch->is_shutdown = 1;
-			pthread_mutex_unlock(&watch->mutex);
-
-			return watch;
-		}
-	}
-
-	pthread_mutex_unlock(&watchset->mutex);
-	return NULL;
 }
 
 /**
@@ -1267,6 +1046,80 @@ failed:
 	return NULL;
 }
 
+static int watch_del(const xmlChar *href)
+{
+	obix_watch_t *watch;
+
+	if (!(watch = watch_search(href))) {
+		return ERR_WATCH_NO_SUCH_URI;
+	}
+
+	/*
+	 * Mark the watch as being shutdown so as to synchronise with other
+	 * threads accessing it and prevent further access
+	 *
+	 * If some other threads may have started to delete the same watch
+	 * object, such as another thread serving a watch.delete request, or
+	 * the lease thread, have THAT thread taken care ofdeletion and exit
+	 * gracefully
+	 */
+	if (tsync_shutdown_entry(&watch->sync) < 0) {
+		watch_put(watch);
+		return 0;
+	}
+
+	/*
+	 * Cancel relevant lease task
+	 *
+	 * NOTE: wait == 1 so as to wait for the lease thread getting
+	 * rid of relevant task for the watch object
+	 */
+	if (watch->lease_tid) {
+		ptask_cancel(watchset->lease_thread, watch->lease_tid, 1);
+	}
+
+	/*
+	 * Wake up any pending poll tasks on the watch object and wait
+	 * until they are all processed
+	 */
+	__watch_notify_tasks(watch);
+
+	if (tsync_writer_entry(&watchset->sync) == 0) {
+		xmldb_delete_node(watch->node, DELETE_EMPTY_ANCESTORS_WATCH);
+		list_del(&watch->list);
+		tsync_writer_exit(&watchset->sync);
+	}
+
+	watch_put(watch);
+
+	__watch_dispose(watch);
+	return 0;
+}
+
+
+/*
+ * Release a watch set descriptor once it has been marked as
+ * being shutdown
+ */
+static void watch_set_cleanup(obix_watch_set_t *set)
+{
+	if (!set) {
+		return;
+	}
+
+	tsync_cleanup(&set->sync);
+
+	if (set->lease_thread) {
+		ptask_dispose(set->lease_thread, 1);
+	}
+
+	if (set->map) {
+		bitmap_dispose(set->map);
+	}
+
+	free(set);
+}
+
 /**
  * Dequeue and remove every watch object and then free the
  * whole watch set.
@@ -1274,70 +1127,60 @@ failed:
  * Deleting a watch will also have relevant poll tasks
  * processed, dequeued and released as well.
  */
-static void watch_set_dispose(watch_set_t *set)
+static void watch_set_dispose(obix_watch_set_t *set)
 {
-	watch_t *watch, *n;
+	obix_watch_t *watch, *n;
 
-	pthread_mutex_lock(&set->mutex);
+	if (tsync_shutdown_entry(&set->sync) < 0) {
+		return;
+	}
+
 	list_for_each_entry_safe(watch, n, &set->watches, list) {
 		list_del(&watch->list);
-
-		/*
-		 * Unlease watchset->mutex while waiting to have a watch
-		 * finally deleted, which will notify and wait for poll
-		 * threads to send back relevant responses
-		 */
-		pthread_mutex_unlock(&set->mutex);
-		if (watch->lease_tid) {
-			ptask_cancel(watchset->lease_thread, watch->lease_tid, 1);
-		}
-		delete_watch_helper(watch);
-		pthread_mutex_lock(&set->mutex);
-	}
-	pthread_mutex_unlock(&set->mutex);
-
-	if (set->lease_thread) {
-		ptask_dispose(set->lease_thread, 1);
+		watch_del(watch->href);
 	}
 
-	pthread_mutex_destroy(&set->mutex);
-
-	bitmap_dispose(set->map);
-
-	free(set);
+	watch_set_cleanup(set);
 }
 
 /**
  * Create and initialized a watch set descriptor, return its
  * address on success, return NULL on failure
  */
-static watch_set_t *watch_set_init(void)
+static obix_watch_set_t *watch_set_init(void)
 {
-	watch_set_t *ws;
+	obix_watch_set_t *set;
 
-	if (!(ws = (watch_set_t *)malloc(sizeof(watch_set_t)))) {
-		log_error("Failed to allocate watch_set_t");
+	if (!(set = (obix_watch_set_t *)malloc(sizeof(obix_watch_set_t)))) {
+		log_error("Failed to allocate obix_watch_set_t");
 		return NULL;
 	}
-	memset(ws, 0, sizeof(watch_set_t));
+	memset(set, 0, sizeof(obix_watch_set_t));
 
-	INIT_LIST_HEAD(&ws->watches);
-	pthread_mutex_init(&ws->mutex, NULL);
+	if (!(set->node = xmldb_get_node(obix_roots[OBIX_WATCH].root))) {
+		log_error("Failed to find the root node of the Watch subsystem");
+		goto failed;
+	}
 
-	if (!(ws->map = bitmap_init())) {
+	tsync_init(&set->sync);
+	INIT_LIST_HEAD(&set->watches);
+
+	if (!(set->map = bitmap_init())) {
 		log_error("Failed to create bitmaps");
 		goto failed;
 	}
 
-	if (!(ws->lease_thread = ptask_init())) {
+	if (!(set->lease_thread = ptask_init())) {
 		log_error("Failed to create the lease thread");
 		goto failed;
 	}
 
-	return ws;
+	xml_setup_private(set->node, (void *)set);
+
+	return set;
 
 failed:
-	watch_set_dispose(ws);
+	watch_set_cleanup(set);
 	return NULL;
 }
 
@@ -1388,88 +1231,179 @@ int obix_watch_init(const int poll_threads)
 	return 0;
 }
 
-xmlNode *handlerWatchServiceMake(obix_request_t *request,
-								 const char *overrideUri, xmlNode *input)
+static obix_watch_t *watch_create(void)
 {
-	xmlNode *node;
-	watch_t *watch;
+	obix_watch_t *watch;
+	long lease;
+
+	if (!(watch = (obix_watch_t *)malloc(sizeof(obix_watch_t)))) {
+		log_error("Failed to allocate obix_watch_t");
+		return NULL;
+	}
+	memset(watch, 0, sizeof(obix_watch_t));
+
+	if ((watch->id = bitmap_get_id(watchset->map)) < 0) {
+		log_error("Failed to get an ID for current watch object");
+		goto failed;
+	}
+
+	if (!(watch->href = (xmlChar *)malloc(strlen(WATCH_URI_TEMPLATE) +
+									  (WATCH_ID_MAX_BITS - 2) * 2 + 1))) {
+		log_error("Failed to allocate URI string for a watch object");
+		goto failed;
+	}
+	sprintf((char *)watch->href, WATCH_URI_TEMPLATE,
+			watch->id / MAX_WATCHES_PER_FOLDER, watch->id);
+
+	if (!(watch->node = xmldb_copy_sys(WATCH_STUB)) ||
+		!xmlSetProp(watch->node, BAD_CAST OBIX_ATTR_HREF, watch->href)) {
+		log_error("Failed to copy a xmlNode for %s", watch->href);
+		goto node_failed;
+	}
+
+	INIT_LIST_HEAD(&watch->tasks);
+	INIT_LIST_HEAD(&watch->items);
+	INIT_LIST_HEAD(&watch->list);
+	pthread_mutex_init(&watch->mutex, NULL);
+	tsync_init(&watch->sync);
+	refcnt_init(&watch->refcnt);
+
+	lease = get_time(watch->node, WATCH_LEASE);
+	watch->lease_tid = ptask_schedule(watchset->lease_thread,
+									  delete_watch_task, watch, lease, 1);
+	if (watch->lease_tid < 0) {
+		log_error("Failed to register a lease task for %s", watch->href);
+		goto lease_failed;
+	}
+
+	if (tsync_reader_entry(&watchset->sync) < 0) {
+		log_error("The watch subsystem is shutting down");
+		goto ws_failed;
+	}
+
+	/*
+	 * Automatically create the missing parent for watch objects
+	 * to setup a 2-level hierarchy
+	 */
+	if (xmldb_put_node(watch->node, watch->href,
+					   CREATE_ANCESTORS_WATCH) > 0) {
+		tsync_reader_exit(&watchset->sync);
+		log_error("Failed to register %s node to DOM tree", watch->href);
+		goto ws_failed;
+	}
+
+	/*
+	 * The private pointer of the added parent node should point
+	 * to the descriptor of the entire Watch subsystem in stead
+	 * of any particular watch objects underneath it
+	 */
+	watch->node->parent->_private = watchset;
+
+	list_add_tail(&watch->list, &watchset->watches);
+
+	tsync_reader_exit(&watchset->sync);
+
+	xml_setup_private(watch->node, (void *)watch);
+
+	watch_get(watch);
+	return watch;
+
+ws_failed:
+	ptask_cancel(watchset->lease_thread, watch->lease_tid, 1);
+
+lease_failed:
+	pthread_mutex_destroy(&watch->mutex);
+	tsync_cleanup(&watch->sync);
+	refcnt_cleanup(&watch->refcnt);
+
+node_failed:
+	if (watch->node) {
+		xmlFreeNode(watch->node);
+	}
+
+	xmlFree(watch->href);
+
+failed:
+	if (watch->id >= 0) {
+		bitmap_put_id(watchset->map, watch->id);
+	}
+
+	free(watch);
+	return NULL;
+}
+
+xmlNode *handlerWatchServiceMake(obix_request_t *request, const xmlChar *href,
+								 xmlNode *input)
+{
+	xmlNode *node = NULL;
+	obix_watch_t *watch;
 	int ret;
-	const char *uri;
 
-	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
-
-	if(!(watch = create_watch())) {
+	if (!(watch = watch_create())) {
 		ret = ERR_NO_MEM;
 		goto failed;
 	}
 
 	/*
-	 * Get a copy of the watch object which will be released once
-	 * response sent back to clients. If copying failed, then the
-	 * content of a static fatal error will be responded.
+	 * Another thread may try to delete the created watch object since
+	 * it is publicly available. However, the deletion thread will be
+	 * blocked until its refcnt drops to 0 (by this thread) after marking
+	 * it as being shutdown, which will make this thread exit directly
 	 */
-	if ((node = xmldb_copy_node(watch->node, XML_COPY_EXCLUDE_META)) != NULL) {
-		if (xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, BAD_CAST watch->uri) == NULL) {
+
+	if (tsync_reader_entry(&watch->sync) < 0) {
+		watch_put(watch);
+		ret = ERR_INVALID_STATE;
+		goto failed;
+	}
+
+	if ((node = xmldb_copy_node(watch->node, EXCLUDE_META)) != NULL) {
+		if (!xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, watch->href)) {
 			xmlFreeNode(node);
 			node = NULL;
 		}
 	}
 
-	/*
-	 * Fill in the HTTP Content-Location header with the href
-	 * of the newly created watch object
-	 */
-	request->response_uri = strdup(watch->uri);
+	tsync_reader_exit(&watch->sync);
 
+	request->response_uri = xmlStrdup(watch->href);
+
+	watch_put(watch);
 	return node;
 
 failed:
-	log_error("%s : %s", uri, server_err_msg[ret].msgs);
-
-	return obix_server_generate_error(uri, server_err_msg[ret].type,
-									  "WatchService", server_err_msg[ret].msgs);
+	log_error("%s : %s", href, server_err_msg[ret].msgs);
+	return obix_server_generate_error(href, server_err_msg[ret].type,
+									  "Watch.make", server_err_msg[ret].msgs);
 }
 
 /**
  * Delete the specified watch from system.
- *
- * Note,
- * 1. Return a Nil object unconditionally, even if the watch
- * object may have been deleted by other deleting thread
  */
-xmlNode *handlerWatchDelete(obix_request_t *request, const char *overrideUri,
+xmlNode *handlerWatchDelete(obix_request_t *request, const xmlChar *href,
 							xmlNode *input)
 {
-	watch_t *watch;
-	const char *uri;
+	xmlNode *node;
+	int ret;
 
-	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
-
-	if ((watch = dequeue_watch(uri)) != NULL) {
-		/* Cancel relevant lease task */
-		if (watch->lease_tid) {
-			ptask_cancel(watchset->lease_thread, watch->lease_tid, 1);
-		}
-
-		delete_watch_helper(watch);
+	if ((ret = watch_del(href)) == 0) {
+		node = obix_obj_null(href);
+	} else {
+		node = obix_server_generate_error(href, server_err_msg[ret].type,
+									"Watch.delete", server_err_msg[ret].msgs);
 	}
 
-	return obix_obj_null(BAD_CAST uri);
+	return node;
 }
 
 static xmlNode *watch_item_helper(obix_request_t *request,
-								  const char *overrideUri,
-								  xmlNode *input,
+								  const xmlChar *href, xmlNode *input,
 								  int add)		/* 1 for Watch.add */
 {
-	watch_t *watch;
+	obix_watch_t *watch;
 	xmlNode *watch_out = NULL, *list, *item;
-	xmlChar *is_attr = NULL;
-	const char *uri;
-	char *target_uri;
+	xmlChar *is_attr = NULL, *target_href;
 	int ret = 0;
-
-	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
 	if (!request || !input ||
 		!(is_attr = xmlGetProp(input, BAD_CAST OBIX_ATTR_IS)) ||
@@ -1485,8 +1419,8 @@ static xmlNode *watch_item_helper(obix_request_t *request,
 		goto failed;
 	}
 
-	if (!(watch = get_watch(uri))) {
-		ret = ERR_NO_SUCH_URI;
+	if (!(watch = watch_search(href))) {
+		ret = ERR_WATCH_NO_SUCH_URI;
 		goto failed;
 	}
 
@@ -1494,24 +1428,23 @@ static xmlNode *watch_item_helper(obix_request_t *request,
 
 	for (item = list->children; item; item = item->next) {
 		if (item->type != XML_ELEMENT_NODE ||
-			xmlStrcmp(item->name, BAD_CAST OBIX_OBJ_URI) != 0) {
+			xmlStrcmp(item->name, BAD_CAST OBIX_OBJ_URI) != 0 ||
+			!(target_href = xmlGetProp(item, BAD_CAST OBIX_ATTR_VAL))) {
 			continue;
 		}
 
-		target_uri = (char *)xmlGetProp(item, BAD_CAST OBIX_ATTR_VAL);
-
 		if (add == 1) {
-			create_watch_item(watch, target_uri, watch_out);
+			watch_create_item(watch, target_href, watch_out);
 		} else {
-			delete_watch_item(watch, target_uri, watch_out);
+			watch_delete_item(watch, target_href, watch_out);
 		}
 
-		if (target_uri) {
-			free(target_uri);
+		if (target_href) {
+			xmlFree(target_href);
 		}
 	}
 
-	put_watch(watch);
+	watch_put(watch);
 
 	/* Fall through */
 
@@ -1521,13 +1454,13 @@ failed:
 	}
 
 	if (ret > 0) {
-		log_error("%s : %s", uri, server_err_msg[ret].msgs);
+		log_error("%s : %s", href, server_err_msg[ret].msgs);
 
 		if (watch_out) {
 			xmlFreeNode(watch_out);
 		}
 
-		watch_out = obix_server_generate_error(uri, server_err_msg[ret].type,
+		watch_out = obix_server_generate_error(href, server_err_msg[ret].type,
 									((add == 1) ? "Watch.add" : "Watch.remove"),
 									server_err_msg[ret].msgs);
 	}
@@ -1535,31 +1468,31 @@ failed:
 	return watch_out;
 }
 
-xmlNode *handlerWatchAdd(obix_request_t *request, const char *overrideUri,
+xmlNode *handlerWatchAdd(obix_request_t *request, const xmlChar *href,
 						 xmlNode *input)
 {
-	return watch_item_helper(request, overrideUri, input, 1);
+	return watch_item_helper(request, href, input, 1);
 }
 
-xmlNode *handlerWatchRemove(obix_request_t *request, const char *overrideUri,
+xmlNode *handlerWatchRemove(obix_request_t *request, const xmlChar *href,
 							xmlNode *input)
 {
-	return watch_item_helper(request, overrideUri, input, 0);
+	return watch_item_helper(request, href, input, 0);
 }
 
 /**
- * Create a poll task for the specified watch object and insert
- * it into the global poll task queue which is organized in
- * strict expiry ascending order
+ * Create a poll task for the specified watch object
+ *
+ * Return 0 on success, > 0 for error code
  */
-static int create_poll_task(watch_t *watch, long expiry,
-							obix_request_t *request, xmlNode *watch_out)
+static int watch_create_poll_task(obix_watch_t *watch, long expiry,	/* milliseconds */
+								  obix_request_t *request, xmlNode *watch_out)
 {
 	poll_task_t *task, *pos;
 
 	if (!(task = (poll_task_t *)malloc(sizeof(poll_task_t)))) {
 		log_error("Failed to create a poll_task_t");
-		return -1;
+		return ERR_NO_MEM;
 	}
 	memset(task, 0, sizeof(poll_task_t));
 
@@ -1572,22 +1505,32 @@ static int create_poll_task(watch_t *watch, long expiry,
 	request->no_reply = 1;
 
 	clock_gettime(CLOCK_REALTIME, &task->expiry); /* since now on */
-	task->expiry.tv_sec += expiry / 1000;		/* in milliseconds */
+	task->expiry.tv_sec += expiry / 1000;
 	task->expiry.tv_nsec += (expiry % 1000) * 1000;
 
 	task->request = request;
 	task->watch_out = watch_out;
+
 	INIT_LIST_HEAD(&task->list_all);
 	INIT_LIST_HEAD(&task->list_active);
 	INIT_LIST_HEAD(&task->list_watch);
 
 	/* Associate the poll task with its watch altogether */
-	task->watch = watch;
-	pthread_mutex_lock(&watch->mutex);
+	if (tsync_writer_entry(&watch->sync) < 0) {
+		free(task);
+		return ERR_INVALID_STATE;
+	}
+
 	list_add_tail(&task->list_watch, &watch->tasks);
 	watch->tasks_count++;
-	pthread_mutex_unlock(&watch->mutex);
+	tsync_writer_exit(&watch->sync);
 
+	task->watch = watch;
+
+	/*
+	 * Insert the poll task into the global poll task queue which is
+	 * organized in strict expiry ascending order of each task
+	 */
 	pthread_mutex_lock(&backlog->mutex);
 	if (list_empty(&backlog->list_all) == 1) {
 		list_add(&task->list_all, &backlog->list_all);
@@ -1638,14 +1581,11 @@ static int create_poll_task(watch_t *watch, long expiry,
  * task at all or only one poll task in watch->tasks queue
  * (so that all poll tasks on this watch are able to harvest
  * changes).
- *
- * Note,
- * 1. Callers should hold watch->mutex before invocation.
  */
-static void harvest_changes(watch_t *watch, xmlNode *watch_out,
-							int include_all)	/* 1 for pollRefresh */
+static void __watch_harvest_changes(obix_watch_t *watch, xmlNode *watch_out,
+									int include_all)	/* 1 for pollRefresh */
 {
-	watch_item_t *item;
+	obix_watch_item_t *item;
 	xmlNode *node;
 
 	if (watch->changed == 0 && include_all == 0) {
@@ -1669,14 +1609,14 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 
 		/* The monitored node may have been signed off */
 		if (item->node &&
-			(node = xmldb_copy_node(item->node, XML_COPY_EXCLUDE_META))) {
-			xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, BAD_CAST item->uri);
+			(node = device_copy_uri(item->href, EXCLUDE_META))) {
+			xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, item->href);
 		} else {
-			node = obix_obj_null(BAD_CAST item->uri);
+			node = obix_obj_null(item->href);
 		}
 
 		if (!node) {
-			node = obix_server_generate_error(item->uri,
+			node = obix_server_generate_error(item->href,
 										server_err_msg[ERR_NO_MEM].type,
 										"Watch.PollChange",
 										server_err_msg[ERR_NO_MEM].msgs);
@@ -1684,7 +1624,7 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 
 		fill_watch_out(watch_out, node);
 
-		log_debug("[%u] Harvested %s", get_tid(), item->uri);
+		log_debug("[%u] Harvested %s", get_tid(), item->href);
 	}
 
 	if (include_all == 1 || watch->tasks_count <= 1) {
@@ -1693,100 +1633,106 @@ static void harvest_changes(watch_t *watch, xmlNode *watch_out,
 }
 
 static xmlNode *watch_poll_helper(obix_request_t *request,
-								  const char *overrideUri,
+								  const xmlChar *href,
 								  int include_all)	/* 1 for pollRefresh */
 {
-	watch_t *watch;
-	xmlNode *watch_out;
+	obix_watch_t *watch;
+	xmlNode *watch_out = NULL;
 	long wait_min, wait_max, delay = 0;
-	const char *uri;
 	int ret = 0;
-
-	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
 
 	if (!request) {
 		ret = ERR_INVALID_ARGUMENT;
-		goto out;
+		goto failed;
 	}
-
-	if (!(watch = get_watch(uri))) {
-		ret = ERR_NO_SUCH_URI;
-		goto out;
-	}
-
-	reset_lease_time(watch);
 
 	if (!(watch_out = xmldb_copy_sys(WATCH_OUT_STUB))) {
 		ret = ERR_NO_MEM;
 		goto failed;
 	}
 
-	pthread_mutex_lock(&watch->mutex);
-	if (watch->changed == 1 || include_all == 1) {
-		harvest_changes(watch, watch_out, include_all);
-		__put_watch(watch);
-		pthread_mutex_unlock(&watch->mutex);
-		return watch_out;
+	if (!(watch = watch_search(href))) {
+		ret = ERR_WATCH_NO_SUCH_URI;
+		goto failed;
 	}
-	pthread_mutex_unlock(&watch->mutex);
 
-	get_time(watch->node, WATCH_MAX, &wait_max);
-	get_time(watch->node, WATCH_MIN, &wait_min);
+	reset_lease_time(watch);
 
-	if (wait_max > 0) {
+	if (tsync_reader_entry(&watch->sync) < 0) {
+		ret = ERR_INVALID_STATE;
+		goto out;
+	}
+
+	if (watch->changed == 1 || include_all == 1) {
+		__watch_harvest_changes(watch, watch_out, include_all);
+		tsync_reader_exit(&watch->sync);
+		goto out;
+	}
+
+	wait_max = get_time(watch->node, WATCH_MAX);
+	wait_min = get_time(watch->node, WATCH_MIN);
+
+	tsync_reader_exit(&watch->sync);
+
+	if (wait_max > wait_min) {
 		delay = wait_max;
 	} else if (wait_min > 0) {
 		delay = wait_min;
+	} else {
+		/*
+		 * Enforce long poll mechanism for sake of performance if
+		 * not enabled by user in the first place
+		 */
+		delay = WATCH_POLL_INTERVAL_MIN;
 	}
 
-	if (delay > 0) {
-		if (create_poll_task(watch, delay, request, watch_out) < 0) {
-			xmlFreeNode(watch_out);
-			ret = ERR_NO_MEM;
-			goto failed;
-		}
-
+	if ((ret = watch_create_poll_task(watch, delay, request, watch_out)) == 0) {
 		/*
 		 * The polling thread will take care of sending back watchOut
 		 * contract when either the poll task expires or changes occur
 		 * and release it finally
 		 *
-		 * Note,
-		 * 1. Each poll task will increase the watch's reference count
-		 * by 1, therefore it won't drop to 0 until all poll tasks have
-		 * been properly handled
+		 * NOTE: don't decrease the watch's refernence count since it
+		 * should be remained added 1 for each outstanding poll tasks
 		 */
 		return NULL;
 	}
 
-	put_watch(watch);
-	return watch_out;
-
-failed:
-	put_watch(watch);
+	/* Fall through */
 
 out:
-	log_error("%s : %s", uri, server_err_msg[ret].msgs);
+	watch_put(watch);
 
-	return obix_server_generate_error(uri, server_err_msg[ret].type,
+failed:
+	if (ret > 0) {
+		log_error("%s : %s", href, server_err_msg[ret].msgs);
+
+		if (watch_out) {
+			xmlFreeNode(watch_out);
+		}
+
+		watch_out = obix_server_generate_error(href, server_err_msg[ret].type,
 						((include_all == 1) ? "Watch.refresh" : "Watch.poll"),
 						server_err_msg[ret].msgs);
+	}
+
+	return watch_out;
 }
 
 xmlNode *handlerWatchPollChanges(obix_request_t *request,
-								 const char *overrideUri, xmlNode *input)
+								 const xmlChar *href, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(request, overrideUri, 0);
+	return watch_poll_helper(request, href, 0);
 }
 
 xmlNode *handlerWatchPollRefresh(obix_request_t *request,
-								 const char *overrideUri, xmlNode *input)
+								 const xmlChar *href, xmlNode *input)
 {
 	/* input is ignored */
 
-	return watch_poll_helper(request, overrideUri, 1);
+	return watch_poll_helper(request, href, 1);
 }
 
 /**
@@ -1798,7 +1744,8 @@ xmlNode *handlerWatchPollRefresh(obix_request_t *request,
  */
 static void poll_thread_task_helper(poll_task_t *task)
 {
-	watch_t *watch = task->watch;
+	obix_watch_t *watch;
+	int ret;
 
 	if (!(watch = task->watch)) {
 		log_warning("Relevant watch of current poll task was deleted! "
@@ -1807,28 +1754,42 @@ static void poll_thread_task_helper(poll_task_t *task)
 		return;
 	}
 
-	pthread_mutex_lock(&watch->mutex);
-	if (watch->changed == 1) {
-		harvest_changes(watch, task->watch_out, 0);
+	if ((ret = tsync_reader_entry(&watch->sync)) < 0) {
+		log_debug("Watch%d has been marked as shutdown", watch->id);
 	}
 
-	/* Dequeue the poll task from relevant watch object */
-	task->watch = NULL;
+	__watch_harvest_changes(watch, task->watch_out, 0);
+
+	if (ret == 0) {
+		tsync_reader_exit(&watch->sync);
+	}
+
+	/*
+	 * Use a separate mutex to protect watch->tasks queue when the
+	 * critical regions are no longer usable after marked as shutdown
+	 */
+	if ((ret = tsync_writer_entry(&watch->sync)) < 0) {
+		log_debug("Watch%d has been marked as shutdown", watch->id);
+		pthread_mutex_lock(&watch->mutex);
+	}
+
 	list_del(&task->list_watch);
 	watch->tasks_count--;
 
-	/*
-	 * Once changed items are collected in watchOut contract, poll
-	 * threads won't touch the watch's descriptor nor its DOM node
-	 * any more, therefore it's safe to wake up potential deletion
-	 * threads to wipe the entire watch out.
-	 */
-	__put_watch(watch);
-	pthread_mutex_unlock(&watch->mutex);
+	if (ret < 0) {
+		pthread_mutex_unlock(&watch->mutex);
+	} else {
+		tsync_writer_exit(&watch->sync);
+	}
 
 	/*
-	 * Finally, send out the task's watch_out as response.
+	 * Decrease the reference count on the watch object now that
+	 * it has been dealt with
 	 */
+	watch_put(watch);
+
+	task->watch = NULL;
+
 	do_and_free_task(task);
 }
 
@@ -1920,4 +1881,251 @@ retry:
 	} /* for */
 
 	return NULL;	/* Should never reach here */
+}
+
+int watch_update_uri(const xmlChar *href, const xmlChar *new)
+{
+	obix_watch_t *watch;
+	xmlNode *node;
+	xmlChar *old = NULL;
+	int ret = 0;
+
+	if (!(watch = watch_search(href))) {
+		return ERR_WATCH_NO_SUCH_URI;
+	}
+
+	if (tsync_writer_entry(&watch->sync) < 0) {
+		ret = ERR_INVALID_STATE;
+		goto failed;
+	}
+
+	if (!(node = __watch_get_node_core(watch, href))) {
+		tsync_writer_exit(&watch->sync);
+		ret = ERR_NO_SUCH_URI;
+		goto failed;
+	}
+
+	if (!(old = xmlGetProp(node, BAD_CAST OBIX_ATTR_VAL))) {
+		tsync_writer_exit(&watch->sync);
+		ret = ERR_READONLY_HREF;
+		goto failed;
+	}
+
+	if (xmlStrcmp(old, new) != 0 &&
+		!xmlSetProp(node, BAD_CAST OBIX_ATTR_VAL, new)) {
+		tsync_writer_exit(&watch->sync);
+		ret = ERR_NO_MEM;
+		goto failed;
+	}
+
+	tsync_writer_exit(&watch->sync);
+
+	/* Fall through */
+
+failed:
+	if (old) {
+		xmlFree(old);
+	}
+
+	watch_put(watch);
+	return ret;
+}
+
+/*
+ * Get a subnode under the root node of the watch subsystem,
+ * also return a value indicating its relative depth under it
+ */
+static xmlNode *__watch_set_get_node_core(const xmlChar *href, int *level)
+{
+	xmlNode *node;
+	const xmlChar *root_href = obix_roots[OBIX_WATCH].root;
+
+	if (is_str_identical(href, root_href, 1) == 1) {
+		node = watchset->node;
+		*level = 0;
+	} else {
+		node = xmldb_get_node_core(watchset->node, href + xmlStrlen(root_href));
+		*level = (node) ? 1 : -1;
+	}
+
+	return node;
+}
+
+/*
+ * Copy the subtree of the given node which may have a number of
+ * watch objects involved
+ */
+static xmlNode *__watch_set_copy_node(const xmlNode *src,
+									  xml_copy_flags_t flags,
+									  int level, int depth)
+{
+	obix_watch_t *watch = NULL;
+	xmlNode *node, *copy_src = NULL, *copy_node = NULL;
+	int ret = ERR_NO_MEM;
+
+	if (level == 0 || level == 1 ||
+		(level == 2 && src->_private == (void *)watchset)) {
+		/*
+		 * Already in the read region of watchset descriptor, do nothing
+		 *
+		 * NOTE: the <meta op/> node under "/obix/watchService/make" are in
+		 * level 2 as well
+		 */
+	} else if (level == 2 && src->_private != NULL &&
+			   src->_private != (void *)watchset) {
+		/*
+		 * Come across read regions from watset into a watch object
+		 */
+		tsync_reader_exit(&watchset->sync);
+
+		watch = (obix_watch_t *)src->_private;
+		watch_get(watch);
+
+		if (tsync_reader_entry(&watch->sync) < 0) {
+			watch_put(watch);
+			return NULL;
+		}
+	} else {
+		/*
+		 * level > 2, still in the current watch object, do nothing
+		 */
+	}
+
+	/*
+	 * If hidden, meta or comment nodes are not explicitly required,
+	 * they may be skipped over according to the flag
+	 */
+	if (depth > 0) {
+		if (((flags & EXCLUDE_HIDDEN) > 0 && xml_is_hidden(src) == 1) ||
+			((flags & EXCLUDE_META) > 0 &&
+			 xmlStrcmp(src->name, BAD_CAST OBIX_OBJ_META) == 0) ||
+			((flags & EXCLUDE_COMMENTS) > 0 && src->type == XML_COMMENT_NODE)) {
+			ret = 0;
+			goto out;
+		}
+	}
+
+	if (!(copy_src = xmlCopyNode((xmlNode *)src, 2))) {
+		log_error("Failed to copy a node");
+		goto out;
+	}
+
+	for (node = src->children; node; node = node->next) {
+		if (!(copy_node = __watch_set_copy_node(node, flags, ++level, ++depth))) {
+			/*
+			 * The current child may have been deliberatly excluded,
+			 * move on to the next one
+			 */
+			continue;
+		}
+
+		if (!xmlAddChild(copy_src, copy_node)) {
+			xmlFreeNode(copy_node);
+			goto out;
+		}
+	}
+
+	ret = 0;
+
+	/* Fall through */
+
+out:
+	if (level == 2 && src->_private != NULL &&
+		src->_private != (void *)watchset) {
+		tsync_reader_exit(&watch->sync);
+		watch_put(watch);
+
+		tsync_reader_entry(&watchset->sync);
+	}
+
+	if (ret > 0 && copy_src) {
+		xmlFreeNode(copy_src);
+		copy_src = NULL;
+	}
+
+	return copy_src;
+}
+
+static xmlNode *watch_set_copy_uri(const xmlChar *href, xml_copy_flags_t flags)
+{
+	xmlNode *node, *copy = NULL;
+	int level;
+
+	/*
+	 * href points to some common watch facilities such as
+	 * "/obix/watchService[/%d/]" or something not existing
+	 * so the watchset descriptor is used
+	 */
+	if (tsync_reader_entry(&watchset->sync) < 0) {
+		return NULL;
+	}
+
+	if ((node = __watch_set_get_node_core(href, &level)) != NULL) {
+		copy = __watch_set_copy_node(node, flags, level, 0);
+	}
+
+	tsync_reader_exit(&watchset->sync);
+	return copy;
+}
+
+static xmlNode *watch_obj_copy_uri(obix_watch_t *watch, const xmlChar *href,
+								   xml_copy_flags_t flags)
+{
+	xmlNode *node, *copy = NULL;
+
+	if (tsync_reader_entry(&watch->sync) < 0) {
+		return NULL;
+	}
+
+	if ((node = __watch_get_node_core(watch, href)) != NULL) {
+		/*
+		 * NOTE: watch objects are all "siblings" to each other (although
+		 * they are organised in a 2-level hierarchy) so there is no worries
+		 * to come across boundaries of different watch objects
+		 */
+		copy = xmldb_copy_node(node, flags);
+	}
+
+	tsync_reader_exit(&watch->sync);
+
+	watch_put(watch);
+	return copy;
+}
+
+xmlNode *watch_copy_uri(const xmlChar *href, xml_copy_flags_t flags)
+{
+	obix_watch_t *watch;
+
+	return ((watch = watch_search(href)) != NULL) ?
+			watch_obj_copy_uri(watch, href, flags) : watch_set_copy_uri(href, flags);
+}
+
+/*
+ * Read value of the "op" attribute in the meta node
+ * in watch object
+ *
+ * Return 0 on success, > 0 for error code
+ */
+int watch_get_op_id(const xmlChar *href, long *id)
+{
+	obix_watch_t *watch;
+	xmlNode *node;
+	int ret = ERR_INVALID_STATE;
+
+	if (!(watch = watch_search(href))) {
+		return ERR_WATCH_NO_SUCH_URI;
+	}
+
+	if (tsync_reader_entry(&watch->sync) == 0) {
+		if ((node = __watch_get_node_core(watch, href)) != NULL) {
+			ret = xmldb_get_op_id_core(node, id);
+		} else {
+			ret = 0;
+		}
+
+		tsync_reader_exit(&watch->sync);
+	}
+
+	watch_put(watch);
+	return ret;
 }

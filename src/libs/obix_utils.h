@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -113,24 +113,6 @@ extern const char *STR_DELIMITER_DOT;
 extern const char *OBIX_RELTIME_ZERO;
 extern const int OBIX_RELTIME_ZERO_LEN;
 
-extern const char *OBIX_DEVICE_ROOT;
-extern const int OBIX_DEVICE_ROOT_LEN;
-
-extern const char *OBIX_BATCH;
-extern const int OBIX_BATCH_LEN;
-
-extern const char *OBIX_DEVICES;
-
-extern const char *OBIX_HISTORY_LOBBY;
-
-extern const char *OBIX_HISTORY_SERVICE;
-extern const int OBIX_HISTORY_SERVICE_LEN;
-
-extern const char *OBIX_WATCH_SERVICE;
-extern const int OBIX_WATCH_SERVICE_LEN;
-
-extern const char *OBIX_WATCH_POLLCHANGES;
-
 extern const char *XML_FILENAME_SUFFIX;
 
 #define OBIX_DIR_PERM		0755
@@ -201,8 +183,6 @@ int for_each_str_token(const char *delimiter, const char *str,
 int str_token_count_helper(const char *token, void *arg1, void *arg2);
 
 pid_t get_tid(void);
-
-int is_str_identical(const char *str1, const char *str2);
 
 int link_pathname(char **, const char *, const char *, const char *, const char *);
 

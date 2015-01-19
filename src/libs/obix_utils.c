@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -87,27 +87,6 @@ const char *OBIX_CONTRACT_WATCH_IN = "obix:WatchIn";
 const char *OBIX_RELTIME_ZERO = "PT0S";
 const int OBIX_RELTIME_ZERO_LEN = 4;
 
-/*
- * Must ended up with a slash as expected by the Device subsystem
- */
-const char *OBIX_DEVICE_ROOT = "/obix/deviceRoot/";
-const int OBIX_DEVICE_ROOT_LEN = 17;
-
-const char *OBIX_BATCH = "/obix/batch";
-const int OBIX_BATCH_LEN = 11;
-
-const char *OBIX_DEVICES = "/obix/devices/";
-
-const char *OBIX_HISTORY_LOBBY = "/obix/historyService/histories/";
-
-const char *OBIX_HISTORY_SERVICE = "/obix/historyService";
-const int OBIX_HISTORY_SERVICE_LEN = 20;
-
-const char *OBIX_WATCH_SERVICE = "/obix/watchService";
-const int OBIX_WATCH_SERVICE_LEN = 18;
-
-const char *OBIX_WATCH_POLLCHANGES = "pollChanges";
-
 const char *XML_FILENAME_SUFFIX = ".xml";
 
 /*
@@ -158,52 +137,6 @@ int slash_followed(const char *s)
 	}
 
 	return (s[len - 1] == '/') ? 1 : 0;
-}
-
-/**
- * Compare whether the given two strings are identical regardless
- * of the trailing slash if present.
- *
- * Return 1 if this is the case, 0 otherwise
- */
-int is_str_identical(const char *str1, const char *str2)
-{
-	int len1, len2, i;
-
-	if (!str1 || !str2) {
-		return 0;
-	}
-
-	len1 = strlen(str1);
-	len2 = strlen(str2);
-
-	if (str1[len1 - 1] == '/') {
-		len1--;
-	}
-
-	if (str2[len2 - 1] == '/') {
-		len2--;
-	}
-
-	if (len1 != len2) {
-		return 0;
-	}
-
-	if (len1 == 0 && len2 == 0) {
-		return 1;	/* both strings are "/" */
-	}
-
-	/*
-	 * NOTE: for sake of performance, compare from the tail to the head
-	 * since strings tend to be different in their tails
-	 */
-	for (i = len1 - 1; i >= 0; i--) {
-		if (str1[i] != str2[i]) {
-			return 0;
-		}
-	}
-
-	return 1;
 }
 
 int str_token_count_helper(const char *tok, void *arg1, void *arg2)

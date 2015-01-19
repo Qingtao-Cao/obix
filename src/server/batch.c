@@ -1,6 +1,6 @@
 /* *****************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
+ * Copyright (c) 2014 Tyler Watson
  *
  * This file is part of oBIX.
  *
@@ -26,6 +26,8 @@
 #include "server.h"
 #include "errmsg.h"
 #include "device.h"
+
+static const char *OBIX_WATCH_POLLCHANGES = "pollChanges";
 
 static void obix_batch_add_item(xmlNode *batchOut, xmlNode *item)
 {
@@ -71,14 +73,13 @@ static void obix_batch_add_item(xmlNode *batchOut, xmlNode *item)
 }
 
 static void obix_batch_process_item(obix_request_t *request, xmlNode *batchItem,
-									xmlNode *batch_out, obix_dev_t **dev)
+									xmlNode *batch_out, xmlChar **uri)
 {
 	xmlNode *node = NULL;
-	xmlChar *is_attr = NULL;
-	char *href = NULL;
+	xmlChar *is_attr = NULL, *href = NULL;
 	int ret = 0;
 
-	if (!(href = (char *)xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
+	if (!(href = xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
 		ret = ERR_INVALID_INPUT;
 		goto failed;
 	}
@@ -88,7 +89,7 @@ static void obix_batch_process_item(obix_request_t *request, xmlNode *batchItem,
 	 * to prevent client reading the content of the entire DOM tree
 	 * by specifying "/"
 	 */
-	if (xml_is_valid_href((xmlChar *)href) == 0) {
+	if (xml_is_valid_href(href) == 0) {
 		ret = ERR_INVALID_HREF;
 		goto failed;
 	}
@@ -105,19 +106,20 @@ static void obix_batch_process_item(obix_request_t *request, xmlNode *batchItem,
 
 		/*
 		 * If writing a subnode of a device contract succeeds and it is
-		 * the first device found, cache up its descriptor
+		 * the first device found, cache up its URI so as to have the
+		 * relevant persistent file of the parent device updated when
+		 * the entire batch has been handled
 		 */
-		if (!*dev && xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_ERR) != 0) {
-			*dev = device_search_parent((xmlChar *)href);
+		if (!*uri && xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_ERR) != 0) {
+			*uri = xmlStrdup(href);
 		}
 	} else if (xmlStrcasecmp(is_attr, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
-		if (strncmp(href, OBIX_BATCH, OBIX_BATCH_LEN) == 0) {
+		if (is_given_type(href, OBIX_BATCH) == 1) {
 			/*
 			 * Prohibit recursive batch invocation
 			 */
 			ret = ERR_BATCH_RECURSIVE;
-		} else if (strncmp(href, OBIX_HISTORY_SERVICE,
-						   OBIX_HISTORY_SERVICE_LEN) == 0) {
+		} else if (is_given_type(href, OBIX_HISTORY) == 1) {
 			/*
 			 * Histroy handlers take care of sending back responses by
 			 * themselves which are likely too massive to be sent via
@@ -126,9 +128,8 @@ static void obix_batch_process_item(obix_request_t *request, xmlNode *batchItem,
 			 * are allowed through a batch request.
 			 */
 			ret = ERR_BATCH_HISTORY;
-		} else if (strncmp(href, OBIX_WATCH_SERVICE,
-						   OBIX_WATCH_SERVICE_LEN) == 0 &&
-				   strstr(href, OBIX_WATCH_POLLCHANGES) != NULL) {
+		} else if (is_given_type(href, OBIX_WATCH) == 1 &&
+				   strstr((const char *)href, OBIX_WATCH_POLLCHANGES) != NULL) {
 			/*
 			 * The polling threads handling watch.pollChanges requests will
 			 * compete against the current thread handling the batchIn contract
@@ -152,7 +153,7 @@ failed:
 		log_error("%s", server_err_msg[ret].msgs);
 
 		node = obix_server_generate_error(href, server_err_msg[ret].type,
-									 "obix:Batch", server_err_msg[ret].msgs);
+									"obix:Batch", server_err_msg[ret].msgs);
 	}
 
 	if (is_attr) {
@@ -160,7 +161,7 @@ failed:
 	}
 
 	if (href) {
-		free(href);
+		xmlFree(href);
 	}
 
 	obix_batch_add_item(batch_out, node);
@@ -170,14 +171,13 @@ failed:
  * Handles Batch operation
  *
  * NOTE: recursive batch invocation is disabled, therefore the batch
- * facility can't be redirected to and the overrideUri is ignored
+ * facility can't be redirected to and the uri parameter is ignored
  */
-xmlNode *handlerBatch(obix_request_t *request, const char *overrideUri,
+xmlNode *handlerBatch(obix_request_t *request, const xmlChar *uri,
 					  xmlNode *input)
 {
 	xmlNode *batch_out = NULL, *item;
-	xmlChar *is_attr = NULL;
-	obix_dev_t *dev = NULL;
+	xmlChar *is_attr = NULL, *dev_uri = NULL;
 	int ret = 0;
 
 	if (!input) {
@@ -219,11 +219,13 @@ xmlNode *handlerBatch(obix_request_t *request, const char *overrideUri,
 		 * and then back it up to persistent files on the hard drive
 		 * if needed
 		 */
-		obix_batch_process_item(request, item, batch_out, &dev);
+		obix_batch_process_item(request, item, batch_out, &dev_uri);
 	}
 
-	if (dev) {
-		device_write_file(dev);
+	if (dev_uri) {
+		/* Ignore return value since the URI may not belong to a device */
+		device_backup_uri(dev_uri);
+		xmlFree(dev_uri);
 	}
 
 	/* Fall through */
@@ -240,7 +242,7 @@ failed:
 			xmlFreeNode(batch_out);
 		}
 
-		batch_out = obix_server_generate_error(request->request_decoded_uri,
+		batch_out = obix_server_generate_error((xmlChar *)request->request_decoded_uri,
 									  server_err_msg[ret].type,
 									  "obix:Batch", server_err_msg[ret].msgs);
 	}

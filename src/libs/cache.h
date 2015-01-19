@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -62,7 +62,7 @@ long cache_get_miss(cache_t *c);
 cache_t *cache_init(const int len);
 void cache_dispose(cache_t *c);
 void cache_update(cache_t *c, const unsigned char *href, const void *item);
-const void *cache_search(cache_t *c, const unsigned char *href);
+const void *cache_search(cache_t *c, const unsigned char *href, void (*get)(void *));
 void cache_invalidate(cache_t *c, const unsigned char *href);
 
 #endif

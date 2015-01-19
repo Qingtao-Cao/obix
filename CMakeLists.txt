@@ -79,7 +79,7 @@ ADD_SUBDIRECTORY(docs ${CMAKE_BUILD_DIR}/docs)
 # Compiler flags 
 #
 SET (CMAKE_C_FLAGS "-Wall -Werror -O4 -std=c99")
-SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND -DDEBUG_CACHE")
+SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_VALGRIND -DDEBUG_CACHE")
 SET (CMAKE_C_FLAGS_MINSIZEREL  "-Os -DNDEBUG -Werror")
 SET (CMAKE_C_FLAGS_RELEASE  "-O4 -Werror -DNDEBUG")
 SET (CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g -Werror")
@@ -138,22 +138,3 @@ ADD_CUSTOM_TARGET(obix-clean
     COMMENT "Removing: build/, CMakeCache.txt, CMakeFiles/"
     COMMAND rm -rf ${CMAKE_BUILD_DIR} CMakeCache.txt CMakeFiles)
 
-
-######################################
-# Test Suites.
-#
-# TODO: add further testing using existing tests/scripts
-#
-SET(CMAKE_TESTS_DIR tests/scripts)
-ENABLE_TESTING()
-ADD_TEST("Dependencies" ${CMAKE_TESTS_DIR}/dependencies.sh)
-ADD_TEST("Setup"        ${CMAKE_TESTS_DIR}/setup.sh)
-ADD_TEST("Server_Start" ${CMAKE_TESTS_DIR}/server.sh start)
-
-file(GLOB files "${CMAKE_TESTS_DIR}/unit-tests/*.test")
-foreach(file ${files})
-	execute_process(COMMAND "basename" "${file}" OUTPUT_VARIABLE file_name)
-	add_test("${file_name}" "${file}" "${CMAKE_TESTS_DIR}")
-endforeach()
-
-ADD_TEST("Server_Stop"  ${CMAKE_TESTS_DIR}/server.sh stop)

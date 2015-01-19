@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -31,7 +31,6 @@
 #include <limits.h>		/* LONG_MAX, LONG_MIN */
 #include <sys/uio.h>	/* writev */
 #include <libxml/tree.h>
-#include <libxml/xpath.h>
 #include "list.h"
 #include "log_utils.h"
 #include "obix_utils.h"
@@ -99,7 +98,7 @@ typedef struct obix_hist_dev {
 	int namelen;
 
 	/* /obix/historyService/histories/dev_id/ */
-	char *devhref;
+	xmlChar *href;
 
 	/* index's absolute pathname */
 	char *indexpath;
@@ -112,9 +111,6 @@ typedef struct obix_hist_dev {
 
 	/* SORTED list of obix_hist_file */
 	struct list_head files;
-
-	/* protect the list of history file descriptors */
-	pthread_mutex_t mutex;
 
 	/* synchroniser among multi threads */
 	tsync_t sync;
@@ -152,7 +148,7 @@ obix_hist_t *_history;
 
 #define HISTORIES_DIR			"histories/"
 #define HISTORIES_RELHREF		HISTORIES_DIR
-#define INDEX_FILENAME			"index"
+#define HIST_INDEX_FILENAME		"index"
 #define LOG_FILENAME_SUFFIX		".fragment"
 
 #define HIST_REC_VAL			"value"
@@ -172,6 +168,9 @@ obix_hist_t *_history;
 #define OBIX_CONTRACT_HIST_ABS	"HistoryFileAbstract"
 #define OBIX_CONTRACT_HIST_AOUT	"HistoryAppendOut"
 
+static const char *OBIX_HISTORY_LOBBY = "/obix/historyService/histories/";
+static const int OBIX_HISTORY_LOBBY_LEN = 31;
+
 /*
  * Append "\r\n" at the end of a history record so that
  * "</obj>\r\n" can be used as the boundary of it
@@ -187,52 +186,41 @@ static const char *HIST_RECORD_SEPARATOR = "\r\n";
  * then abstract(obix:HistoryFileAbstract) for each log file
  * named after the date when data generated.
  */
-static const char *INDEX_SKELETON =
+static const char *HIST_INDEX_SKELETON =
 "<list name=\"index\" href=\"index\" of=\"obix:HistoryFileAbstract\"/>\r\n";
 
-static char *QUERY_OUT_PREFIX =
+static char *HIST_QUERY_OUT_PREFIX =
 "<obj is=\"obix:HistoryQueryOut\">\r\n"
 "<int name=\"count\" val=\"%d\"/>\r\n"
 "<abstime name=\"start\" val=\"%s\"/>\r\n"
 "<abstime name=\"end\" val=\"%s\"/>\r\n"
 "<list name=\"data\" of=\"obix:HistoryRecord\">\r\n";
 
-static char *QUERY_OUT_SUFFIX = "</list>\r\n</obj>\r\n";
+static char *HIST_QUERY_OUT_SUFFIX = "</list>\r\n</obj>\r\n";
 
-static const char *GET_OUT_SKELETON =
+static const char *HIST_GET_OUT_SKELETON =
 "<str name=\"%s\" href=\"%s\"/>\r\n";
-
-/*
- * Return 1 if the given href is prefixed by the root of
- * History service,  0 otherwise
- */
-int is_history_href(const xmlChar *href)
-{
-	return (xmlStrncmp(href, BAD_CAST OBIX_HISTORY_SERVICE,
-					   OBIX_HISTORY_SERVICE_LEN) == 0) ? 1 : 0;
-}
 
 /*
  * Enqueue a new obix_hist_file struct based on its date
  *
- * Note,
- * 1. Callers must have held obix_hist_dev_t.mutex
+ * Return 0 on success, < 0 otherwise
  */
-static int __file_add_sorted(obix_hist_file_t *new, obix_hist_dev_t *dev)
+static int __hist_enqueue_file(obix_hist_file_t *new, obix_hist_dev_t *dev)
 {
 	int res;
 	obix_hist_file_t *file;
 
 	list_for_each_entry(file, &dev->files, list) {
 		if (timestamp_compare_date(new->date, file->date, &res) < 0) {
-			log_error("Failed to compare date strings %s vs %s",
-						new->date, file->date);
+			log_error("Failed to compare date strings %s vs %s", new->date,
+					  file->date);
 			return -1;
 		}
 
 		if (res == 0) {
 			log_error("Raw data file on the same date %s already exist",
-						new->date);
+					  new->date);
 			return -1;
 		}
 
@@ -248,7 +236,7 @@ static int __file_add_sorted(obix_hist_file_t *new, obix_hist_dev_t *dev)
 		return 0;
 	}
 
-	log_error("Should never reach here.");
+	log_error("Should never reach here");
 	return -1;
 }
 
@@ -293,48 +281,6 @@ static int add_abs_count(obix_hist_file_t *file, int added)
 	}
 
 	return update_count(file->abstract, HIST_ABS_COUNT, count + added);
-}
-
-/*
- * Allocate and initialize a new HistoryAppendOut node
- *
- * Note,
- * 1. Callers should release the node once done with it
- */
-static xmlNode *create_aout(obix_hist_dev_t *dev, int added)
-{
-	xmlNode *aout;
-	char *start = NULL, *end = NULL;
-	obix_hist_file_t *first, *last;
-	long count;
-
-	if (!(aout = xmldb_copy_sys(HIST_AOUT_STUB))) {
-		return NULL;
-	}
-
-	pthread_mutex_lock(&dev->mutex);
-	first = list_entry(dev->files.next, obix_hist_file_t, list);
-	last = list_entry(dev->files.prev, obix_hist_file_t, list);
-	count = dev->count;
-	pthread_mutex_unlock(&dev->mutex);
-
-	start = xml_get_child_val(first->abstract, OBIX_OBJ_ABSTIME, HIST_ABS_START);
-	end = xml_get_child_val(last->abstract,	OBIX_OBJ_ABSTIME, HIST_ABS_END);
-
-	update_count(aout, AOUT_NUMADDED, added);
-	update_count(aout, AOUT_NEWCOUNT, count);
-
-	if (start) {
-		update_value(aout, OBIX_OBJ_ABSTIME, AOUT_NEWSTART, start);
-		free(start);
-	}
-
-	if (end) {
-		update_value(aout, OBIX_OBJ_ABSTIME, AOUT_NEWEND, end);
-		free(end);
-	}
-
-	return aout;
 }
 
 /*
@@ -434,17 +380,12 @@ static void hist_destroy_file(obix_hist_file_t *file)
  * Return the address of relevant file descriptor on success,
  * NULL otherwise
  */
-static obix_hist_file_t *hist_create_file(obix_hist_dev_t *dev,
-										  xmlNode *abstract,
-										  int newly_created)
+static obix_hist_file_t *__hist_create_file(obix_hist_dev_t *dev,
+											xmlNode *abstract,
+											int newly_created)
 {
 	obix_hist_file_t *file = NULL;
 	struct stat statbuf;
-
-	if (!dev || !abstract) {
-		log_error("Illegal parameters provided to create a hist file descriptor");
-		return NULL;
-	}
 
 	if (!(file = (obix_hist_file_t *)malloc(sizeof(obix_hist_file_t)))) {
 		log_error("Failed to allocae file descriptor");
@@ -464,37 +405,30 @@ static obix_hist_file_t *hist_create_file(obix_hist_dev_t *dev,
 	if (link_pathname(&file->filepath, _history->dir, dev->dev_id,
 					  file->date, LOG_FILENAME_SUFFIX) < 0) {
 		log_error("Not enough memory to allocate absolute pathname for "
-					"log file on %s", file->date);
+				  "log file on %s", file->date);
 		goto failed;
 	}
 
-	/* Validate the sanity of relevant log file */
-	if (lstat(file->filepath, &statbuf) < 0) {
-		log_error("lstat on %s failed", file->filepath);
-		goto failed;
+	if (newly_created == 1) {
+		list_add_tail(&file->list, &dev->files);
+		return file;
 	}
 
-	if (S_ISREG(statbuf.st_mode) == 0 ||
-		(statbuf.st_size == 0 && newly_created == 0)){
+	/* Sanity check on existing fragment files */
+	if (lstat(file->filepath, &statbuf) < 0 ||
+		S_ISREG(statbuf.st_mode) == 0 ||
+		statbuf.st_size == 0){
 		log_error("%s is not a regular file, or is empty", file->filepath);
 		goto failed;
 	}
 
-	/* Lastly, enqueue file descriptor based on its date */
-	pthread_mutex_lock(&dev->mutex);
-	if (newly_created == 1) {
-		list_add_tail(&file->list, &dev->files);
-	} else {
-		if (__file_add_sorted(file, dev) < 0) {
-			pthread_mutex_unlock(&dev->mutex);
-			log_error("Failed to enqueue a file descriptor for %s",
-						file->filepath);
-			goto failed;
-		}
+	if (__hist_enqueue_file(file, dev) == 0) {
+		return file;
 	}
-	pthread_mutex_unlock(&dev->mutex);
 
-	return file;
+	log_error("Failed to enqueue a file descriptor for %s", file->filepath);
+
+	/* Fall through */
 
 failed:
 	hist_destroy_file(file);
@@ -502,10 +436,10 @@ failed:
 }
 
 /*
- * Allocate and initialize a new abstract contract
+ * Allocate and setup an abstract node for a new fragment file
  */
-static xmlNode *create_absnode(obix_hist_dev_t *dev, const char *date,
-							   const char *start, const char *end)
+static xmlNode *__hist_add_absnode(obix_hist_dev_t *dev, const char *date,
+								   const char *start)
 {
 	xmlNode *node;
 
@@ -516,11 +450,11 @@ static xmlNode *create_absnode(obix_hist_dev_t *dev, const char *date,
 	update_value(node, OBIX_OBJ_DATE, HIST_ABS_DATE, date);
 	update_count(node, HIST_ABS_COUNT, 0);
 	update_value(node, OBIX_OBJ_ABSTIME, HIST_ABS_START, start);
-	update_value(node, OBIX_OBJ_ABSTIME, HIST_ABS_END, end);
+	update_value(node, OBIX_OBJ_ABSTIME, HIST_ABS_END, start);
 
 	if (xmldb_add_child(dev->index, node, 0, 0) != 0) {
 		log_error("Failed to add abstract node on %s into %s",
-				  date, dev->devhref);
+				  date, dev->href);
 		xmlFreeNode(node);
 		node = NULL;
 	}
@@ -529,18 +463,18 @@ static xmlNode *create_absnode(obix_hist_dev_t *dev, const char *date,
 }
 
 /**
- * Create a new history log file and setup relevant backend data
+ * Create a new history fragment file and setup relevant backend data
  * structure based on the specified timestamp of its first record
  *
  * Return address of the relevant file descriptor on success,
  * NULL otherwise
  */
-static obix_hist_file_t *create_file_helper(obix_hist_dev_t *dev,
-											const char *ts)
+static obix_hist_file_t *__hist_create_fragment(obix_hist_dev_t *dev,
+												const char *ts)
 {
 	obix_hist_file_t *file = NULL;
 	xmlNode *node;
-	char *filepath, *date;
+	char *filepath = NULL, *date = NULL;
 	int fd;
 
 	if (!(date = timestamp_get_utc_date(ts)) ||
@@ -556,13 +490,25 @@ static obix_hist_file_t *create_file_helper(obix_hist_dev_t *dev,
 	}
 	close(fd);
 
-	if (!(node = create_absnode(dev, date, ts, ts))) {
-		goto failed;
+	if (!(node = __hist_add_absnode(dev, date, ts))) {
+		goto abs_failed;
 	}
 
-	file = hist_create_file(dev, node, 1);
+	if (!(file = __hist_create_file(dev, node, 1))) {
+		goto desc_failed;
+	}
 
-	/* Fall through */
+	xml_setup_private(file->abstract, (void *)dev);
+
+	free(date);
+	free(filepath);
+	return file;
+
+desc_failed:
+	xmldb_delete_node(node, 0);
+
+abs_failed:
+	unlink(filepath);
 
 failed:
 	if (date) {
@@ -576,20 +522,6 @@ failed:
 	return file;
 }
 
-static void hist_create_file_wrapper(xmlNode *node, obix_hist_dev_t *dev)
-{
-	obix_hist_file_t *file;
-
-	if (!(file = hist_create_file(dev, node, 0))) {
-		log_error("Failed to create obix_hist_file_t for one data file of %s",
-					dev->dev_id);
-		return;
-	}
-
-	dev->count += xml_get_child_long(file->abstract, OBIX_OBJ_INT,
-									 HIST_ABS_COUNT);
-}
-
 /*
  * Setup and register a XML node for a device, which bridges
  * the device's index subtree with that of global DOM tree
@@ -597,17 +529,19 @@ static void hist_create_file_wrapper(xmlNode *node, obix_hist_dev_t *dev)
  * Return the address of relevant XML node on success, NULL
  * otherwise
  *
- * NOTE: If the given devhref happens to be an ancestor of the
+ * NOTE: If the given href happens to be an ancestor of the
  * href of existing history facility, then its corresponding
  * node would have been established already because of the
- * usage of the DOM_CREATE_ANCESTORS_HISTORY option.
+ * usage of the CREATE_ANCESTORS_HISTORY option, but the
+ * rest of the ancestor's history facility needs to be further
+ * established
  */
-static xmlNode *create_devnode(const char *devhref)
+static xmlNode *__hist_add_devnode(const xmlChar *href)
 {
 	xmlNode *node;
 
-	if ((node = xmldb_get_node((xmlChar *)devhref)) != NULL) {
-		log_debug("Ancestor history facility already created at %s", devhref);
+	if ((node = xmldb_get_node(href)) != NULL) {
+		log_debug("Ancestor history facility already created at %s", href);
 		return node;
 	}
 
@@ -615,8 +549,8 @@ static xmlNode *create_devnode(const char *devhref)
 		return NULL;
 	}
 
-	if (!xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, BAD_CAST devhref)) {
-		log_error("Failed to set href %s on relevant node", devhref);
+	if (!xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, href)) {
+		log_error("Failed to set href %s on relevant node", href);
 		goto failed;
 	}
 
@@ -624,8 +558,8 @@ static xmlNode *create_devnode(const char *devhref)
 	 * The XML nodes for ancestors hrefs may be created if needed,
 	 * however, NO parent history facilities will ever be created
 	 */
-	if (xmldb_put_node_legacy(node, DOM_CREATE_ANCESTORS_HISTORY) != 0) {
-		log_error("Failed to add node with href %s into XML database", devhref);
+	if (xmldb_put_node(node, href, CREATE_ANCESTORS_HISTORY) != 0) {
+		log_error("Failed to add node with href %s into XML database", href);
 		goto failed;
 	}
 
@@ -637,11 +571,11 @@ failed:
 }
 
 /*
- * Setup and register a XML Node for the index file of a device
+ * Setup and register a XML Node for the index file of a history facility
  *
  * Return the address of relevant XML Node on success, NULL otherwise
  */
-static xmlNode *create_indexnode(const char *path, xmlNode *parent)
+static xmlNode *__hist_add_indexnode(const char *path, xmlNode *parent)
 {
 	struct stat statbuf;
 	xmlDoc *doc;
@@ -694,17 +628,17 @@ static void hist_destroy_dev(obix_hist_dev_t *dev)
 {
 	obix_hist_file_t *file, *n;
 
-	tsync_shutdown(&dev->sync);
+	if (tsync_shutdown_entry(&dev->sync) < 0) {
+		return;
+	}
 
-	pthread_mutex_lock(&dev->mutex);
 	list_for_each_entry_safe(file, n, &dev->files, list) {
 		list_del(&file->list);
 		hist_destroy_file(file);
 	}
-	pthread_mutex_unlock(&dev->mutex);
 
-	if (dev->devhref) {
-		free(dev->devhref);
+	if (dev->href) {
+		xmlFree(dev->href);
 	}
 
 	if (dev->dev_id) {
@@ -719,32 +653,9 @@ static void hist_destroy_dev(obix_hist_dev_t *dev)
 		xmldb_delete_node(dev->node, 0);
 	}
 
-	pthread_mutex_destroy(&dev->mutex);
-
 	tsync_cleanup(&dev->sync);
 
 	free(dev);
-}
-
-static int get_href_helper(const char *token, void *arg1, void *arg2)
-{
-	char **href = (char **)arg1;
-
-	if (!*href) {
-		return ((*href = strdup(token)) != NULL) ? 0 : -1;
-	}
-
-	/*
-	 * Concatenate existing string with the new token, delimited by
-	 * an '/' character
-	 */
-	if (!(*href = realloc(*href, strlen(*href) + strlen(token) + 2)) ||
-		!(*href = strcat(*href, STR_DELIMITER_SLASH)) ||
-		!(*href = strcat(*href, token))) {
-		return -1;
-	}
-
-	return 0;
 }
 
 /*
@@ -754,23 +665,21 @@ static int get_href_helper(const char *token, void *arg1, void *arg2)
  * Return new history facility's descriptor on success,
  * NULL otherwise.
  *
- * Note:
- * 1. The caller should ensure <resdir>/histories/dev_id/index.xml
- * exists and filled in with INDEX_SKELETON at least.
+ * NOTE: The caller should ensure <resdir>/histories/dev_id/index.xml
+ * exists and filled in with HIST_INDEX_SKELETON at least
+ *
+ * NOTE: On success the passed in string parameters are saved in a
+ * history facility and should be released upon cleanup, so callers
+ * should NOT release them instead. However, on failure callers
+ * should release these strings by themselves
  */
-static obix_hist_dev_t *hist_create_dev(const char *dev_id,
-										const char *indexpath)
+static obix_hist_dev_t *__hist_create_dev(char *dev_id, xmlChar *href,
+										  char *indexpath, int newly_created)
 {
 	xmlNode *node;
 	xmlChar *is_attr = NULL;
 	obix_hist_dev_t *dev, *n;
-	char *href = NULL;
-	int ret;
-
-	if (!dev_id || !indexpath) {
-		log_error("Illegal parameter provided to create a hist device descriptor");
-		return NULL;
-	}
+	obix_hist_file_t *file;
 
 	if (!(dev = (obix_hist_dev_t *)malloc(sizeof(obix_hist_dev_t)))) {
 		log_error("Failed to allocae history facility for %s", dev_id);
@@ -778,81 +687,67 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 	}
 	memset(dev, 0, sizeof(obix_hist_dev_t));
 
+	if (!(dev->node = __hist_add_devnode(href)) ||
+		!(dev->index = __hist_add_indexnode(indexpath, dev->node))) {
+		goto failed;
+	}
+
+	/* Save parameters directly into descriptors on success */
+	dev->dev_id = dev_id;
+	dev->href = href;
+	dev->indexpath = indexpath;
+
+	dev->namelen = strlen(dev_id);
 	INIT_LIST_HEAD(&dev->list);
 	INIT_LIST_HEAD(&dev->files);
-	pthread_mutex_init(&dev->mutex, NULL);
-
 	tsync_init(&dev->sync);
 
-	if (!(dev->dev_id = strdup(dev_id))) {
-		log_error("Failed to allocate string for %s", dev_id);
-		goto failed;
-	}
-	dev->namelen = strlen(dev->dev_id);
-
-	if (!(dev->indexpath = strdup(indexpath))) {
-		log_error("Failed to allocate string for %s", indexpath);
-		goto failed;
-	}
-
-	if (for_each_str_token(STR_DELIMITER_DOT, dev_id,
-						   get_href_helper, &href, NULL) < 0) {
-		log_error("Failed to convert %s into href format", dev_id);
-		goto failed;
-	}
-
-	ret = link_pathname(&dev->devhref, OBIX_HISTORY_LOBBY, href,
-						NULL, NULL);
-	free(href);
-	if (ret < 0) {
-		log_error("Failed to allocate device's href name for %s", dev_id);
-		goto failed;
-	}
-
-	if (!(dev->node = create_devnode(dev->devhref))) {
-		goto failed;
-	}
-
-	if (!(dev->index = create_indexnode(dev->indexpath, dev->node))) {
-		goto failed;
-	}
-
 	/*
-	 * Lastly, once all DOM infrastructure properly setup and linked
-	 * altogether, create descriptors for each log file which cache
-	 * pointers to their abstract contract in the global DOM tree.
+	 * Create descriptor for each fragment file when loading from disk
+	 * at startup, whereas newly created facility has no fragments
 	 */
-	for (node = dev->index->children; node; node = node->next) {
-		if (node->type != XML_ELEMENT_NODE) {
-			continue;
+	if (newly_created == 0) {
+		for (node = dev->index->children; node; node = node->next) {
+			if (node->type != XML_ELEMENT_NODE) {
+				continue;
+			}
+
+			if (is_attr) {
+				xmlFree(is_attr);
+				is_attr = NULL;		/* avoid double-free */
+			}
+
+			if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ) != 0 ||
+				!(is_attr = xmlGetProp(node, BAD_CAST OBIX_ATTR_IS)) ||
+				xmlStrcmp(is_attr, BAD_CAST OBIX_CONTRACT_HIST_FILE_ABS) != 0) {
+				continue;
+			}
+
+			if ((file = __hist_create_file(dev, node, 0)) != NULL) {
+				dev->count += xml_get_child_long(file->abstract, OBIX_OBJ_INT,
+												 HIST_ABS_COUNT);
+			} else {
+				log_error("Failed to create descriptor for one fragment file of %s",
+						  dev->dev_id);
+			}
 		}
 
 		if (is_attr) {
 			xmlFree(is_attr);
 		}
-
-		if (xmlStrcmp(node->name, BAD_CAST OBIX_OBJ) != 0 ||
-			!(is_attr = xmlGetProp(node, BAD_CAST OBIX_ATTR_IS)) ||
-			xmlStrcmp(is_attr, BAD_CAST OBIX_CONTRACT_HIST_FILE_ABS) != 0) {
-			continue;
-		}
-
-		hist_create_file_wrapper(node, dev);
 	}
 
-	if (is_attr) {
-		xmlFree(is_attr);
-	}
-
-	pthread_mutex_lock(&_history->mutex);
+	/*
+	 * Enqueue the newly created history facility according to the
+	 * length of its name
+	 *
+	 * History facilities with shorter names are placed ahead of those
+	 * with longer names to ensure "descendant" facilities are behind
+	 * the "ancestor" ones. At cleanup the queue is accessed in a *reverse*
+	 * order to dispose descendants first so as to avoid double free
+	 * of them
+	 */
 	list_for_each_entry(n, &_history->devices, list) {
-		/*
-		 * Considering that tons of history facilities names are
-		 * of the same length, if the name of the newly created
-		 * has a same length as the current one in the list,
-		 * insert the new one before it so as to finish the loop
-		 * quickly
-		 */
 		if (n->namelen < dev->namelen) {
 			continue;
 		}
@@ -864,12 +759,25 @@ static obix_hist_dev_t *hist_create_dev(const char *dev_id,
 	if (&n->list == &_history->devices)	{	/* empty list */
 		list_add_tail(&dev->list, &_history->devices);
 	}
-	pthread_mutex_unlock(&_history->mutex);
+
+	/*
+	 * Lastly setup the _private pointers for the entire subtree
+	 * of the current history facility, although race conditions
+	 * may only happen against the abstract for the last fragment
+	 * file
+	 *
+	 * This conforms with the behaviour adopted in the query handler
+	 */
+	xml_setup_private(dev->node, (void *)dev);
 
 	return dev;
 
 failed:
-	hist_destroy_dev(dev);
+	if (dev->node) {
+		xmldb_delete_node(dev->node, 0);
+	}
+
+	free(dev);
 	return NULL;
 }
 
@@ -881,60 +789,54 @@ static void hist_flush_index(obix_hist_dev_t *dev)
 	char *data;
 
 	if (!(data = xml_dump_node(dev->index))) {
-		log_error("Failed to dump XML subtree of %s", dev->devhref);
+		log_error("Failed to dump XML subtree of %s", dev->href);
 		return;
 	}
 
-	if (xml_write_file(dev->indexpath, OPEN_FLAG_SYNC,
-					   data, strlen(data)) < 0) {
-		log_error("Failed to save %s on hard drive", dev->devhref);
+	if (xml_write_file(dev->indexpath, OPEN_FLAG_SYNC, data,
+					   strlen(data)) < 0) {
+		log_error("Failed to save %s on hard drive", dev->href);
 	}
 
 	free(data);
 }
 
 /*
- * Append records from input contract to history log files, return
- * the added number of records through the added parameter
+ * Append records from input contract to the given history facility,
+ * return the number of records added through the last parameter
  *
  * Return 0 on success, > 0 for error code
+ *
+ * NOTE: Caller has entered the "write region" of relevant history
+ * facility
  */
-static int hist_append_dev_helper(obix_hist_dev_t *dev, xmlNode *input, int *added)
+static int __hist_append_dev(obix_hist_dev_t *dev, xmlNode *input, int *added)
 {
 	obix_hist_file_t *file;
 	xmlNode *list, *record;
 	char *ts = NULL, *latest_ts = NULL;
 	int count = 0, all_count = 0;
-	int res, new_day;
-	int ret = 0;
+	int res, new_day = 0, ret = 0;
 
 	*added = 0;
 
-	/* Get the latest history log file */
-	pthread_mutex_lock(&dev->mutex);
-	if (list_empty(&dev->files) == 1) {
-		pthread_mutex_unlock(&dev->mutex);
-		file = NULL;
-
-		if (!(latest_ts = strdup(HIST_TS_INIT))) {
-			ret = ERR_NO_MEM;
-			goto failed;
-		}
-	} else {
-		file = list_entry(dev->files.prev, obix_hist_file_t, list);
-		pthread_mutex_unlock(&dev->mutex);
-
-		if (!(latest_ts = xml_get_child_val(file->abstract, OBIX_OBJ_ABSTIME,
-											HIST_ABS_END))) {
-			ret = ERR_NO_MEM;
-			goto failed;
-		}
-	}
-
 	if(!(list = xml_find_child(input, OBIX_OBJ_LIST,
 							   OBIX_ATTR_NAME, HIST_AIN_DATA))) {
-		ret = ERR_INVALID_INPUT;
-		goto failed;
+		return ERR_INVALID_INPUT;
+	}
+
+	/* Get the timestamp of the latest history record */
+	if (list_empty(&dev->files) == 1) {
+		file = NULL;
+		latest_ts = strdup(HIST_TS_INIT);
+	} else {
+		file = list_last_entry(&dev->files, obix_hist_file_t, list);
+		latest_ts = xml_get_child_val(file->abstract, OBIX_OBJ_ABSTIME,
+									  HIST_ABS_END);
+	}
+
+	if (!latest_ts) {
+		return ERR_NO_MEM;
 	}
 
 	/*
@@ -971,14 +873,14 @@ static int hist_append_dev_helper(obix_hist_dev_t *dev, xmlNode *input, int *add
 			continue;
 		}
 
-		/* Create a new log file for the new date */
+		/* Create a new fragment file for the new date */
 		if (new_day == 1) {
 			if (count > 0) {
 				add_abs_count(file, count);
 				count = 0;		/* Reset counter for the new log file */
 			}
 
-			if (!(file = create_file_helper(dev, ts))) {
+			if (!(file = __hist_create_fragment(dev, ts))) {
 				ret = ERR_HISTORY_IO;
 				goto failed;
 			}
@@ -1047,42 +949,79 @@ failed:
 static int hist_append_dev(obix_request_t *request,
 						   obix_hist_dev_t *dev, xmlNode *input)
 {
-	xmlNode *aout;
+	char *start = NULL, *end = NULL;
+	obix_hist_file_t *first, *last;
+	xmlNode *aout = NULL;
 	char *data;
-	int added;
-	int ret = ERR_NO_MEM;
+	long count;
+	int added, ret;
 
 	if (tsync_writer_entry(&dev->sync) < 0) {
+		log_error("History facility %s shouldn't have been marked as "
+				  "being shutdown", dev->dev_id);
 		return ERR_INVALID_STATE;
 	}
 
-	if ((ret = hist_append_dev_helper(dev, input, &added)) != 0) {
-		goto out;
+	if ((ret = __hist_append_dev(dev, input, &added)) > 0) {
+		tsync_writer_exit(&dev->sync);
+		return ret;
 	}
 
-	if (!(aout = create_aout(dev, added))) {
-		goto out;
+	/* dev->files is ensured not empty */
+	first = list_first_entry(&dev->files, obix_hist_file_t, list);
+	last = list_last_entry(&dev->files, obix_hist_file_t, list);
+	count = dev->count;
+
+	start = xml_get_child_val(first->abstract, OBIX_OBJ_ABSTIME, HIST_ABS_START);
+	end = xml_get_child_val(last->abstract,	OBIX_OBJ_ABSTIME, HIST_ABS_END);
+
+	tsync_writer_exit(&dev->sync);
+
+	/* Allocate and setup a HistoryAppendOut contract */
+
+	if (!(aout = xmldb_copy_sys(HIST_AOUT_STUB))) {
+		ret = ERR_NO_MEM;
+		goto failed;
 	}
 
-	data = xml_dump_node(aout);
-	xmlFreeNode(aout);
+	update_count(aout, AOUT_NUMADDED, added);
+	update_count(aout, AOUT_NEWCOUNT, count);
 
-	if (!data) {
-		goto out;
+	if (start) {
+		update_value(aout, OBIX_OBJ_ABSTIME, AOUT_NEWSTART, start);
+	}
+
+	if (end) {
+		update_value(aout, OBIX_OBJ_ABSTIME, AOUT_NEWEND, end);
+	}
+
+	if (!(data = xml_dump_node(aout))) {
+		ret = ERR_NO_MEM;
+		goto failed;
 	}
 
 	if (obix_request_create_append_response_item(request, data,
 												 strlen(data), 0) < 0) {
 		free(data);
-		goto out;
+		ret = ERR_NO_MEM;
+	} else {
+		ret = 0;	/* Success */
 	}
-
-	ret = 0;	/* Success */
 
 	/* Fall through */
 
-out:
-	tsync_writer_exit(&dev->sync);
+failed:
+	if (start) {
+		free(start);
+	}
+
+	if (end) {
+		free(end);
+	}
+
+	if (aout) {
+		xmlFreeNode(aout);
+	}
 
 	return ret;
 }
@@ -1264,8 +1203,8 @@ failed:
  *
  * Return 0 on success, > 0 on errors
  */
-static int hist_query_dev_helper(obix_request_t *request,
-								 obix_hist_dev_t *dev, xmlNode *input)
+static int __hist_query_dev(obix_request_t *request,
+							obix_hist_dev_t *dev, xmlNode *input)
 {
 	long limit;									/* the number of records wanted */
 	char *start = NULL, *end = NULL;			/* start/end TS specified in input  */
@@ -1283,15 +1222,12 @@ static int hist_query_dev_helper(obix_request_t *request,
 	response_item_t *item;
 	char *data;
 
-	pthread_mutex_lock(&dev->mutex);
 	if (list_empty(&dev->files) == 1) {
-		pthread_mutex_unlock(&dev->mutex);
 		return ERR_HISTORY_EMPTY;
 	}
 
-	first = list_entry(dev->files.next, obix_hist_file_t, list);
-	last = list_entry(dev->files.prev, obix_hist_file_t, list);
-	pthread_mutex_unlock(&dev->mutex);
+	first = list_first_entry(&dev->files, obix_hist_file_t, list);
+	last = list_last_entry(&dev->files, obix_hist_file_t, list);
 
 	d_oldest = xml_get_child_val(first->abstract, OBIX_OBJ_ABSTIME,
 								 HIST_ABS_START);
@@ -1483,7 +1419,7 @@ static int hist_query_dev_helper(obix_request_t *request,
 
 no_matching_data:
 	/* Add HistoryQueryOut contract header */
-	len = strlen(QUERY_OUT_PREFIX) + HIST_FLT_VAL_MAX_BITS +
+	len = strlen(HIST_QUERY_OUT_PREFIX) + HIST_FLT_VAL_MAX_BITS +
 			HIST_REC_TS_MAX_LEN * 2 - 6;
 
 	if (!(data = (char *)malloc(len + 1))) {
@@ -1499,7 +1435,7 @@ no_matching_data:
 	 * Otherwise the client side will complain connection is closed
 	 * by server before all claimed number of bytes could be read.
 	 */
-	len = sprintf(data, QUERY_OUT_PREFIX, r,
+	len = sprintf(data, HIST_QUERY_OUT_PREFIX, r,
 					((start_ts != NULL) ? start_ts : start),
 					((end_ts != NULL) ? end_ts : end));
 
@@ -1511,9 +1447,8 @@ no_matching_data:
 	obix_request_add_response_item(request, item);
 
 	/* Tail HistoryQueryOut contract footer */
-	if (!(item = obix_request_create_response_item(QUERY_OUT_SUFFIX,
-													strlen(QUERY_OUT_SUFFIX),
-													1))) {
+	if (!(item = obix_request_create_response_item(HIST_QUERY_OUT_SUFFIX,
+										strlen(HIST_QUERY_OUT_SUFFIX), 1))) {
 		goto flush_response;
 	}
 
@@ -1581,10 +1516,12 @@ static int hist_query_dev(obix_request_t *request,
 	int ret;
 
 	if (tsync_reader_entry(&dev->sync) < 0) {
+		log_error("History facility %s shouldn't have been marked as "
+				  "being shutdown", dev->dev_id);
 		return ERR_INVALID_STATE;
 	}
 
-	ret = hist_query_dev_helper(request, dev, input);
+	ret = __hist_query_dev(request, dev, input);
 
 	tsync_reader_exit(&dev->sync);
 	return ret;
@@ -1660,15 +1597,43 @@ static int is_skipped_dir(const char *dir)
 	return 0;
 }
 
-static int hist_create_dev_wrapper(const char *parent_dir, const char *subdir,
-								   void *arg)	/* ignored */
+static int hist_get_href(const char *token, void *arg1, void *arg2)
 {
-	obix_hist_dev_t *dev;
+	char **href = (char **)arg1;
+
+	if (!*href) {
+		return ((*href = strdup(token)) != NULL) ? 0 : -1;
+	}
+
+	/*
+	 * Concatenate existing string with the new token, delimited by
+	 * an '/' character
+	 */
+	if (!(*href = realloc(*href, strlen(*href) + strlen(token) + 2)) ||
+		!(*href = strcat(*href, STR_DELIMITER_SLASH)) ||
+		!(*href = strcat(*href, token))) {
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * Create a history facility based on disk files in the current sub folder
+ *
+ * Return 0 on success, -1 otherwise
+ */
+static int hist_load_dev(const char *parent_dir, const char *subdir,
+						 void *arg)	/* ignored */
+{
 	struct stat statbuf;
-	char *indexpath, *path;
-	int ret = 0;
+	char *dev_id, *href, *subhref, *indexpath, *path;
+	int ret = -1;
+
+	dev_id = href = subhref = indexpath = NULL;
 
 	if (link_pathname(&path, parent_dir, subdir, NULL, NULL) < 0) {
+		log_error("Failed to assemble pathname for %s", subdir);
 		return -1;
 	}
 
@@ -1682,18 +1647,49 @@ static int hist_create_dev_wrapper(const char *parent_dir, const char *subdir,
 	}
 	free(path);
 
-	if (link_pathname(&indexpath, parent_dir, subdir,
-					  INDEX_FILENAME, XML_FILENAME_SUFFIX) < 0) {
-		log_error("Failed to allocate index file name for %s", subdir);
+	if (for_each_str_token(STR_DELIMITER_DOT, subdir,
+						   hist_get_href, &subhref, NULL) < 0) {
+		log_error("Failed to convert %s into href format", subdir);
 		return -1;
+    }
+
+	if (!(dev_id = strdup(subdir)) ||
+		link_pathname(&indexpath, parent_dir, dev_id, HIST_INDEX_FILENAME,
+					  XML_FILENAME_SUFFIX) < 0 ||
+		link_pathname(&href, OBIX_HISTORY_LOBBY, NULL, subhref, NULL) < 0) {
+		log_error("Failed to allocate meta information for %s", subdir);
+		goto failed;
 	}
 
-	dev = hist_create_dev(subdir, indexpath);
-	free(indexpath);
+	if (__hist_create_dev(dev_id, (xmlChar *)href, indexpath, 0) != NULL) {
+		/*
+		 * On success the address of name, href and index file's pathname
+		 * are all saved in the device descriptor and these strings are
+		 * released along with it during clean-up
+		 */
+		free(subhref);
+		return 0;
+	}
 
-	if (!dev) {
-		log_error("Failed to setup history facility for %s", subdir);
-		ret = -1;
+	log_error("Failed to setup history facility for %s", subdir);
+
+	/* Fall through */
+
+failed:
+	if (subhref) {
+		free(subhref);
+	}
+
+	if (href) {
+		free(href);
+	}
+
+	if (dev_id) {
+		free(dev_id);
+	}
+
+	if (indexpath) {
+		free(indexpath);
 	}
 
 	return ret;
@@ -1728,7 +1724,7 @@ int obix_hist_init(const char *resdir)
 	pthread_mutex_init(&_history->mutex, NULL);
 
 	if (for_each_file_name(_history->dir, NULL, NULL,	/* all possible names */
-						   hist_create_dev_wrapper, NULL) < 0) {
+						   hist_load_dev, NULL) < 0) {
 		log_error("Failed to setup history facilities from %s",
 				  _history->dir);
 		obix_hist_dispose();
@@ -1744,14 +1740,15 @@ int obix_hist_init(const char *resdir)
  *
  * Return its obix_hist_dev_t address on success, NULL otherwise.
  */
-static obix_hist_dev_t *find_device(const char *dev_id)
+static obix_hist_dev_t *hist_find_device(const char *dev_id)
 {
 	obix_hist_dev_t *dev;
 
 	pthread_mutex_lock(&_history->mutex);
 	list_for_each_entry(dev, &_history->devices, list) {
 		/* The whole string needs to be exactly the same */
-		if (strcmp(dev->dev_id, dev_id) == 0) {
+		if (is_str_identical((xmlChar *)dev->dev_id,
+							 (xmlChar *)dev_id, 0) == 1) {
 			pthread_mutex_unlock(&_history->mutex);
 			return dev;
 		}
@@ -1759,74 +1756,6 @@ static obix_hist_dev_t *find_device(const char *dev_id)
 	pthread_mutex_unlock(&_history->mutex);
 
 	return NULL;
-}
-
-/*
- * Setup a history facility for the specified device ID
- *
- * Return relevant device descriptor on success, NULL otherwise
- */
-static int create_dev_helper(const char *dev_id,
-							 obix_hist_dev_t **dev)
-{
-	char *devdir, *indexpath;
-	int ret = ERR_DISK_IO;
-
-	*dev = NULL;
-
-	if (link_pathname(&devdir, _history->dir, dev_id, NULL, NULL) < 0 ||
-		link_pathname(&indexpath, devdir, NULL, INDEX_FILENAME,
-					  XML_FILENAME_SUFFIX) < 0) {
-		ret = ERR_NO_MEM;
-		goto failed;
-	}
-
-	errno = 0;
-	if (mkdir(devdir, OBIX_DIR_PERM) < 0) {
-		log_error("Failed to mkdir %s because of %s", devdir,
-				  strerror(errno));
-		if (errno == EDQUOT || errno == ENOMEM || errno == ENOSPC) {
-			ret = ERR_NO_MEM;
-		}
-		goto failed;
-	}
-
-	errno = 0;
-	if (creat(indexpath, OBIX_FILE_PERM) < 0) {
-		log_error("Failed to creat %s because of %s", indexpath,
-				  strerror(errno));
-		if (errno == EDQUOT || errno == ENOMEM || errno == ENOSPC) {
-			ret = ERR_NO_MEM;
-		}
-		goto creat_failed;
-	}
-
-	if (xml_write_file(indexpath, OPEN_FLAG_SYNC,
-					   INDEX_SKELETON, strlen(INDEX_SKELETON)) > 0) {
-		if ((*dev = hist_create_dev(dev_id, indexpath)) != NULL) {
-			ret = 0;
-		}
-	} else {
-		unlink(indexpath);
-	}
-
-	/* Fall through */
-
-creat_failed:
-	if (ret > 0) {		/* Preserve device dir on success */
-		rmdir(devdir);
-	}
-
-failed:
-	if (devdir) {
-		free(devdir);
-	}
-
-	if (indexpath) {
-		free(indexpath);
-	}
-
-	return ret;
 }
 
 static int get_dev_id_helper(const char *token, void *arg1, void *arg2)
@@ -1870,10 +1799,10 @@ static int get_dev_id_helper(const char *token, void *arg1, void *arg2)
  * Note,
  * 1. Callers should free the returned device ID string after use.
  */
-static int get_dev_id(const char *uri, const char *op_name, char **dev_id)
+static int hist_get_dev_id(const char *uri, const char *op_name, char **dev_id)
 {
 	char *str, *end;
-	int len = strlen(OBIX_HISTORY_LOBBY);
+	int len = OBIX_HISTORY_LOBBY_LEN;
 	int ret;
 
 	*dev_id = NULL;
@@ -1908,23 +1837,20 @@ static int get_dev_id(const char *uri, const char *op_name, char **dev_id)
 }
 
 static xmlNode *handlerHistoryHelper(obix_request_t *request,
-									 const char *overrideUri,
+									 const xmlChar *uri,
 									 xmlNode *input,
 									 const char *op_name)
 {
 	obix_hist_dev_t *dev;
 	char *dev_id;
-	const char *uri;
 	int ret = ERR_NO_MEM;
 
-	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
-
 	/* Find the device to operate on */
-	if ((ret = get_dev_id(uri, op_name, &dev_id)) != 0) {
+	if ((ret = hist_get_dev_id((char *)uri, op_name, &dev_id)) != 0) {
 		goto failed;
 	}
 
-	dev = find_device(dev_id);
+	dev = hist_find_device(dev_id);
 	free(dev_id);
 	if (!dev) {
 		ret = ERR_NO_SUCH_URI;
@@ -1956,96 +1882,196 @@ failed:
 									  op_name, server_err_msg[ret].msgs);
 }
 
-xmlNode *handlerHistoryAppend(obix_request_t *request, const char *overrideUri,
+xmlNode *handlerHistoryAppend(obix_request_t *request, const xmlChar *uri,
 							  xmlNode *input)
 {
-	return handlerHistoryHelper(request, overrideUri, input, HIST_OP_APPEND);
+	return handlerHistoryHelper(request, uri, input, HIST_OP_APPEND);
 }
 
-xmlNode *handlerHistoryQuery(obix_request_t *request, const char *overrideUri,
+xmlNode *handlerHistoryQuery(obix_request_t *request, const xmlChar *uri,
 							 xmlNode *input)
 {
-	return handlerHistoryHelper(request, overrideUri, input, HIST_OP_QUERY);
+	return handlerHistoryHelper(request, uri, input, HIST_OP_QUERY);
 }
 
-xmlNode *handlerHistoryGet(obix_request_t *request, const char *overrideUri,
+/*
+ * Create and setup a folder with a skeleton index file for
+ * a brand-new history facility
+ *
+ * Return 0 on success, > 0 for error
+ */
+static int __hist_create_backend(const char *devdir, const char *indexpath)
+{
+	int ret = ERR_DISK_IO;
+
+	errno = 0;
+	if (mkdir(devdir, OBIX_DIR_PERM) < 0) {
+		log_error("Failed to mkdir %s because of %s", devdir,
+				  strerror(errno));
+		if (errno == EDQUOT || errno == ENOMEM || errno == ENOSPC) {
+			ret = ERR_NO_MEM;
+		}
+
+		return ret;
+	}
+
+	errno = 0;
+	if (creat(indexpath, OBIX_FILE_PERM) < 0) {
+		log_error("Failed to creat %s because of %s", indexpath,
+				  strerror(errno));
+		if (errno == EDQUOT || errno == ENOMEM || errno == ENOSPC) {
+			ret = ERR_NO_MEM;
+		}
+
+		goto failed;
+	}
+
+	if (xml_write_file(indexpath, OPEN_FLAG_SYNC, HIST_INDEX_SKELETON,
+					   strlen(HIST_INDEX_SKELETON)) < 0) {
+		goto write_failed;
+	}
+
+	return 0;
+
+write_failed:
+	unlink(indexpath);
+
+failed:
+	rmdir(devdir);
+	return ret;
+}
+
+xmlNode *handlerHistoryGet(obix_request_t *request, const xmlChar *uri,
 						   xmlNode *input)
 {
 	obix_hist_dev_t *dev;
-	char *href = NULL, *dev_id = NULL, *data;
-	const char *uri;
-	char *requester_id = NULL;
-	int len = strlen(OBIX_HISTORY_LOBBY);
-	int ret = ERR_NO_MEM;
+	char *href, *subhref, *dev_id, *requester_id, *devdir, *indexpath, *data;
+	int len, ret = ERR_NO_MEM;
 
-	uri = (overrideUri != NULL) ? overrideUri : request->request_decoded_uri;
+	href = subhref = dev_id = requester_id = devdir = indexpath = data = NULL;
 
 	if (!(requester_id = obix_fcgi_get_requester_id(request))) {
 		ret = ERR_NO_REQUESTER_ID;
 		goto failed;
 	}
 
-	if (!(href = xml_get_child_val(input, OBIX_OBJ_STR, DEVICE_ID))) {
+	if (!(subhref = xml_get_child_val(input, OBIX_OBJ_STR, DEVICE_ID))) {
 		ret = ERR_INVALID_INPUT;
 		goto failed;
 	}
 
-	if (get_dev_id(href, NULL, &dev_id) != 0) {
+	if (hist_get_dev_id(subhref, NULL, &dev_id) != 0) {
 		ret = ERR_HISTORY_DEVID;
 		goto failed;
 	}
 
-	if (!(dev = find_device(dev_id))) {
-		if (se_lookup(requester_id, OBIX_ID_HISTORY, OP_HISTORY_CREATE) == 0) {
-			ret = ERR_NO_SUCH_URI;
-			goto failed;
-		}
-
-		if ((ret = create_dev_helper(dev_id, &dev)) > 0) {
-			goto failed;
-		}
-	}
-
-	len = strlen(GET_OUT_SKELETON) + strlen(dev_id) + strlen(dev->devhref) - 4;
-
-	if (!(data = (char *)malloc(len + 1))) {
+	if (link_pathname(&devdir, _history->dir, dev_id, NULL, NULL) < 0 ||
+		link_pathname(&indexpath, devdir, NULL, HIST_INDEX_FILENAME,
+					  XML_FILENAME_SUFFIX) < 0 ||
+		link_pathname(&href, OBIX_HISTORY_LOBBY, NULL, subhref, NULL) < 0) {
+		ret = ERR_NO_MEM;
 		goto failed;
 	}
 
-	len = sprintf(data, GET_OUT_SKELETON, dev_id, dev->devhref);
+	len = strlen(HIST_GET_OUT_SKELETON) + strlen(dev_id) + strlen(href) - 4;
+	if (!(data = (char *)malloc(len + 1))) {
+		ret = ERR_NO_MEM;
+		goto failed;
+	}
+	len = sprintf(data, HIST_GET_OUT_SKELETON, dev_id, href);
 
+	/* "find + create" should be done atomically to avoid races */
+	pthread_mutex_lock(&_history->mutex);
+	list_for_each_entry(dev, &_history->devices, list) {
+		if (is_str_identical((xmlChar *)dev->dev_id,
+							 (xmlChar *)dev_id, 0) == 1) {
+			pthread_mutex_unlock(&_history->mutex);
+			/*
+			 * Release strings that would have been referenced in
+			 * a facility descriptor and nullify their pointers to
+			 * avoid double-free in case of error
+			 */
+			free(dev_id);
+			free(href);
+			free(indexpath);
+			dev_id = href = indexpath = NULL;
+			goto existed;
+		}
+	}
+
+	/* Create the history facility upon request */
+
+	if (se_lookup(requester_id, OBIX_ID_HISTORY, OP_HISTORY_CREATE) == 0) {
+		pthread_mutex_unlock(&_history->mutex);
+		ret = ERR_PERM_DENIED;
+		goto failed;
+	}
+
+	if ((ret = __hist_create_backend(devdir, indexpath)) > 0) {
+		pthread_mutex_unlock(&_history->mutex);
+		goto failed;
+	}
+
+	if (!(dev = __hist_create_dev(dev_id, (xmlChar *)href, indexpath, 1))) {
+		pthread_mutex_unlock(&_history->mutex);
+		ret = ERR_NO_MEM;
+		goto failed;
+	}
+
+	ret = 0;			/* history facility created successfully */
+
+	pthread_mutex_unlock(&_history->mutex);
+
+	/* Device created, fall through */
+
+existed:
 	if (obix_request_add_response_xml_header(request) == 0 &&
 		obix_request_create_append_response_item(request, data, len, 0) == 0) {
-		free(href);
-		free(dev_id);
+		free(subhref);
 		free(requester_id);
+		free(devdir);
 
-		/*
-		 * Fill in the HTTP Content-Location header with the href
-		 * of the relevant history facility
-		 */
-		request->response_uri = strdup(dev->devhref);
-
+		request->response_uri = xmlStrdup(dev->href);
 		request->is_history = 1;
 		obix_request_send_response(request);
-		return NULL;
-	} else {
+
+		return NULL;	/* Success */
+	}
+
+	/*
+	 * Failed to create response item won't have the newly created
+	 * history facility discarded
+	 */
+
+failed:
+	if (data) {
 		free(data);
 	}
 
-	/* Fall through */
-
-failed:
-	if (href) {
-		free(href);
-	}
-
-	if (dev_id) {
-		free(dev_id);
+	if (subhref) {
+		free(subhref);
 	}
 
 	if (requester_id) {
 		free(requester_id);
+	}
+
+	if (devdir) {
+		free(devdir);
+	}
+
+	if (ret > 0) {
+		if (href) {
+			free(href);
+		}
+
+		if (dev_id) {
+			free(dev_id);
+		}
+
+		if (indexpath) {
+			free(indexpath);
+		}
 	}
 
 	log_error("%s : %s", uri, server_err_msg[ret].msgs);
@@ -2059,3 +2085,172 @@ failed:
 	return obix_server_generate_error(uri, server_err_msg[ret].type,
 									  "History.Get", server_err_msg[ret].msgs);
 }
+
+/*
+ * Copy the given subtree in history facilities. Basically it's similar
+ * to xml_copy_r() but takes extra care to come across "read regions"
+ * of different history facilities
+ */
+static xmlNode *__hist_copy_node(obix_hist_dev_t *previous, const xmlNode *src,
+								 xml_copy_flags_t flags, int depth)
+{
+	obix_hist_dev_t *current = (obix_hist_dev_t *)src->_private;
+	xmlNode *node, *copy_src = NULL, *copy_node = NULL;
+	int ret = ERR_NO_MEM;
+
+	/*
+	 * Come across the boundary of different "read regions" if needed
+	 */
+	if (previous && previous != current) {
+		tsync_reader_exit(&previous->sync);
+	}
+
+	if (current && current != previous) {
+		if (tsync_reader_entry(&current->sync) < 0) {
+			if (previous) {
+				tsync_reader_entry(&previous->sync);
+			}
+			return NULL;
+		}
+	}
+
+	/*
+	 * If hidden, meta or comment nodes are not explicitly required,
+	 * they may be skipped over according to the flag
+	 */
+	if (depth > 0) {
+		if (((flags & EXCLUDE_HIDDEN) > 0 && xml_is_hidden(src) == 1) ||
+			((flags & EXCLUDE_META) > 0 &&
+			 xmlStrcmp(src->name, BAD_CAST OBIX_OBJ_META) == 0) ||
+			((flags & EXCLUDE_COMMENTS) > 0 && src->type == XML_COMMENT_NODE)) {
+			ret = 0;
+			goto out;
+		}
+	}
+
+	if (!(copy_src = xmlCopyNode((xmlNode *)src, 2))) {
+		log_error("Failed to copy a node");
+		goto out;
+	}
+
+	for (node = src->children; node; node = node->next) {
+		if (!(copy_node = __hist_copy_node(current, node, flags, ++depth))) {
+			/*
+			 * The current child may have been deliberatly excluded,
+			 * move on to the next one
+			 */
+			continue;
+		}
+
+		if (!xmlAddChild(copy_src, copy_node)) {
+			xmlFreeNode(copy_node);
+			goto out;
+		}
+	}
+
+	ret = 0;
+
+	/* Fall through */
+
+out:
+	if (current && current != previous) {
+		tsync_reader_exit(&current->sync);
+	}
+
+	if (previous && previous != current) {
+		tsync_reader_entry(&previous->sync);
+	}
+
+	if (ret > 0 && copy_src) {
+		xmlFreeNode(copy_src);
+		copy_src = NULL;
+	}
+
+	return copy_src;
+}
+
+/*
+ * Find the "youngest" or "smallest" history facility that hosts
+ * the given href.
+ *
+ * Take advantage of the fact that history facility descriptors
+ * are organised in the ascending order of the length of their
+ * names, so search the queue from tail to head until find the
+ * first history facility whose href prefixes the given href
+ *
+ * NOTE: since history facilities are not removable, there is no
+ * need to manipulate a refcnt_t to manage its life cycle and there
+ * is no risk to split the search operation and further access
+ * attempts on a history facility descriptor
+ */
+static obix_hist_dev_t *hist_search(const xmlChar *href)
+{
+	obix_hist_dev_t *dev;
+
+	if (is_given_type(href, OBIX_HISTORY) == 0) {
+		return NULL;
+	}
+
+	pthread_mutex_lock(&_history->mutex);
+	list_for_each_entry_reverse(dev, &_history->devices, list) {
+		if (xmlStrstr(href, dev->href) != NULL) {
+			pthread_mutex_unlock(&_history->mutex);
+			return dev;
+		}
+	}
+	pthread_mutex_unlock(&_history->mutex);
+
+	return NULL;
+}
+
+/*
+ * Get a subnode in the given history facility contract
+ */
+static xmlNode *__hist_get_node_core(obix_hist_dev_t *dev, const xmlChar *href)
+{
+	xmlNode *node;
+
+	if (is_str_identical(href, dev->href, 1) == 1) {
+		node = dev->node;
+	} else {
+		node = xmldb_get_node_core(dev->node, href + xmlStrlen(dev->href));
+    }
+
+	return node;
+}
+
+/*
+ * Copy a subtree at the given href, which may belong to a particular
+ * history facility or a high-level href that contains a number of
+ * history facilities
+ *
+ * Return the copy's pointer on success, NULL otherwise
+ */
+xmlNode *hist_copy_uri(const xmlChar *href, xml_copy_flags_t flag)
+{
+	obix_hist_dev_t *dev;
+	xmlNode *node, *copy = NULL;
+
+	if (!(dev = hist_search(href))) {
+		/*
+		 * href points to some common history facilities that have
+		 * no descriptors created
+		 */
+		node = xmldb_get_node(href);
+	} else {
+		/* Won't fail since history facilities are not removable */
+		tsync_reader_entry(&dev->sync);
+		node = __hist_get_node_core(dev, href);
+	}
+
+	if (node) {
+		copy = __hist_copy_node(dev, node, flag, 0);
+	}
+
+	if (dev) {
+		tsync_reader_exit(&dev->sync);
+	}
+
+	return copy;
+}
+

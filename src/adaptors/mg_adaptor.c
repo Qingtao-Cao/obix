@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2015 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of obix.
  *
@@ -2116,6 +2116,12 @@ static void obix_updater_task_helper(mg_bcm_t *bcm)
 
 	if (obix_update_aux(bcm) != OBIX_SUCCESS) {
 		log_error("Failed to update AUX status on %s", bcm->name);
+	}
+
+	if (bcm->off_line == 1) {
+		log_warning("BCM %s offlined, skip updating all its BM contracts "
+					"and relevant history facilities", bcm->name);
+		return;
 	}
 
 	if (obix_update_bm(bcm) != OBIX_SUCCESS) {
