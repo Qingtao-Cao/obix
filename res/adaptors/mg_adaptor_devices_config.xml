@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
- 	Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ 	Copyright (c) 2013-2014 Qingtao Cao
 
-	This file is part of obix-adaptors
+	This file is part of obix
 
-	obix-adaptors is free software: you can redistribute it and/or modify
+	obix is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	obix-adaptors is distributed in the hope that it will be useful,
+	obix is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with obix-adaptors.  If not, see <http://www.gnu.org/licenses/>.
+	along with obix. If not, see <http://www.gnu.org/licenses/>.
 -->
 <config>
 	<!--
@@ -102,6 +102,7 @@
 			-->
 			<curl_timeout val="30" unit="sec"/>
 			<curl_bulky val="0"/>
+			<curl_nosignal val="1"/>
 		</misc>
 
 		<!--
@@ -271,57 +272,57 @@
 		<list name="PORT1">
 			<obj name="4A-1A">
 				<int name="slave_id" val="1"/>
-				<str name="parent_href" val="/M1/DH1/A/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 			<obj name="4A-2A">
 				<int name="slave_id" val="3"/>
-				<str name="parent_href" val="/M1/DH1/A/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 			<obj name="4G-3A">
 				<int name="slave_id" val="5"/>
-				<str name="parent_href" val="/M1/DH1/A/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 		</list>
 		<list name="PORT2">
 			<obj name="4G-4A">
 				<int name="slave_id" val="7"/>
-				<str name="parent_href" val="/M1/DH1/B/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 			<obj name="4C-5A">
 				<int name="slave_id" val="9"/>
-				<str name="parent_href" val="/M1/DH1/B/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 			<obj name="4C-6A">
 				<int name="slave_id" val="11"/>
-				<str name="parent_href" val="/M1/DH1/B/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 		</list>
 		<list name="PORT3">
 			<obj name="4J-7A">
 				<int name="slave_id" val="13"/>
-				<str name="parent_href" val="/M1/DH1/C/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 			<obj name="4G-8A">
 				<int name="slave_id" val="15"/>
-				<str name="parent_href" val="/M1/DH1/C/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 			<obj name="4H-9A">
 				<int name="slave_id" val="17"/>
-				<str name="parent_href" val="/M1/DH1/C/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 		</list>
 		<list name="PORT4">
     	 	<obj name="4I-10A">
 				<int name="slave_id" val="19"/>
-				<str name="parent_href" val="/M1/DH1/D/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 			<obj name="4I-11A">
 				<int name="slave_id" val="21"/>
-				<str name="parent_href" val="/M1/DH1/D/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 			<obj name="4I-12A">
 				<int name="slave_id" val="23"/>
-				<str name="parent_href" val="/M1/DH1/D/"/>
+				<str name="parent_href" val="/M1/DH1/"/>
 			</obj>
 		</list>
 	</modbus>

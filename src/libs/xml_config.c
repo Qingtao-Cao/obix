@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -32,7 +32,13 @@ static const char *XP_LOG_FACILITY = "/config/log/facility";
 /*
  * XPath predicates used by the server side
  */
-const char *XP_POLL_THREAD_COUNT = "/config/poll-threads-count";
+const char *XP_LISTEN_SOCKET = "/config/listen_socket";
+const char *XP_LISTEN_BACKLOG = "/config/listen_backlog";
+const char *XP_MULTI_THREADS = "/config/multi_threads";
+const char *XP_POLL_THREADS = "/config/poll_threads";
+const char *XP_DEV_TABLE_SIZE = "/config/dev_table_size";
+const char *XP_DEV_CACHE_SIZE = "/config/dev_cache_size";
+const char *XP_DEV_BACKUP_PERIOD = "/config/dev_backup_period";
 
 /*
  * XPath predicates used by the client side
@@ -40,13 +46,14 @@ const char *XP_POLL_THREAD_COUNT = "/config/poll-threads-count";
 const char *XP_CT = "/config/connection";
 const char *CT_ID = "id";
 const char *CT_TYPE = "type";
-const char *CT_SERVER_IP = "server-ip";
-const char *CT_SERVER_LOBBY = "server-lobby";
-const char *CT_POLL_INTERVAL= "poll-interval";
-const char *CT_LP_MIN = "long-poll-min";
-const char *CT_LP_MAX = "long-poll-max";
-const char *CT_CURL_TIMEOUT = "curl-timeout";
-const char *CT_CURL_BULKY = "curl-bulky";
+const char *CT_SERVER_IP = "server_ip";
+const char *CT_SERVER_LOBBY = "server_lobby";
+const char *CT_POLL_INTERVAL= "poll_interval";
+const char *CT_LP_MIN = "long_poll_min";
+const char *CT_LP_MAX = "long_poll_max";
+const char *CT_CURL_TIMEOUT = "curl_timeout";
+const char *CT_CURL_BULKY = "curl_bulky";
+const char *CT_CURL_NOSIGNAL = "curl_nosignal";
 
 #define ARRAY_LEN(a) (size_t) (sizeof(a) / sizeof(a[0]))
 

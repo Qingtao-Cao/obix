@@ -1,6 +1,5 @@
-/* *****************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+/******************************************************************************
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -16,9 +15,9 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
- * *****************************************************************************/
+ ******************************************************************************/
 
 #ifndef _OBIX_REQUEST_H
 #define _OBIX_REQUEST_H
@@ -45,11 +44,14 @@ typedef struct obix_request {
 	 * In most cases handlers won't bother to set it up and the
 	 * decoded request_uri will be used.
 	 */
-	char *response_uri;
+	unsigned char *response_uri;
 
 	/*
 	 * The FastCGI requested URI, that is, the href on the oBIX
 	 * server that has been requested.
+	 *
+	 * NOTE: its type is not "xmlChar *" due to the type of the
+	 * pointer returned by FCGX_GetParam()
 	 *
 	 * NOTE: the batch mechanism will further redirect each sub
 	 * batch command to relevant facility as specified by the
@@ -131,18 +133,10 @@ void obix_request_append_response_item(obix_request_t *, response_item_t *);
 
 int obix_request_add_response_xml_header(obix_request_t *resp);
 
-void obix_request_set_listener(obix_request_listener);
-
 void obix_request_send_response(obix_request_t *);
 
 long obix_request_get_response_len(obix_request_t *);
 
 int obix_request_get_response_items(obix_request_t *);
-
-void obix_fcgi_request_destroy(FCGX_Request *);
-
-FCGX_Request *obix_fcgi_request_create(void);
-
-int is_privileged_mode(obix_request_t *);
 
 #endif

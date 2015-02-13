@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -15,13 +15,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <stdio.h>			/* sprintf */
@@ -44,7 +45,6 @@ const char *OBIX_ATTR_NAME = "name";
 const char *OBIX_ATTR_HREF = "href";
 const char *OBIX_ATTR_VAL = "val";
 const char *OBIX_ATTR_NULL = "null";
-const char *OBIX_ATTR_WRITABLE = "writable";
 const char *OBIX_ATTR_DISPLAY = "display";
 const char *OBIX_ATTR_DISPLAY_NAME = "displayName";
 const char *OBIX_ATTR_HIDDEN = "hidden";
@@ -65,7 +65,7 @@ const char *HIST_AIN_TS_UND = "UNSPECIFIED";
 const char *HIST_OP_APPEND = "append";
 const char *HIST_OP_QUERY = "query";
 const char *HIST_INDEX = "index";
-const char *HIST_TS_INIT = "1970-01-01T0:0:0Z";
+const char *HIST_TS_INIT = "1970-01-01T00:00:00Z";
 const char *HIST_DATE_INIT = "1970-01-01";
 
 /*
@@ -87,23 +87,7 @@ const char *OBIX_CONTRACT_WATCH_IN = "obix:WatchIn";
 const char *OBIX_RELTIME_ZERO = "PT0S";
 const int OBIX_RELTIME_ZERO_LEN = 4;
 
-const char *OBIX_DEVICE_ROOT = "/obix/deviceRoot/";
-const int OBIX_DEVICE_ROOT_LEN = 17;
-
-const char *OBIX_BATCH = "/obix/batch";
-const int OBIX_BATCH_LEN = 11;
-
-const char *OBIX_DEVICES = "/obix/devices/";
-
-const char *OBIX_HISTORY_LOBBY = "/obix/historyService/histories/";
-
-const char *OBIX_HISTORY_SERVICE = "/obix/historyService";
-const int OBIX_HISTORY_SERVICE_LEN = 20;
-
-const char *OBIX_WATCH_SERVICE = "/obix/watchService";
-const int OBIX_WATCH_SERVICE_LEN = 18;
-
-const char *OBIX_WATCH_POLLCHANGES = "pollChanges";
+const char *XML_FILENAME_SUFFIX = ".xml";
 
 /*
  * Timestamps are in "yyyy-mm-ddThh:mm:ssZ" format which has
@@ -153,29 +137,6 @@ int slash_followed(const char *s)
 	}
 
 	return (s[len - 1] == '/') ? 1 : 0;
-}
-
-/**
- * Compare whether the given two strings are identical
- *
- * Return 0 if two strings are same with each other ignoring
- * any potential trailing slash in any one of them
- */
-int str_is_identical(const char *str1, const char *str2)
-{
-	int len1 = strlen(str1);
-	int len2 = strlen(str2);
-
-	if (slash_followed(str1) == 1) {
-		len1--;
-	}
-
-	if (slash_followed(str2) == 1) {
-		len2--;
-	}
-
-	/* No assignment passed in the macro, or unwanted effect ensue */
-	return strncmp(str1, str2, max(len1, len2));
 }
 
 int str_token_count_helper(const char *tok, void *arg1, void *arg2)

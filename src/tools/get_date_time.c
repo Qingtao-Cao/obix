@@ -1,5 +1,6 @@
-/*
- * Copyright (c) 2014 Qingtao Cao [harry.cao@nextdc.com]
+/* *******************************************************************
+ *
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -16,8 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
  *
- * *******************************************************************
- */
+ * *******************************************************************/
 
 #include <stdlib.h>
 #include <errno.h>

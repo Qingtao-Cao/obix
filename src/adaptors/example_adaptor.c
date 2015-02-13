@@ -1,21 +1,21 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
- * This file is part of obix-adaptors
+ * This file is part of obix.
  *
- * obix-adaptors is free software: you can redistribute it and/or modify
+ * obix is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * obix-adaptors is distributed in the hope that it will be useful,
+ * obix is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with obix-adaptors. If not, see <http://www.gnu.org/licenses/>.
+ * along with obix. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -98,10 +98,16 @@ typedef struct example_dev {
 	char *mtime_ts;
 
 	/*
+	 * The Batch object used by the timer thread that periodically update
+	 * the device contract
+	 */
+	Batch *batch_timer;
+
+	/*
 	 * The Batch object used by the callback function upon reception of
 	 * the notification of changes from the oBIX server
 	 */
-	Batch *batch;
+	Batch *batch_reset;
 
 	/*
 	 * The XML template of the obix:HistoryAppendIn contract
@@ -230,8 +236,8 @@ static int example_setup_param(example_dev_t *dev, xml_config_t *config)
 
 	if (link_pathname(&dev->history_name, dev->history_root, NULL,
 					  dev->name, NULL) < 0 ||
-		link_pathname(&dev->href, OBIX_DEVICE_ROOT, dev->parent_href,
-					  dev->name, NULL) < 0) {
+		link_pathname(&dev->href, (char *)obix_roots[OBIX_DEVICE].root,
+					  dev->parent_href, dev->name, NULL) < 0) {
 		log_error("Failed to assemble BMS device href or history_name");
 		ret = OBIX_ERR_NO_MEMORY;
 		goto failed;
@@ -337,10 +343,6 @@ static int example_append_history(example_dev_t *dev, const char *reltime)
 	ret = obix_append_history(NULL, OBIX_CONNECTION_ID,
 							  dev->history_name, data);
 	free(data);
-
-	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to append history record for %s", dev->history_name);
-	}
 
 	return ret;
 }
@@ -474,6 +476,12 @@ int example_reset_cb(CURL_EXT *handle, xmlNode *node, void *arg)
 	}
 
 	/*
+	 * Remove previous batch command about the counter
+	 */
+	obix_batch_remove_command(dev->batch_reset, dev->history_name,
+							  example_nodes[DEV_NODE_COUNTER].param);
+
+	/*
 	 * Increase reset counter by 1
 	 */
 	if ((ret = obix_read_value(handle, OBIX_CONNECTION_ID, dev->history_name,
@@ -484,12 +492,13 @@ int example_reset_cb(CURL_EXT *handle, xmlNode *node, void *arg)
 		count++;
 		sprintf(buf, "%ld", count);
 
-		if ((ret = obix_write_value(handle, OBIX_CONNECTION_ID,
-									dev->history_name,
-									example_nodes[DEV_NODE_COUNTER].param,
-									buf,
-									example_nodes[DEV_NODE_COUNTER].tag)) != OBIX_SUCCESS) {
-			log_error("Failed to update %s", example_nodes[DEV_NODE_COUNTER].param);
+		if ((ret = obix_batch_write_value(dev->batch_reset,
+										  dev->history_name,
+										  example_nodes[DEV_NODE_COUNTER].param,
+										  buf,
+										  example_nodes[DEV_NODE_COUNTER].tag)) != OBIX_SUCCESS) {
+			log_error("Failed to append batch command for %s",
+					  example_nodes[DEV_NODE_COUNTER].param);
 		}
 	}
 
@@ -498,15 +507,19 @@ int example_reset_cb(CURL_EXT *handle, xmlNode *node, void *arg)
 	}
 
 	/*
-	 * Reset device contract on the oBIX server and verify
-	 * the result
+	 * Reset device contract on the oBIX server and verify the result
+	 *
+	 * NOTE: one known side effect is that since the timer thread constantly
+	 * update the device contract and the write-through to hard drive won't
+	 * happen at least during a 5-minute interval, the device contract after
+	 * reset can't be backed up until the next write-through moment comes
 	 */
-	if ((ret = obix_batch_send(handle, dev->batch)) != OBIX_SUCCESS) {
+	if ((ret = obix_batch_send(handle, dev->batch_reset)) != OBIX_SUCCESS) {
 		log_error("Failed to send batchIn contract to oBIX server");
 		return ret;
 	}
 
-	if ((ret = obix_batch_get_result(dev->batch,
+	if ((ret = obix_batch_get_result(dev->batch_reset,
 									 example_nodes[DEV_NODE_TIME].param,
 									 &res)) != OBIX_SUCCESS) {
 		log_error("Failed to get relevant node in batchOut contract");
@@ -547,19 +560,28 @@ void obix_updater_task(void *arg)
 
 	reltime = obix_reltime_from_long(t, RELTIME_DAY);
 
-	/*
-	 * For a simple application that won't race for one
-	 * CURL handle, the default one of the current connection
-	 * can be safely manipulated
-	 */
-	if (obix_write_value(NULL, OBIX_CONNECTION_ID, dev->history_name,
-						 example_nodes[DEV_NODE_TIME].param,
-						 reltime,
-						 example_nodes[DEV_NODE_TIME].tag) != OBIX_SUCCESS) {
-		log_error("Failed to update %s on Device %s",
-				  example_nodes[DEV_NODE_TIME].param, dev->history_name);
 
-		/* Go on to try to append history record */
+	/*
+	 * Use batch to update the device contract so as to utilise the
+	 * "Persistent Device" feature on the oBIX server
+	 *
+	 * Remove the previous command if exists and re-install a new
+	 * one
+	 *
+	 * For a simple application that won't race for one CURL handle, the
+	 * default one of the current connection can be safely manipulated
+	 */
+	obix_batch_remove_command(dev->batch_timer, dev->history_name,
+							  example_nodes[DEV_NODE_TIME].param);
+
+	if (obix_batch_write_value(dev->batch_timer, dev->history_name,
+							   example_nodes[DEV_NODE_TIME].param,
+							   reltime,
+							   example_nodes[DEV_NODE_TIME].tag) != OBIX_SUCCESS ||
+		obix_batch_send(NULL, dev->batch_timer) != OBIX_SUCCESS) {
+		log_error("Failed to update %s on %s via batch",
+				  example_nodes[DEV_NODE_TIME].param, dev->history_name);
+		goto failed;
 	}
 
 	if (dev->mtime_ts) {
@@ -631,20 +653,28 @@ static int example_setup_listener(example_dev_t *dev)
 
 static void example_destroy_batch(example_dev_t *dev)
 {
-	obix_batch_destroy(dev->batch);
+	if (dev->batch_timer) {
+		obix_batch_destroy(dev->batch_timer);
+	}
+
+	if (dev->batch_reset) {
+		obix_batch_destroy(dev->batch_reset);
+	}
 }
 
 static int example_setup_batch(example_dev_t *dev)
 {
 	int ret, i;
 
-	if (!(dev->batch = obix_batch_create(OBIX_CONNECTION_ID))) {
+	if (!(dev->batch_timer = obix_batch_create(OBIX_CONNECTION_ID)) ||
+		!(dev->batch_reset = obix_batch_create(OBIX_CONNECTION_ID))) {
 		log_error("Failed to create a batch object");
-		return OBIX_ERR_NO_MEMORY;
+		ret = OBIX_ERR_NO_MEMORY;
+		goto failed;
 	}
 
 	for (i = 0; i < DEV_NODE_MAX; i++) {
-		if ((ret = obix_batch_write_value(dev->batch, dev->history_name,
+		if ((ret = obix_batch_write_value(dev->batch_reset, dev->history_name,
 										  example_nodes[i].param,
 										  example_nodes[i].defval,
 										  example_nodes[i].tag)) != OBIX_SUCCESS) {
@@ -658,22 +688,12 @@ static int example_setup_batch(example_dev_t *dev)
 	 * Reset the device contract just in case it existed on the oBIX server
 	 * in the first place
 	 */
-	obix_batch_send(NULL, dev->batch);
-
-	/*
-	 * The value of the reset counter should be carried on for each reset
-	 * event, therefore remove relevant command from the batch object
-	 */
-	if (obix_batch_remove_command(dev->batch, dev->history_name,
-					  example_nodes[DEV_NODE_COUNTER].param) != OBIX_SUCCESS) {
-		log_error("Failed to remove command for %s on Device %s from batch",
-				  example_nodes[DEV_NODE_COUNTER].param, dev->history_name);
-	}
+	obix_batch_send(NULL, dev->batch_reset);
 
 	return OBIX_SUCCESS;
 
 failed:
-	obix_batch_destroy(dev->batch);
+	example_destroy_batch(dev);
 	return ret;
 }
 

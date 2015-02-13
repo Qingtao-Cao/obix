@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX
@@ -458,7 +458,7 @@ void curl_ext_free(CURL_EXT *h)
 	free(h);
 }
 
-static CURL_EXT *curl_ext_allocateMemory(int bulky, int timeout)
+static CURL_EXT *curl_ext_allocateMemory(int bulky, int timeout, int nosignal)
 {
 	CURL_EXT *handle;
 
@@ -495,6 +495,7 @@ static CURL_EXT *curl_ext_allocateMemory(int bulky, int timeout)
 
 	handle->cl = 0;
 	handle->timeout = timeout;
+	handle->nosignal = nosignal;
 
 	handle->write = inputWriter;
 	handle->read = outputReader;
@@ -528,7 +529,8 @@ void curl_ext_dispose()
 	_header = NULL;
 }
 
-int curl_ext_create(CURL_EXT **handle, const int bulky, const int timeout)
+int curl_ext_create(CURL_EXT **handle, const int bulky,
+					const int timeout, const int nosignal)
 {
 	CURL_EXT *h;
 	CURL *curl;
@@ -538,7 +540,7 @@ int curl_ext_create(CURL_EXT **handle, const int bulky, const int timeout)
 		return 0;
 	}
 
-	if (!(h = curl_ext_allocateMemory(bulky, timeout))) {
+	if (!(h = curl_ext_allocateMemory(bulky, timeout, nosignal))) {
 		log_error("Unable to allocate memory for CURL handle.");
 		goto failed;
 	}
@@ -572,7 +574,7 @@ int curl_ext_create(CURL_EXT **handle, const int bulky, const int timeout)
 	if ((code = curl_easy_setopt(curl, CURLOPT_WRITEDATA,
 								 h)) != CURLE_OK) {
 		log_error("Unable to initialize CURL handle: "
-					"Failed to set input buffer (%d).", code);
+					"Failed to set input data (%d).", code);
 		goto failed;
 	}
 
@@ -608,6 +610,13 @@ int curl_ext_create(CURL_EXT **handle, const int bulky, const int timeout)
 												   h->timeout)) != CURLE_OK) {
 		log_error("Unable to initialize CURL handle: Failed to set "
 				  "timeout threshold (%d).", code);
+		goto failed;
+	}
+
+	if ((code = curl_easy_setopt(curl, CURLOPT_NOSIGNAL,
+								 h->nosignal)) != CURLE_OK) {
+		log_error("Unable to initialize CURL handle: Failed to set "
+				  "nosignal option (%d).", code);
 		goto failed;
 	}
 

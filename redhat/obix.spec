@@ -82,9 +82,9 @@ Adaptors for %{name}
 
 %build
 %if 0%{?rhel}
-cmake -DPROJECT_DOC_DIR_SUFFIX="%{name}-%{version}" .
+cmake -DPROJECT_DOC_DIR_SUFFIX="%{name}-%{version}" -DCMAKE_BUILD_TYPE=Release .
 %else
-cmake -DPROJECT_DOC_DIR="%{_pkgdocdir}" .
+cmake -DPROJECT_DOC_DIR="%{_pkgdocdir}" -DCMAKE_BUILD_TYPE=Release .
 %endif
 make %{?_smp_mflags} VERBOSE=1
 

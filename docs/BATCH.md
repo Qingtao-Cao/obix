@@ -2,12 +2,13 @@
 
 ## Overview
 
-The batch mechanism is implemented to combine multiple requests into one to yield better network performance, which is basically an aggregation of normal read, write and invoke requests in a batchIn contract. The batch handler on the oBIX server returns a batchOut contract with a list of responses to each respective request, specifically, the number of responses must equal to that of the requests and the sequence of each response in the batchOut contract must equal to that of respective request in the batchIn contract.
+The batch mechanism is implemented to combine multiple requests into one to yield better network performance, which is basically an aggregation of normal read, write and invoke requests in a batchIn contract. The batch handler on the oBIX server returns a batchOut contract with a list of responses to each respective request, specifically, the number of responses equals to that of the requests and the sequence of each response in the batchOut contract equals to that of respective request in the batchIn contract.
 
-All read and write requests are supported via a batch request, however, not all invoke requests are supported. Please see the next section for details.
+All normal read and write requests are supported via a batch object, however, not all invoke requests are supported. Please see the next section for details.
 
 Furthermore, considering that each sub batch command in a batch request are handled in a sequential order, the more number of commands aggregated the longer time it takes the oBIX server to handle it and therefore the longer time relevant client needs to wait for the overall batchOut response. Keep this in mind, oBIX clients had better batch only "small" requests which can be handled fairly quickly and raise time-consuming requests explicitly.
 
+Last but not least, oBIX client applications are encouraged to group all write requests on different subnodes of one device into one batch object so as to notify oBIX server of the time that may need to backup the device contract into its persistent files on the hard drive. The oBIX server has no idea at all about the definition of device contracts and no idea about when a device contract has been overally updated, so writing into disk files at the end of a batch request is the best guess the oBIX server can make.
 
 ## Limitations On POST Handlers
 
@@ -16,8 +17,9 @@ The support of POST handlers via the batch mechanism are summarised below:
 POST HANDLER | SUPPORTED?
 ------------ | ----------
 handlerSignUp | Yes
+handlerSignOff | Yes
 handlerWatchServiceMake | Yes
-handlerWatchDelete | Yes				
+handlerWatchDelete | Yes
 handlerWatchAdd | Yes
 handlerWatchRemove | Yes
 handlerWatchPollRefresh | Yes
@@ -26,7 +28,6 @@ handlerHistoryGet | No
 handlerHistoryQuery	| No
 handlerHistoryAppend | No
 handlerBatch | No
-
 
 
 In the first place, a batch request should not be allowed to nest within another otherwise a malicious batch request with thousands of level of sub batch requests nested altogether can easily consume the stack memory of relevant oBIX server thread handling such request.

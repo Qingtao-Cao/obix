@@ -1,20 +1,20 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
- * This file is part of obix-adaptors
+ * This file is part of obix.
  *
- * obix-adaptors is free software: you can redistribute it and/or modify
+ * obix is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * obix-adaptors is distributed in the hope that it will be useful,
+ * obix is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with obix-adaptors.  If not, see <http://www.gnu.org/licenses/>.
+ * along with obix. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -60,6 +60,7 @@ static const char *XP_AC_FREQ_DEF = "/config/meta/misc/ac_freq_def";
 static const char *XP_DELAY_PER_REG = "/config/meta/misc/delay_per_reg";
 static const char *XP_CURL_TIMEOUT = "/config/meta/misc/curl_timeout";
 static const char *XP_CURL_BULKY = "/config/meta/misc/curl_bulky";
+static const char *XP_CURL_NOSIGNAL = "/config/meta/misc/curl_nosignal";
 
 static const char *XP_SN_ADDRESS = "/config/meta/reg_table/sn/address";
 static const char *XP_SN_COUNT = "/config/meta/reg_table/sn/count";
@@ -208,6 +209,7 @@ typedef struct obix_mg {
 	int delay_per_reg;
 	int curl_timeout;
 	int curl_bulky;
+	int curl_nosignal;
 
 	/* where to read static information of a BCM */
 	reg_tab_t sn;
@@ -315,6 +317,12 @@ typedef struct mg_bcm {
 	 * thus can be used to name its history facility (if needed)
 	 */
 	char *history_name;
+
+	/*
+	 * the flag used during clean up process to unregister those
+	 * devices that have actually been registered
+	 */
+	int registered;
 
 	/* starting slave ID of this device */
 	int slave_id;
@@ -427,6 +435,12 @@ typedef struct mg_bm {
 	 */
 	char *history_name;
 
+	/*
+	 * the flag used during clean up process to unregister those
+	 * devices that have actually been registered
+	 */
+	int registered;
+
 	/* next time to append history record */
 	time_t htime;
 
@@ -469,37 +483,27 @@ static const char *MG_BCM_OFFLINED = "DEVICE OFFLINED";
 /*
  * oBIX contract of a Veris BCM, the name of each attribute must be
  * the same as those indicated above.
- *
- * Note,
- * 1. Any attribute that needs to be updated at the runtime would
- * have to be declared as writable, or otherwise oBIX server will
- * regard them as read-only.
- *
- * In particular, those static AUX information from serial number
- * to location string would have to be declared as writable as well
- * so that they also can be updated once relevant BCM is brought
- * on-line which used to be disconnected at program start-up.
  */
 static const char *OBIX_BCM_CONTRACT =
 "<obj name=\"%s\" href=\"/obix/deviceRoot%s%s/\" is=\"nextdc:veris-bcm\">\r\n"
 "<int name=\"SlaveID\" href=\"SlaveID\" val=\"%d\"/>\r\n"
-"<int name=\"SerialNumber\" href=\"SerialNumber\" val=\"0x%x\" writable=\"true\"/>\r\n"
-"<int name=\"Firmware\" href=\"Firmware\" val=\"0x%.8x\" writable=\"true\"/>\r\n"
-"<int name=\"Model\" href=\"Model\" val=\"%d\" writable=\"true\"/>\r\n"
-"<int name=\"CTConfig\" href=\"CTConfig\" val=\"%d\" writable=\"true\"/>\r\n"
-"<str name=\"Location\" href=\"Location\" val=\"%s\" writable=\"true\"/>\r\n"
-"<real name=\"ACFreq\" href=\"ACFreq\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltL-N\" href=\"VoltL-N\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltL-L\" href=\"VoltL-L\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltA\" href=\"VoltA\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltB\" href=\"VoltB\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltC\" href=\"VoltC\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kWh\" href=\"kWh\" displayName=\"Total kWh for 3 phases\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kW\" href=\"kW\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"CurrentAverage\" href=\"CurrentAverage\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"TotalCurrent\" href=\"TotalCurrent\" val=\"%f\" writable=\"true\"/>\r\n"
-"<abstime name=\"LastUpdated\" href=\"LastUpdated\" val=\"%s\" writable=\"true\"/>\r\n"
-"<bool name=\"Online\" href=\"OnLine\" val=\"%s\" writable=\"true\"/>\r\n"
+"<int name=\"SerialNumber\" href=\"SerialNumber\" val=\"0x%x\"/>\r\n"
+"<int name=\"Firmware\" href=\"Firmware\" val=\"0x%.8x\"/>\r\n"
+"<int name=\"Model\" href=\"Model\" val=\"%d\"/>\r\n"
+"<int name=\"CTConfig\" href=\"CTConfig\" val=\"%d\"/>\r\n"
+"<str name=\"Location\" href=\"Location\" val=\"%s\"/>\r\n"
+"<real name=\"ACFreq\" href=\"ACFreq\" val=\"%f\"/>\r\n"
+"<real name=\"VoltL-N\" href=\"VoltL-N\" val=\"%f\"/>\r\n"
+"<real name=\"VoltL-L\" href=\"VoltL-L\" val=\"%f\"/>\r\n"
+"<real name=\"VoltA\" href=\"VoltA\" val=\"%f\"/>\r\n"
+"<real name=\"VoltB\" href=\"VoltB\" val=\"%f\"/>\r\n"
+"<real name=\"VoltC\" href=\"VoltC\" val=\"%f\"/>\r\n"
+"<real name=\"kWh\" href=\"kWh\" displayName=\"Total kWh for 3 phases\" val=\"%f\"/>\r\n"
+"<real name=\"kW\" href=\"kW\" val=\"%f\"/>\r\n"
+"<real name=\"CurrentAverage\" href=\"CurrentAverage\" val=\"%f\"/>\r\n"
+"<real name=\"TotalCurrent\" href=\"TotalCurrent\" val=\"%f\"/>\r\n"
+"<abstime name=\"LastUpdated\" href=\"LastUpdated\" val=\"%s\"/>\r\n"
+"<bool name=\"Online\" href=\"OnLine\" val=\"%s\"/>\r\n"
 "<list name=\"Meters\" href=\"Meters\" of=\"nextdc:Meter\"/>\r\n"
 "</obj>\r\n";
 
@@ -517,11 +521,11 @@ static const char *mg_bm_attr[] = {
  */
 static const char *OBIX_BM_CONTRACT =
 "<obj name=\"%s\" href=\"/obix/deviceRoot%s%s/Meters/%s/\" is=\"nextdc:veris-meter\">\r\n"
-"<real name=\"kWh\" href=\"kWh\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kW\" href=\"kW\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"V\" href=\"V\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"PF\" href=\"PF\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"I\" href=\"I\" val=\"%f\" writable=\"true\"/>\r\n"
+"<real name=\"kWh\" href=\"kWh\" val=\"%f\"/>\r\n"
+"<real name=\"kW\" href=\"kW\" val=\"%f\"/>\r\n"
+"<real name=\"V\" href=\"V\" val=\"%f\"/>\r\n"
+"<real name=\"PF\" href=\"PF\" val=\"%f\"/>\r\n"
+"<real name=\"I\" href=\"I\" val=\"%f\"/>\r\n"
 "</obj>\r\n";
 
 static void mg_collector_task(void *);
@@ -582,7 +586,8 @@ static int mg_schedule_tasks(obix_mg_t *mg)
 		 * obix_updater only refreshs device status and append history
 		 * records, thus does not require a hugh quantum size.
 		 */
-		error = curl_ext_create(&bus->handle, mg->curl_bulky, mg->curl_timeout);
+		error = curl_ext_create(&bus->handle, mg->curl_bulky,
+								mg->curl_timeout, mg->curl_nosignal);
 		if (error != 0) {
 			log_error("Failed to create curl handle for %s", bus->name);
 			bus->handle = NULL;
@@ -639,11 +644,19 @@ static int mg_read_registers(mg_bcm_t *bcm, int addr, int nb, uint16_t *dest)
 	errno = 0;
 	rc = modbus_read_registers(ctx, addr - 1, nb, dest);
 	if (rc < 0 || rc != nb) {
-		log_error("Failed to read %d regs from %d on BCM %s, returned %d: %s",
-					nb, addr, bcm->name, rc, modbus_strerror(errno));
+		/*
+		 * Generate error messages only if the BCM has not been regarded
+		 * as off-lined in order to prevent polluting logs
+		 */
+		if (bcm->off_line == 0) {
+			log_error("Failed to read %d regs from %d on BCM %s, returned %d: %s",
+					  nb, addr, bcm->name, rc, modbus_strerror(errno));
+		}
+
 		return -1;
-	} else
-		return 0;
+	}
+
+	return 0;
 }
 
 static void mg_destroy_param(obix_mg_t *mg)
@@ -684,6 +697,7 @@ static int mg_setup_param(obix_mg_t *mg, xml_config_t *config)
 		(mg->delay_per_reg = xml_config_get_int(config, XP_DELAY_PER_REG)) < 0 ||
 		(mg->curl_timeout = xml_config_get_int(config, XP_CURL_TIMEOUT)) < 0 ||
 		(mg->curl_bulky = xml_config_get_int(config, XP_CURL_BULKY)) < 0 ||
+		(mg->curl_nosignal = xml_config_get_int(config, XP_CURL_NOSIGNAL)) < 0 ||
 		(mg->sn.address = xml_config_get_int(config, XP_SN_ADDRESS)) < 0 ||
 		(mg->sn.count = xml_config_get_int(config, XP_SN_COUNT)) < 0 ||
 		(mg->firmware.address = xml_config_get_int(config, XP_FIRMWARE_ADDRESS)) < 0 ||
@@ -1205,13 +1219,6 @@ failed:
 	return NULL;
 }
 
-static void mg_unregister_bm(mg_bm_t *bm)
-{
-	obix_unregister_device(OBIX_CONNECTION_ID, bm->history_name);
-
-	/* History records would always be preserved */
-}
-
 /*
  * Register a BM to oBIX server and have a history facility
  * setup for it
@@ -1245,14 +1252,16 @@ static int mg_register_bm(mg_bm_t *bm)
 	free(dev_data);
 
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to register BM %s", bm->name);
 		return ret;
+	} else {
+		bm->registered = 1;
 	}
 
 	ret = obix_get_history(NULL, OBIX_CONNECTION_ID, bm->history_name);
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to create a history facility for %s", bm->name);
-		mg_unregister_bm(bm);
+		log_error("Failed to create a history facility for %s on BCM %s",
+				  bm->name, bcm->name);
+		/* Clean up of the registered BM will be done before the program exists */
 	}
 
 	return ret;
@@ -1265,7 +1274,11 @@ static void mg_unregister_bcm(mg_bcm_t *bcm)
 
 	for (i = 0; i < MG_PANELS_PER_BCM; i++) {
 		list_for_each_entry(bm, &bcm->devices[i], list) {
-			mg_unregister_bm(bm);
+			if (bm->registered == 0) {
+				continue;
+			}
+
+			obix_unregister_device(OBIX_CONNECTION_ID, bm->history_name);
 		}
 	}
 
@@ -1420,20 +1433,21 @@ static int mg_register_bcm(obix_mg_t *mg, mg_bcm_t *bcm)
 	free(dev_data);
 
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to register BCM %s", bcm->name);
 		return ret;
+	} else {
+		bcm->registered = 1;
 	}
 
 	for (i = 0; i < MG_PANELS_PER_BCM; i++) {
 		list_for_each_entry(bm, &bcm->devices[i], list) {
 			if ((ret = mg_register_bm(bm)) != OBIX_SUCCESS) {
-				break;
+				/*
+				 * Return directly to avoid double cleanup, which is done
+				 * by the caller
+				*/
+				return ret;
 			}
 		}
-	}
-
-	if (ret != OBIX_SUCCESS) {
-		mg_unregister_bcm(bcm);
 	}
 
 	return ret;
@@ -1449,6 +1463,10 @@ static void mg_unregister_devices(obix_mg_t *mg)
 
 	list_for_each_entry(bus, &mg->devices, list) {
 		list_for_each_entry(bcm, &bus->devices, list) {
+			if (bcm->registered == 0) {
+				continue;
+			}
+
 			mg_unregister_bcm(bcm);
 		}
 	}
@@ -1487,11 +1505,14 @@ static int mg_register_devices(obix_mg_t *mg)
 		log_debug("Register devices on modbus %s", bus->name);
 		list_for_each_entry(bcm, &bus->devices, list) {
 			if ((ret = mg_register_bcm(mg, bcm)) != OBIX_SUCCESS) {
-				break;
+				goto failed;
 			}
 		}
 	}
 
+	/* Fall through */
+
+failed:
 	if (ret != OBIX_SUCCESS) {
 		mg_unregister_devices(mg);
 	}
@@ -1747,6 +1768,11 @@ static int mg_collect_bm(mg_bcm_t *bcm)
 /*
  * Refresh hardware status of one specific BCM, including AUX
  * and all BM on each of its panel.
+ *
+ * NOTE: try to access the current BCM regardless of whether it
+ * has been marked as off-line or not, so that it status could
+ * be updated and synchronised with oBIX server as soon as it has
+ * been re-connected without attendance.
  */
 static void mg_collector_task_helper(mg_bcm_t *bcm)
 {
@@ -1763,6 +1789,7 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 		}
 
 		bcm->timeout++;
+
 		if (timeout++ < mg->collector_max_timeout) {
 			sleep(mg->collector_sleep);
 		} else {
@@ -1780,6 +1807,7 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 	timeout = 0;
 	while (mg_collect_bm(bcm) < 0) {
 		bcm->timeout++;
+
 		if (timeout++ < mg->collector_max_timeout) {
 			sleep(mg->collector_sleep);
 		} else {
@@ -1829,13 +1857,6 @@ static void mg_collector_task(void *arg)
 
 	list_for_each_entry(bcm, &bus->devices, list) {
 		pthread_mutex_lock(&bcm->mutex);
-
-		/*
-		 * Try to access the current BCM, regardless of whether it has
-		 * been marked as off-line or not, so that it states could be
-		 * updated and synchronized with oBIX server as soon as it has
-		 * been re-connected.
-		 */
 
 		while (bcm->being_read == 1)	/* obix_updater is working on this dev */
 			pthread_cond_wait(&bcm->wq, &bcm->mutex);
@@ -2097,6 +2118,12 @@ static void obix_updater_task_helper(mg_bcm_t *bcm)
 		log_error("Failed to update AUX status on %s", bcm->name);
 	}
 
+	if (bcm->off_line == 1) {
+		log_warning("BCM %s offlined, skip updating all its BM contracts "
+					"and relevant history facilities", bcm->name);
+		return;
+	}
+
 	if (obix_update_bm(bcm) != OBIX_SUCCESS) {
 		log_error("Failed to update BM status on %s", bcm->name);
 	}
@@ -2113,16 +2140,15 @@ static void obix_updater_task(void *arg)
 
 	list_for_each_entry(bcm, &bus->devices, list) {
 		pthread_mutex_lock(&bcm->mutex);
-		while (bcm->being_written == 1)		/* mg_collector is working on this dev */
-			pthread_cond_wait(&bcm->rq, &bcm->mutex);
 
+		/* Skip current device if it has been marked as off-lined */
 		if (bcm->off_line == 1) {
-			/*
-			 * Skip current device if it has been marked as off-lined
-			 */
 			pthread_mutex_unlock(&bcm->mutex);
 			continue;
 		}
+
+		while (bcm->being_written == 1)		/* mg_collector is working on this dev */
+			pthread_cond_wait(&bcm->rq, &bcm->mutex);
 
 		bcm->being_read = 1;
 		pthread_mutex_unlock(&bcm->mutex);
@@ -2157,13 +2183,20 @@ static void mg_resurrect_dev(obix_mg_t *mg, int slave_id)
 	mg_modbus_t *bus;
 	mg_bcm_t *bcm;
 
-	log_debug("%d is brought alive", slave_id);
-
 	list_for_each_entry(bus, &mg->devices, list) {
 		list_for_each_entry(bcm, &bus->devices, list) {
 			if (bcm->slave_id != slave_id) {
 				continue;
 			}
+
+			if (bcm->off_line == 0) {
+				log_error("BCM %s (%d) is not marked as off-lined",
+						  bcm->name, slave_id);
+				return;
+			}
+
+			log_debug("BCM %s (%d) could be brought on-lined",
+					  bcm->name, slave_id);
 
 			pthread_mutex_lock(&bcm->mutex);
 			while (bcm->being_written == 1 || bcm->being_read == 1) {

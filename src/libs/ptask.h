@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX
@@ -22,87 +22,98 @@
 #ifndef PTASK_H_
 #define PTASK_H_
 
+#include <pthread.h>
+#include <time.h>
 /*
- * Non-NULL pointers are likely to trigger segfault
- * under normal circumstances, used to verify that
- * nobody uses non-initialized pointers
+ * Prototype of the function which can be scheduled.
+ */
+typedef void (*periodic_task)(void *arg);
+
+/*
+ * Descriptor of a piece of work to be run by a worker thread
+ */
+typedef struct _Periodic_Task {
+	/* The unique ID of current task */
+	int id;
+
+	/* The execution period and the next execution time */
+	struct timespec period;
+	struct timespec nextScheduledTime;
+
+	/* The number of times this task should be run */
+	int executeTimes;
+
+	/* The workload and required parameter */
+	periodic_task task;
+	void *arg;
+
+	/* Flag whether this task is marked as shutdown and being executed */
+	int isCancelled;
+	int isExecuting;
+
+	/* Join the task queue of a worker thread */
+	struct _Periodic_Task* prev;
+	struct _Periodic_Task* next;
+} Periodic_Task;
+
+/*
+ * Descriptor of a worker thread that executes a list of tasks
+ * in threadCycle()
+ */
+typedef struct _Task_Thread {
+	/* Seed for task ID */
+	int id_gen;
+
+	/* Thread ID */
+	pthread_t thread;
+
+	/* The queue of tasks and the mutex to protect it */
+	Periodic_Task *taskList;
+	pthread_mutex_t taskListMutex;
+
+	/*
+	 * The wait queue to sleep on for any changes on the task list
+	 *
+	 * Used by the main loop of the worker thread and notified by
+	 * user whenever a new task is added or removed from the list
+	 */
+	pthread_cond_t taskListUpdated;
+
+	/*
+	 * The wait queue to sleep on until the current task is completed
+	 *
+	 * Used by the user thread who would like to delete a task which
+	 * is being execution and notified by the worker thread when it's
+	 * done with it
+	 */
+	pthread_cond_t taskExecuted;
+} Task_Thread;
+
+/*
+ * Non-NULL pointers are likely to trigger segfault under normal
+ * circumstances, used to verify that nobody uses non-initialized pointers
+ *
+ * NOTE: will become redundant once task queue is organised by
+ * list_head
  */
 #ifndef LIST_POISON1
-#define LIST_POISON1 ((void *) 0x00100100)
+#define LIST_POISON1 ((void *)0x00100100)
 #endif
 
 #ifndef LIST_POISON2
-#define LIST_POISON2 ((void *) 0x00200200)
+#define LIST_POISON2 ((void *)0x00200200)
 #endif
 
-/**
- * Specifies that the task should be executed indefinite number of times
- * (until #ptask_cancel() is called).
- */
-#define EXECUTE_INDEFINITE -1
+#define EXECUTE_INDEFINITE		(-1)
 
-/**
- * Prototype of the function which can be scheduled.
- *
- * @param arg Argument which is passed to the function when it is invoked.
- */
-typedef void (*periodic_task)(void* arg);
-
-/**
- * Represents a separate thread which can be used to schedule tasks.
- */
-typedef struct _Task_Thread Task_Thread;
-
-/**
- * Creates new instance of #Task_Thread.
- *
- * @return Pointer to the new instance of #Task_Thread, or @a NULL if some
- *         error occurred.
- */
-Task_Thread* ptask_init();
-
-/**
- * Releases resources allocated for the provided #Task_Thread instance.
- * All scheduled tasks are canceled.
- */
-int ptask_dispose(Task_Thread* thread, int wait);
-
-/**
- * Schedules new task for execution.
- */
-int ptask_schedule(Task_Thread* thread,
-                   periodic_task task,
-                   void* arg,
-                   long period,
-                   int executeTimes);
-
-/**
- * Sets new execution period for the specified task.
- */
-int ptask_reschedule(Task_Thread* thread,
-                     int taskId,
-                     long period,
-                     int executeTimes,
-                     int add);
-
-/**
- * Checks whether the task with provided id is scheduled for execution in the
- * thread.
- */
-int ptask_isScheduled(Task_Thread* thread, int taskId);
-
-/**
- * Resets time until the next execution of the specified task.
- * The next execution time will be current time + @a period provided when the
- * task was scheduled. If the @a period needs to be changed than use
- * #ptask_reschedule() instead.
- */
-int ptask_reset(Task_Thread* thread, int taskId);
-
-/**
- * Removes task from the scheduled list.
- */
-int ptask_cancel(Task_Thread* thread, int taskId, int wait);
+Task_Thread *ptask_init(void);
+int ptask_schedule(Task_Thread *thread, periodic_task task, void *arg,
+				   long period, int executeTimes);
+int ptask_reschedule(Task_Thread *thread, int taskId, long period,
+					 int executeTimes, int add);
+int ptask_reset(Task_Thread *thread, int taskId);
+int ptask_cancel(Task_Thread *thread, int taskId, int wait);
+int ptask_dispose(Task_Thread *thread, int wait);
 
 /*
  * Descriptor of a particular worker thread and its payload

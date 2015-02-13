@@ -10,8 +10,8 @@
 	for any ref node of course.
 -->
 <obj name="ExampleDevice" href="/obix/deviceRoot/example" writable="true">
-	<obj href="parent">
-		<reltime name="time" href="time" val="PT0S"/>
-		<bool name="reset" href="/obix/deviceRoot/example/parent/reset" val="false"/>
+	<obj href="parent" writable="true">
+		<reltime name="time" href="time" val="PT0S" writable="true"/>
+		<bool name="reset" href="/obix/deviceRoot/example/parent/reset" val="false" writable="true"/>
 	</obj>
 </obj>

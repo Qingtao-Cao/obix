@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX
@@ -226,31 +226,40 @@ int obix_unregister_device(const int conn_id, const char *name)
 	pthread_mutex_lock(&conn->mutex);
 	list_for_each_entry_safe(dev, n, &conn->devices, list) {
 		if (strcmp(dev->name, name) == 0) {
+			/*
+			 * If the device has any listeners, it can't be deleted yet
+			 */
 			pthread_mutex_lock(&dev->mutex);
 			if (list_empty(&dev->listeners) == 0) {
 				pthread_mutex_unlock(&dev->mutex);
 				pthread_mutex_unlock(&conn->mutex);
-				log_error("Device %s still have active listeners installed");
+				log_error("Device %s still have active listeners installed", name);
 				return OBIX_ERR_INVALID_STATE;
 			}
 			pthread_mutex_unlock(&dev->mutex);
 
+			/*
+			 * The oBIX server will refuse to delete the device if it
+			 * contains any children
+			 */
+			if (conn->comm->unregister_device(dev) != OBIX_SUCCESS) {
+				pthread_mutex_unlock(&conn->mutex);
+				log_error("Failed to unregister Device %s", dev->name);
+				return OBIX_ERR_INVALID_STATE;
+			}
+
 			list_del(&dev->list);
 			pthread_mutex_unlock(&conn->mutex);
 
-			conn->comm->unregister_device(dev);
-
-			/*
-			 * The removal of Device should be unconditional to prevent
-			 * memory leaks now that it has been dequeued from
-			 * Connection.devices
-			 */
 			obix_free_device(dev);
-
 			return OBIX_SUCCESS;
 		}
 	}
 
+	/*
+	 * Device not found, it may have not been registered yet,
+	 * make no fuss about it
+	 */
 	pthread_mutex_unlock(&conn->mutex);
 	return OBIX_ERR_INVALID_ARGUMENT;
 }
@@ -258,7 +267,7 @@ int obix_unregister_device(const int conn_id, const char *name)
 /*
  * Register a new device through the specified connection.
  *
- * The obixData points to url-encoded content of the whole device.
+ * The data points to url-encoded content of the whole device.
  */
 int obix_register_device(const int conn_id, const char *name, const char *data)
 {
@@ -295,7 +304,7 @@ int obix_register_device(const int conn_id, const char *name, const char *data)
 	dev->conn = conn;
 
 	if ((ret = conn->comm->register_device(dev, data)) != OBIX_SUCCESS) {
-		log_error("Failed to register device for %s", name);
+		log_error("Failed to register device %s", name);
 		goto failed;
 	}
 
@@ -326,6 +335,8 @@ existed:
 	 * descriptors but not requesting to sign it off on server side
 	 */
 	conn->comm->unregister_device_local(dev);
+
+	/* Fall through */
 
 failed:
 	obix_free_device(dev);
@@ -592,7 +603,7 @@ static int obix_get_history_index(CURL_EXT *user_handle, const int conn_id,
 	}
 
 	if (!(root = xmlDocGetRootElement(*doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Failed to get history index for Device %s", name);
 		ret = OBIX_ERR_SERVER_ERROR;
 	} else {
@@ -640,7 +651,7 @@ int obix_get_history_ts(CURL_EXT *user_handle, const int conn_id,
 	if (!(doc = xmlReadMemory(data, size, NULL, NULL,
 							  XML_PARSE_OPTIONS_COMMON)) ||
 		!(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		ret = OBIX_ERR_SERVER_ERROR;
 		goto failed;
 	}
@@ -699,8 +710,8 @@ static int obix_setup_connections_helper(xmlNode *node, void *arg1, void *arg2)
 	INIT_LIST_HEAD(&conn->list);
 	pthread_mutex_init(&conn->mutex, NULL);
 
-	if ((conn->id = xml_get_child_long(node, OBIX_OBJ_INT, CT_ID)) < 0 ||
-		!(type = xml_get_child_val(node, OBIX_OBJ_STR, CT_TYPE))) {
+	if ((conn->id = xml_get_child_long(node, CT_ID, NULL)) < 0 ||
+		!(type = xml_get_child_val(node, CT_TYPE, NULL))) {
 		log_error("Failed to get connection settings");
 		goto failed;
 	}
@@ -890,6 +901,15 @@ void obix_batch_destroy(Batch *batch)
 	free(batch);
 }
 
+/**
+ * NOTE: oBIX client applications are encouraged to group all write requests
+ * on different subnodes of one device into one batch object so as to notify
+ * oBIX server of the time that may need to backup the device contract into
+ * its persistent files on the hard drive. The oBIX server has no idea at all
+ * about the definition of device contracts and no idea about when a device
+ * contract has been overally updated, so writing into disk files at the end
+ * of a batch request is the best guess the oBIX server can make
+ */
 Batch *obix_batch_create(const int conn_id)
 {
 	Connection *conn;

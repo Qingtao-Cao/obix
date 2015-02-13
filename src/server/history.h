@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -27,10 +27,10 @@
 int obix_hist_init(const char *resdir);
 void obix_hist_dispose(void);
 
-xmlNode *handlerHistoryGet(obix_request_t *request, const char *overrideUri, xmlNode *input);
-xmlNode *handlerHistoryAppend(obix_request_t *request, const char *overrideUri, xmlNode *input);
-xmlNode *handlerHistoryQuery(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerHistoryGet(obix_request_t *request, const xmlChar *uri, xmlNode *input);
+xmlNode *handlerHistoryAppend(obix_request_t *request, const xmlChar *uri, xmlNode *input);
+xmlNode *handlerHistoryQuery(obix_request_t *request, const xmlChar *uri, xmlNode *input);
 
-int is_history_requests(const char *uri);
+xmlNode *hist_copy_uri(const xmlChar *href, xml_copy_flags_t flag);
 
 #endif	/* _HISTORY_H_ */
