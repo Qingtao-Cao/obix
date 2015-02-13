@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -85,48 +85,9 @@ typedef struct bitmap {
 	pthread_mutex_t mutex;
 } bitmap_t;
 
-/**
- * Retrieves the first unused bit in the bitmap pointed to by
- * @a b.
- *
- * @param	b	A pointer to an initialized bitmap as constructed with
- *				@a bitmap_init.
- *
- * @returns		An integer less than zero if an error occured, or another
- *				value containing the next available ID.
- */
 int bitmap_get_id(bitmap_t *b);
-
-/**
- * Releases an ID integer specified by @a id in the bitmap pointed
- * to by @a b so that it may be reused in the future by subsequent calls
- * to @a bitmap_get_id().
- *
- * @param	b	A pointer to an initialized bitmap as constructed with
- *				@a bitmap_init.
- * @param	id	An integer specifying the ID to be released.
- */
 void bitmap_put_id(bitmap_t *b, int id);
-
-/**
- * Allocates a new bitmap and create and insert the first bitmap node to it.
- *
- * @returns		A pointer to a newly-created bitmap structure, or NULL
- *				if an error occured.
- *
- * @remarks		This is an allocating function.  It's up to the caller to free
- *				the memory allocated by the successful return of this function
- *				with calls to @a bitmap_dispose().
- */
 bitmap_t *bitmap_init(void);
-
-/**
- * Disposes and frees all memory assigned to the bitmap structure pointed to
- * by @a b.
- *
- * @param	b	A pointer to an initialized bitmap structure as allocated by
- *				calls to @a bitmap_init().
- */
 void bitmap_dispose(bitmap_t *b);
 
 #endif

@@ -1,24 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
-    * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
-    * Copyright (c) 2009 Andrey Litvinov
-    *
-    * This file is part of oBIX.
-    *
-    * oBIX is free software: you can redistribute it and/or modify
-    * it under the terms of the GNU General Public License as published by
-    * the Free Software Foundation, either version 3 of the License, or
-    * (at your option) any later version.
-    *
-    * oBIX is distributed in the hope that it will be useful,
-    * but WITHOUT ANY WARRANTY; without even the implied warranty of
-    * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    * GNU General Public License for more details.
-    *
-    * You should have received a copy of the GNU General Public License
-    * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
-    *
+	Copyright (c) 2013-2015 Qingtao Cao
+	Copyright (c) 2009 Andrey Litvinov
+
+	This file is part of obix.
+
+	obix is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	obix is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with obix. If not, see <http://www.gnu.org/licenses/>.
 -->
 <!--
 	System objects for oBIX server, which are invisible for server users,
@@ -42,10 +40,8 @@
 	<obj href="watch-stub" is="obix:Watch /obix/def/LongPollWatch">
 		<reltime name="lease" href="lease" min="PT0S" max="PT24H" val="PT1H"/>
 		<obj name="pollWaitInterval" href="pollWaitInterval">
-			<reltime name="min" href="min" min="PT0S" max="PT1M" val="PT0S"
-				writable="true"/>
-			<reltime name="max" href="max" min="PT0S" max="PT1M" val="PT60S"
-				writable="true"/>
+			<reltime name="min" href="min" min="PT0S" max="PT1M" val="PT0S"/>
+			<reltime name="max" href="max" min="PT0S" max="PT1M" val="PT60S"/>
 		</obj>
 		<op name="add" href="add" in="obix:WatchIn" out="obix:WatchOut">
 			<meta op="2"/>
@@ -85,10 +81,10 @@
 	-->
 	<obj href="hist-dev-stub" is="obix:HistoryDevLobby">
 		<op name="query" href="query" in="obix:HistoryFilter" out="obix:HistoryQueryOut">
-			<meta op="10"/>
+			<meta op="11"/>
 		</op>
 		<op name="append" href="append" in="obix:HistoryAppendIn" out="obix:HistoryAppendOut">
-			<meta op="11"/>
+			<meta op="12"/>
 		</op>
     </obj>
 

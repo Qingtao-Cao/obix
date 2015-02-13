@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-	Copyright (c) 2013-2014 Qingtao Cao <harry.cao@nextdc.com>
+	Copyright (c) 2013-2015 Qingtao Cao
 	Copyright (c) 2009 Andrey Litvinov
 
 	This file is part of oBIX.
@@ -18,60 +18,97 @@
 	You should have received a copy of the GNU General Public License
 	along with oBIX. If not, see <http://www.gnu.org/licenses/>
 -->
-<config>  
-  <!--
-  	 Optional tag, defining maximum number of oBIX server threads for long-poll
-	 tasks that run in parallel. Raise this limitation if constantly run into
-	 warnings thrown by oBIX server that changes may have not been collected in
-	 a timely manner
-  -->
-  <poll-threads-count val="10"/>
+<config>
+	<!--
+		The path of socket file that the listening UNIX domain socket is bound,
+		each server thread should independently accept and handle FCGI requests
+		on it.
 
-  <!--
-    Configuration of the logging system. The only obligatory tag is <level> 
-    which adjusts the amount of output messages.
-  -->  
-  <log>
-    <!--
-      Defines minimum level of messages which will be printed. Available values:
-      - debug: Write to log all possible messages;
-      - warning: Write to log only warnings and errors;
-      - error: Write to log only errors;
-      - no: Do not write any log.      
-    -->    
-  	<level val="debug"/>
-  	<!--
-  	  Optional tag. If presents, forces to use syslog for logging. Otherwise all
-  	  log messages are printed to console (stdout). This tag can have optional
-  	  attribute 'facility' which specifies facility of syslog messages (read
-  	  more about message facility in syslog documentation). 
-  	  Possible values of the 'facility' attribute are:
-  	  - user: Used for any user applications (default value);
-  	  - daemon: Used for system daemons;
-  	  - local0: System defined;
-  	  - local1: System defined;
-  	  - local2: System defined;
-  	  - local3: System defined;
-  	  - local4: System defined;
-  	  - local5: System defined;
-  	  - local6: System defined;
-  	  - local7: System defined;
-  	  It can be useful to configure syslog at your machine to print server log 
-  	  into a separate file. One way to do so is:
-  	  - Set in the tag below one of facilities local0 - local7 which is not 
-  	    used in your system yet. For instance, you chose 'local1'
-  	  - Go to syslog.conf file (usually it is at /etc/syslog.conf) and add the
-  	    following string:
-  	     local1.*		-/var/log/obix.log
-  	    That will make syslog to write all messages sent from 'local1' to the
-  	    file /var/log/obix.log. Symbol '-' before target path means that file
-  	    will be written in asynchronous mode, which is quicker in general, but 
-  	    new messages can appear with delay.  
-  	  - It is also possible to forward error messages to a separate file like
-  	    this:
-  	     local1.err;local1.warning		-/var/log/obix-error.log
-  	  You can read more about syslog configuration at syslog.conf manual page.   
-  	-->
-  	<facility val="local3"/>  	
-  </log>    	
+		It must be set the same as the "socket" option of the obix.fcgi.handler
+		plus suffixed by "-0" so that the host web server (such as lighttpd)
+		can connect to it and raise FCGI requests.
+	-->
+	<listen_socket val="/var/run/lighttpd/obix.fcgi.socket-0"/>
+
+	<!--
+		The depth of the backlog queue of the FCGX listen socket, specifically,
+		the depth of the ESTABLISHED queue of the listen socket on Linux
+		(separate from the SYN RECEIVED queue). If the oBIX server can't consume
+		(via accept() system call) requests from the backlog queue fast enough
+		and the queue becomes full, the Linux kernel will reject newly arrived
+		requests resulting in clients got HTTP 503 "Service Not Available" type
+		of error.
+
+		A FCGX request encapsulates an established TCP connection, which is
+		closed when the FCGX request is destroyed. Therefore the maximal number
+		of requests the oBIX server can handle in parallel is also decided by
+		the limitation on the maximal number of open file descriptors.
+
+		NOTE: According to experiments the real depth of the backlog queue eqauls
+		to the parameter passed to listen() system call plus 1. But as long as the
+		oBIX server supports multi-threads the backlog queue is normally empty so
+		its depth won't make much difference.
+	-->
+	<listen_backlog val="5"/>
+
+	<!--
+		Mandatory tag, defining the maximum number of oBIX server threads that
+		accept and handle FCGX requests in parallel
+
+		NOTE: Administrators are highly recommended to tune this value according
+		to the workload in their specific environment
+	-->
+	<multi_threads val="10"/>
+
+	<!--
+		Mandatory tag, defining maximum number of oBIX server threads for long-poll
+		tasks that run in parallel. Raise this limitation if constantly run into
+		warnings that changes may have not been collected in a timely manner
+	-->
+	<poll_threads val="2"/>
+
+	<!--
+		Mandatory tag, defining the size of the hash table and the cache of the
+		Device subsystem, which must be properly adjusted according to the overall
+		number of devices that are likely registered on the oBIX server.
+
+		Enlarge the hash table if conflict queues are too long. But the cache size
+		must remain small since the larger the cache, the more significant cache
+		miss outweighs cache hit because oBIX server tends to be busy answering
+		requests from different clients resulting in the cache constantly flushed
+	-->
+	<dev_table_size val="1024"/>
+	<dev_cache_size val="4"/>
+
+	<!--
+		How often should the Device subsystem backup device contracts onto hard
+		drive.
+
+		NOTE: it's not necessary and not efficient at all to update a device's
+		persistent file on the hard drive whenever oBIX client changes it
+	-->
+	<dev_backup_period val="300" unit="sec"/>
+
+	<!--
+		Configuration of the logging system. The only obligatory tag is <level> 
+		which adjusts the amount of output messages.
+	-->  
+	<log>
+		<!--
+			Defines minimum level of messages which will be printed. Available values:
+			- debug: Write to log all possible messages;
+			- warning: Write to log only warnings and errors;
+			- error: Write to log only errors;
+			- no: Do not write any log.      
+		-->    
+		<level val="debug"/>
+
+		<!--
+			Optional tag. If presents, forces to use syslog for logging. Otherwise all
+			log messages are printed to console (stdout). This tag can have optional
+			attribute 'facility' which specifies facility of syslog messages (read
+			more about message facility in syslog documentation). 
+		-->
+		<facility val="local3"/>  	
+	</log>    	
 </config>

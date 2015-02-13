@@ -1,37 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
+	Copyright (c) 2013-2015 Qingtao Cao
 	Copyright (c) 2009 Andrey Litvinov
 
-	* This file is part of oBIX.
-	*
-	* oBIX is free software: you can redistribute it and/or modify
-	* it under the terms of the GNU General Public License as published by
-	* the Free Software Foundation, either version 3 of the License, or
-	* (at your option) any later version.
-	*
-	* oBIX is distributed in the hope that it will be useful,
-	* but WITHOUT ANY WARRANTY; without even the implied warranty of
-	* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	* GNU General Public License for more details.
-	*
-	* You should have received a copy of the GNU General Public License
-	* along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
-	*
+	This file is part of obix.
+
+	obix is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	obix is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with obix. If not, see <http://www.gnu.org/licenses/>.
 -->
-	<!--
-		Custom contracts definition.
-	-->
+
 <obj href="/obix/def/" hidden="true">
-	<!--
-		Extension for the Lobby object which allows clients adding their own
-		information to the server using signUp operation.
-	-->
-	<obj href="SignUpLobby" is="obix:Lobby">
-		<op name="signUp" in="obix:obj" out="obix:obj" />
-	</obj>
-	<obj href="DevicesLobby" is="obix:Lobby">
-		<ref name="devices" />
-	</obj>
 	<!--
 		Advanced Watch object, which supports long poll requests (pollChanges
 		operation doesn't answer immediately, but waits for something to be
@@ -40,8 +28,8 @@
 	-->
 	<obj href="LongPollWatch" is="obix:Watch">
 		<obj name="pollWaitInterval">
-			<reltime name="min" min="PT0S" val="PT0S" writable="true" />
-			<reltime name="max" min="PT0S" val="PT0S" writable="true" />
+			<reltime name="min" min="PT0S" val="PT0S"/>
+			<reltime name="max" min="PT0S" val="PT0S"/>
 		</obj>
 	</obj>
 </obj>

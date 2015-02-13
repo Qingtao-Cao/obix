@@ -1,21 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    * Copyright (c) 2009 Andrey Litvinov
-    *
-	* This file is part of oBIX.
-	*
-	* oBIX is free software: you can redistribute it and/or modify
-	* it under the terms of the GNU General Public License as published by
-	* the Free Software Foundation, either version 3 of the License, or
-	* (at your option) any later version.
-	*
-	* oBIX is distributed in the hope that it will be useful,
-	* but WITHOUT ANY WARRANTY; without even the implied warranty of
-	* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	* GNU General Public License for more details.
-	*
-	* You should have received a copy of the GNU General Public License
-	* along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+	Copyright (c) 2013-2015 Qingtao Cao
+	Copyright (c) 2009 Andrey Litvinov
+
+	This file is part of oBIX.
+
+	oBIX is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	oBIX is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with oBIX. If not, see <http://www.gnu.org/licenses/>.
 -->
 <!--
 	The Lobby object for the oBIX server
@@ -23,16 +24,31 @@
 	NOTE: the subnodes should contain relative hrefs except the ref
 	nodes, whose carry the absolute hrefs of the target nodes
 -->
-<obj href="/obix/" is="obix:Lobby /obix/def/SignUpLobby /obix/def/DevicesLobby">
+<obj href="/obix/" is="obix:Lobby">
 	<op name="signUp" href="signUp" in="obix:obj" out="obix:obj">
 		<meta op="7"/>
 	</op>
-	<op name="batch" href="batch" in="obix:BatchIn" out="obix:BatchOut">
+	<op name="signOff" href="signOff" in="obix:obj" out="obix:obj">
 		<meta op="8"/>
 	</op>
-	<obj name="deviceRoot" href="deviceRoot" display="Device Lobby" hidden="true"/>
+	<op name="batch" href="batch" in="obix:BatchIn" out="obix:BatchOut">
+		<meta op="9"/>
+	</op>
+	<obj name="deviceRoot" href="deviceRoot" display="Device Lobby" hidden="true">
+		<!--
+			A placeholder for test devices
+		-->
+		<obj name="test" href="test"/>
+		<!--
+			A placeholder for one particular data centre
+		-->
+		<obj name="M1" href="M1">
+			<obj name="DH1" href="DH1" display="Data Hall 1"/>
+		</obj>
+	</obj>
 	<ref name="about" href="/obix/about" is="obix:About"/>
 	<ref name="historyService" href="/obix/historyService" is="obix:HistoryService"/>
 	<ref name="watchService" href="/obix/watchService" is="obix:WatchService"/>
 	<ref name="devices" href="/obix/devices" display="Device References" is="obix:list"/>
+	<list name="devices" href="devices" display="Device List" of="obix:ref" hidden="true"/>
 </obj>

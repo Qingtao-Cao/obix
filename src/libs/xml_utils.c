@@ -1,6 +1,6 @@
 /* *****************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
+ * Copyright (c) 2014 Tyler Watson
  *
  * This file is part of oBIX.
  *
@@ -20,39 +20,194 @@
  * *****************************************************************************/
 
 #include <libxml/tree.h>
-#include <libxml/xpath.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <ctype.h>		/* isblank */
 #include <string.h>		/* strlen */
+#include <sys/uio.h>	/* writev */
+#include <errno.h>
 #include "xml_utils.h"
 #include "obix_utils.h"
 #include "log_utils.h"
 
-const char *XML_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n";
+const char *XML_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+const const int XML_HEADER_LEN = 38;
 const char *XML_VERSION = "1.0";
 
+static const xmlChar *DOUBLE_SLASHES = (xmlChar *)"//";
+
+/*
+ * The root href for various subsystems on the oBIX server
+ *
+ * NOTE: they must end up with a slash as expected by the source code
+ */
+href_info_t obix_roots[] = {
+	[OBIX_BATCH] = {
+		.root = (xmlChar *)"/obix/batch/",
+		.len = 12
+	},
+	[OBIX_DEVICE] = {
+		.root = (xmlChar *)"/obix/deviceRoot/",
+		.len = 17
+	},
+	[OBIX_WATCH] = {
+		.root = (xmlChar *)"/obix/watchService/",
+		.len = 19
+	},
+	[OBIX_HISTORY] = {
+		.root = (xmlChar *)"/obix/historyService/",
+		.len = 21
+	}
+};
+
+/*
+ * Return 1 if the given href belongs to the specific
+ * subsystem, 0 otherwise
+ *
+ * NOTE: the given href must start with the root href of a particular
+ * subsystem, and the next byte must be either NULL or slash and
+ * shouldn't be any other character
+ */
+int is_given_type(const xmlChar *href, obix_root_t type)
+{
+	xmlChar next;
+	const xmlChar *root = obix_roots[type].root;
+	int len = obix_roots[type].len - 1;		/* root hrefs suffixed by a slash */
+
+	if (xmlStrncmp(href, root, len) == 0) {
+		next = href[len];
+		if (next == '\0' || next == '/') {
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 /**
- * Apply the given callback on the given node and all its ancestors
- * all the way up to the topest level.
+ * Compare whether the given two strings are identical. If lenient == 1,
+ * ignore any trailing slashes if present
+ *
+ * Return 1 if this is the case, 0 otherwise
+ */
+int is_str_identical(const xmlChar *str1, const xmlChar *str2,
+					 const int lenient)
+{
+	int len1, len2, i;
+
+	if (!str1 || !str2) {
+		return 0;
+	}
+
+	len1 = xmlStrlen(str1);
+	len2 = xmlStrlen(str2);
+
+	if (lenient == 1) {
+		if (str1[len1 - 1] == '/') {
+			len1--;
+		}
+
+		if (str2[len2 - 1] == '/') {
+			len2--;
+		}
+	}
+
+	if (len1 != len2) {
+		return 0;
+	}
+
+	if (len1 == 0 && len2 == 0) {
+		return 1;	/* both strings are "/" */
+	}
+
+	/*
+	 * NOTE: for sake of performance, compare from the tail to the head
+	 * since strings tend to be different in their tails
+	 */
+	for (i = len1 - 1; i >= 0; i--) {
+		if (str1[i] != str2[i]) {
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+/*
+ * Create and set up a reference node for the given node
+ *
+ * Return the reference node address on success, NULL otherwise
+ */
+xmlNode *xml_create_ref_node(xmlNode *src, const xmlChar *href)
+{
+	xmlNode *ref = NULL;
+	xmlChar *val;
+	int i;
+
+	/*
+	 * NOTE: avoid declaring this pointer array as a global variable
+	 * which requires initialisation at compiling time and existing
+	 * OBIX_ATTR_XXXX globals can't be used as its initialiser
+	 */
+	const char *ref_attrs[] = {
+		OBIX_ATTR_NAME,
+		OBIX_ATTR_DISPLAY,
+		OBIX_ATTR_DISPLAY_NAME,
+		OBIX_ATTR_IS,
+		NULL
+	};
+
+	if (!src || !href) {
+		return NULL;
+	}
+
+	if (!(ref = xmlNewNode(NULL, BAD_CAST OBIX_OBJ_REF))) {
+		log_error("Failed to allocate a ref node for %s", href);
+		return NULL;
+	}
+
+	if (!xmlSetProp(ref, BAD_CAST OBIX_ATTR_HREF, href)) {
+		log_error("Failed to setup href for the ref node of %s", href);
+		xmlFreeNode(ref);
+		return NULL;
+	}
+
+	/* Set up other good-to-have attributes */
+	for (i = 0; ref_attrs[i]; i++) {
+		if ((val = xmlGetProp(src, BAD_CAST ref_attrs[i])) != NULL) {
+			xmlSetProp(ref, BAD_CAST ref_attrs[i], val);
+			xmlFree(val);
+		}
+	}
+
+	return ref;
+}
+
+/**
+ * Apply the given callback on the given node and its ancestors
+ * until reaching the limit
  *
  * Note,
  * 1. The callback function should check the xmlNode->type of the
  * current node and return if it is not desirable.
  */
-int xml_for_each_ancestor_or_self(xmlNode *child,
+int xml_for_each_ancestor_or_self(xmlNode *start, xmlNode *stop,
 								  xml_item_cb_t callback,
 								  void *arg1, void *arg2)
 {
 	int ret;
 
-	if (!child) {
+	if (!start || (stop && start == stop)) {
 		return 0;
 	}
 
-	if ((ret = callback(&child, arg1, arg2)) < 0) {
+	if ((ret = callback(&start, arg1, arg2)) < 0) {
 		return ret;
 	}
 
-	return xml_for_each_ancestor_or_self(child->parent, callback, arg1, arg2);
+	return xml_for_each_ancestor_or_self(start->parent, stop,
+										 callback, arg1, arg2);
 }
 
 /**
@@ -60,9 +215,10 @@ int xml_for_each_ancestor_or_self(xmlNode *child,
  * with satisfactory type in the given subtree
  */
 int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
-						   xml_item_cb_t callback, void *arg1, void *arg2)
+						   xml_item_cb_t callback, void *arg1, void *arg2,
+						   int depth)
 {
-	xmlNode *nextNode = NULL;
+	xmlNode *sibling = NULL;
 	int ret = 0;
 
 	if (!rootNode) {
@@ -71,10 +227,14 @@ int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
 
 	do {
 		/*
-		 * Save the next node's pointer in case the callback function
+		 * NOTE: Only move on to siblings when the invocation depth
+		 * is greater than 0, so as to prevent trespassing on siblings
+		 * of the original given node
+		 *
+		 * Save the sibling's pointer in case the callback function
 		 * may delete the current node
 		 */
-		nextNode = rootNode->next;
+		sibling = (depth == 0) ? NULL : rootNode->next;
 
 		/* If type equals to 0 then skip the comparison of it */
 		if (type > 0 && rootNode->type != type) {
@@ -93,12 +253,13 @@ int xml_for_each_node_type(xmlNode *rootNode, xmlElementType type,
 
 		if (rootNode != NULL) {
 			if ((ret = xml_for_each_node_type(rootNode->children, type,
-											  callback, arg1, arg2)) < 0) {
+											  callback, arg1, arg2,
+											  ++depth)) < 0) {
 				break;
 			}
 		}
 
-	} while ((rootNode = nextNode) != NULL);
+	} while ((rootNode = sibling) != NULL);
 
 	return ret;
 }
@@ -107,14 +268,14 @@ int xml_for_each_element(xmlNode *rootNode, xml_item_cb_t callback,
 						 void *arg1, void *arg2)
 {
 	return xml_for_each_node_type(rootNode, XML_ELEMENT_NODE,
-								  callback, arg1, arg2);
+								  callback, arg1, arg2, 0);
 }
 
 int xml_for_each_comment(xmlNode *rootNode, xml_item_cb_t callback,
 						 void *arg1, void *arg2)
 {
 	return xml_for_each_node_type(rootNode, XML_COMMENT_NODE,
-								  callback, arg1, arg2);
+								  callback, arg1, arg2, 0);
 }
 
 /**
@@ -152,172 +313,66 @@ int xml_is_null(const xmlNode *node)
 /**
  * Re-enterant version of xml_copy.
  *
- * Note:
- * 1. recursionDepth keeps tracks of the number of times this function
- * recalls itself, it is used to return meta or hidden or comments
- * object if and only if they are explicitly requested, that is, when
- * recursionDepth equals to 1. Otherwise all such objects will be
- * skipped over according to the exludeFlags
+ * NOTE: depth parameter keeps tracks of the number of times this
+ * function recalls itself, it is used to return meta or hidden or
+ * comments object if and only if they are explicitly requested,
+ * that is, when it equals to 0. Otherwise all such objects will be
+ * skipped over according to the excluding flag
  */
-static xmlNode *xml_copy_r(const xmlNode *sourceNode,
-						   xml_copy_exclude_flags_t excludeFlags,
-						   int recursionDepth)
+static xmlNode *xml_copy_r(const xmlNode *src, xml_copy_flags_t flags, int depth)
 {
-	xmlNode *nextNode = NULL;
-	xmlNode *copyRoot = NULL;
-	xmlNode *copyChild = NULL;
+	xmlNode *child, *copyRoot, *copyChild;
 
-	if (!sourceNode) {
+	child = copyRoot = copyChild = NULL;
+
+	if (!src) {
 		return NULL;
 	}
 
-	if (recursionDepth > 0
-		&& (excludeFlags & XML_COPY_EXCLUDE_HIDDEN) == XML_COPY_EXCLUDE_HIDDEN
-		&& xml_is_hidden(sourceNode) == 1) {
-		return NULL;
-	}
+    if (depth > 0) {
+        if (((flags & EXCLUDE_HIDDEN) > 0 && xml_is_hidden(src) == 1) ||
+            ((flags & EXCLUDE_META) > 0 &&
+			 xmlStrcmp(src->name, BAD_CAST OBIX_OBJ_META) == 0) ||
+            ((flags & EXCLUDE_COMMENTS) > 0 && src->type == XML_COMMENT_NODE)) {
+			return NULL;
+        }
+    }
 
-	if (recursionDepth > 0
-		&& (excludeFlags & XML_COPY_EXCLUDE_META) == XML_COPY_EXCLUDE_META
-		&& xmlStrcmp(sourceNode->name, BAD_CAST OBIX_OBJ_META) == 0) {
-		return NULL;
-	}
-
-	if (recursionDepth > 0
-		&& (excludeFlags & XML_COPY_EXCLUDE_COMMENTS) == XML_COPY_EXCLUDE_COMMENTS
-		&& sourceNode->type == XML_COMMENT_NODE) {
-		return NULL;
-	}
-
-	/* Note:
-	 * 2 to xmlCopyNode() means to copy node and all attributes,
+	/*
+	 * NOTE: 2 to xmlCopyNode() means to copy node and all attributes,
 	 * but no child elements.
 	 */
-	if ((copyRoot = xmlCopyNode((xmlNode *)sourceNode, 2)) == NULL) {
+	if (!(copyRoot = xmlCopyNode((xmlNode *)src, 2))) {
 		log_error("Failed to copy the node");
 		return NULL;
 	}
 
-	for (nextNode = sourceNode->children; nextNode; nextNode = nextNode->next) {
-		if (nextNode->type != XML_ELEMENT_NODE ||
-			!(copyChild = xml_copy_r(nextNode, excludeFlags, ++recursionDepth))) {
+	for (child = src->children; child; child = child->next) {
+		if (!(copyChild = xml_copy_r(child, flags, ++depth))) {
+			/*
+			 * The current child may have been deliberatly excluded,
+			 * move on to the next one
+			 */
 			continue;
 		}
 
-		if (xmlAddChild(copyRoot, copyChild) == NULL) {
+		if (!xmlAddChild(copyRoot, copyChild)) {
 			log_error("Failed to add the child copy into the current node");
 			xmlFreeNode(copyChild);
-		};
+			goto failed;
+		}
 	}
 
 	return copyRoot;
+
+failed:
+	xmlFreeNode(copyRoot);
+	return NULL;
 }
 
-xmlNode *xml_copy(const xmlNode *sourceNode, xml_copy_exclude_flags_t excludeFlags)
+xmlNode *xml_copy(const xmlNode *src, xml_copy_flags_t flags)
 {
-	return xml_copy_r(sourceNode, excludeFlags, 0);
-}
-
-/**
- * Find in the specified DOM tree for a set of nodes that match the
- * given pattern, then invoke the provided callback function on each
- * of them
- */
-void xml_xpath_for_each_item(xmlNode *rootNode, const char *pattern,
-							 xpath_item_cb_t cb, void *arg1, void *arg2)
-{
-	xmlDoc *doc = NULL;
-	xmlXPathObject *objects;
-	xmlXPathContext *context;
-	xmlNode *member;
-	int i;
-
-	if (!rootNode || !pattern || !cb) {		/* parameters are optional */
-		return;
-	}
-
-	/*
-	 * Create a temporary document for the standalone node
-	 * that is not part of the global DOM tree
-	 */
-	if (!rootNode->doc) {
-		if (!(doc = xmlNewDoc(BAD_CAST XML_VERSION))) {
-			log_error("Failed to generate temp doc for XPath context");
-			return;
-		}
-
-		xmlDocSetRootElement(doc, rootNode);
-	}
-
-	if (!(context = xmlXPathNewContext(rootNode->doc))) {
-		log_warning("Failed to create a XPath context");
-		goto ctx_failed;
-	}
-
-	/*
-	 * If the provide node is not standalone but in the global DOM tree,
-	 * have the search start from the current node instead of from
-	 * the root of the global DOM tree
-	 */
-	if (!doc) {
-		context->node = rootNode;
-	}
-
-	if (!(objects = xmlXPathEval(BAD_CAST pattern, context))) {
-		log_warning("Unable to compile XPath expression: %s", pattern);
-		goto xpath_failed;
-	}
-
-	/*
-	 * Apply callback function on each matching node
-	 */
-	if (xmlXPathNodeSetIsEmpty(objects->nodesetval) == 0) {
-		for (i = 0; i < xmlXPathNodeSetGetLength(objects->nodesetval); i++) {
-			member = xmlXPathNodeSetItem(objects->nodesetval, i);
-			/*
-			 * Apply the callback function on each node tracked by
-			 * the node set, and more importantly, nullify relevant
-			 * pointer in the node set table just in case the callback
-			 * function will release the pointed node. Since the whole
-			 * node set will be released soon, this won't bring about
-			 * any side effect at all.
-			 *
-			 * Or otherwise valgrind will detect invalid read at below
-			 * address:
-			 *
-			 *		xmlXPathFreeNodeSet (xpath.c:4185)
-			 *		xmlXPathFreeObject (xpath.c:5492)
-			 *
-			 * when it tries to access the xmlNode(its type member)
-			 * that has been deleted!
-			 */
-			if (member != NULL) {
-				cb(member, arg1, arg2);
-				objects->nodesetval->nodeTab[i] = NULL;
-			}
-		}
-	}
-
-	/*
-	 * If a temporary doc has been manipulated, unlink
-	 * the original rootNode node from it so that the doc
-	 * could be freed with no side effects on the rootNode
-	 */
-	if (doc) {
-		xmlUnlinkNode(rootNode);
-	}
-
-	/* Fall through */
-
-	xmlXPathFreeObject(objects);
-
-xpath_failed:
-	xmlXPathFreeContext(context);
-
-ctx_failed:
-	if (doc) {
-		xmlFreeDoc(doc);
-	}
+	return xml_copy_r(src, flags, 0);	/* start from depth == 0 */
 }
 
 /**
@@ -328,7 +383,7 @@ ctx_failed:
  * a hierarchy organization of all XML objects, the global DOM tree
  * should strike a proper balance among its depth and width. If too
  * many direct children organized directly under one same parent,
- * this function will suffer hugh performance loss.
+ * this function will inflict hugh performance loss.
  */
 xmlNode *xml_find_child(const xmlNode *parent, const char *tag,
 						const char *attrName, const char *attrVal)
@@ -504,11 +559,12 @@ char *xml_dump_node(const xmlNode *node)
 	return data;
 }
 
-xmlNode *obix_obj_null(void)
+xmlNode *obix_obj_null(const xmlChar *href)
 {
-    xmlNode *node;
+    xmlNode *node = NULL;
 
 	if (!(node = xmlNewNode(NULL, BAD_CAST OBIX_OBJ)) ||
+		(href && !xmlSetProp(node, BAD_CAST OBIX_ATTR_HREF, href)) ||
 	    !xmlSetProp(node, BAD_CAST OBIX_ATTR_NULL, BAD_CAST XML_TRUE)) {
 		xmlFreeNode(node);
 		node = NULL;
@@ -607,7 +663,10 @@ failed:
 }
 #endif
 
-int xml_is_valid_href(xmlChar *href)
+/*
+ * Return 1 if the given href is valid, 0 otherwise
+ */
+int xml_is_valid_href(const xmlChar *href)
 {
 	int len, i;
 
@@ -616,7 +675,7 @@ int xml_is_valid_href(xmlChar *href)
 	}
 
 	/* Empty string, or a single slash */
-	if ((len = strlen((char *)href)) == 0 ||
+	if ((len = xmlStrlen(href)) == 0 ||
 		(len == 1 && *href == '/')) {
 		return 0;
 	}
@@ -644,9 +703,70 @@ int xml_is_valid_href(xmlChar *href)
 		}
 	}
 
-	if (strstr((char *)href, "//") != NULL) {
+	if (xmlStrstr(href, DOUBLE_SLASHES) != NULL) {
 		return 0;
 	}
 
 	return 1;	/* valid */
+}
+
+/*
+ * Write into the specified file with the given data provisioning
+ * it with a XML header
+ *
+ * Return > 0 on success, < 0 otherwise
+ */
+int xml_write_file(const char *path, int flags, const char *data, int size)
+{
+	struct iovec iov[2];
+	int fd;
+	int ret = -1;
+
+	iov[0].iov_base = (char *)XML_HEADER;
+	iov[0].iov_len = XML_HEADER_LEN;
+	iov[1].iov_base = (char *)data;
+	iov[1].iov_len = size;
+
+	/*
+	 * NOTE: without the usage of O_TRUNC, the latest file size must be
+	 * explicitly setup in order to get rid of any leftover of previous
+	 * snapshot, otherwise the updated XML file will become mal-formed!
+	 */
+	if ((fd = open(path, flags)) >= 0) {
+		errno = 0;
+		if ((ret = writev(fd, iov, 2)) < 0) {
+			log_error("Failed to write into %s due to %s",
+					  path, strerror(errno));
+		} else {
+			errno = 0;
+			if (ftruncate(fd, size + XML_HEADER_LEN) < 0) {
+				log_warning("Failed to truncate %s due to %s",
+							path, strerror(errno));
+			}
+		}
+
+		close(fd);
+	}
+
+	return ret;
+}
+
+static int xml_setup_private_helper(xmlNode **element, void *arg1, void *arg2)
+{
+	if (!*element) {
+		return -1;
+	}
+
+	(*element)->_private = arg1;
+
+	return 0;
+}
+
+/*
+ * Traverse the given subtree and setup each node's _private pointer
+ * according to the given parameter
+ */
+void xml_setup_private(xmlNode *node, void *arg)
+{
+	xml_for_each_node_type(node, 0, xml_setup_private_helper, arg, NULL, 0);
 }

@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX.
@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -63,6 +63,7 @@ typedef enum {
 #define OBIX_OBJ_FEED			"feed"
 #define OBIX_OBJ_META			"meta"
 #define OBIX_OBJ_DATE			"date"
+#define OBIX_OBJ_HTML			"html"
 
 #define HIST_ABS_DATE			"date"
 #define HIST_ABS_COUNT			"count"
@@ -77,7 +78,6 @@ extern const char *OBIX_ATTR_OF;
 extern const char *OBIX_ATTR_HREF;
 extern const char *OBIX_ATTR_VAL;
 extern const char *OBIX_ATTR_NULL;
-extern const char *OBIX_ATTR_WRITABLE;
 extern const char *OBIX_ATTR_DISPLAY;
 extern const char *OBIX_ATTR_DISPLAY_NAME;
 extern const char *OBIX_ATTR_HIDDEN;
@@ -113,24 +113,10 @@ extern const char *STR_DELIMITER_DOT;
 extern const char *OBIX_RELTIME_ZERO;
 extern const int OBIX_RELTIME_ZERO_LEN;
 
-extern const char *OBIX_DEVICE_ROOT;
-extern const int OBIX_DEVICE_ROOT_LEN;
+extern const char *XML_FILENAME_SUFFIX;
 
-extern const char *OBIX_BATCH;
-extern const int OBIX_BATCH_LEN;
-
-extern const char *OBIX_DEVICES;
-
-extern const char *OBIX_HISTORY_LOBBY;
-
-extern const char *OBIX_HISTORY_SERVICE;
-extern const int OBIX_HISTORY_SERVICE_LEN;
-
-extern const char *OBIX_WATCH_SERVICE;
-extern const int OBIX_WATCH_SERVICE_LEN;
-
-extern const char *OBIX_WATCH_POLLCHANGES;
-
+#define OBIX_DIR_PERM		0755
+#define OBIX_FILE_PERM		0644
 
 /*
  * Reserve 10 bits for a physical value
@@ -162,6 +148,20 @@ extern const char *OBIX_WATCH_POLLCHANGES;
 #define HIST_REC_TS_MAX_LEN				20
 #define HIST_REC_DATE_MAX_LEN			10
 
+/*
+ * Flags used when opening XML files on the hard drive
+ *
+ * No O_TRUNC so that even if the write attempt failed due to
+ * lack of disk space, the original content won't be erased
+ * right at the time of open!
+ *
+ * No O_SYNC for devices' persistent files since they are
+ * constantly updated by adaptors whereas the default one
+ * requires write-through to the hard drive
+ */
+#define OPEN_FLAG_ASYNC		(O_RDWR)
+#define OPEN_FLAG_SYNC		(O_RDWR | O_SYNC)
+
 int str_to_long(const char *str, long *val);
 int str_to_float(const char *str, float *val);
 
@@ -183,8 +183,6 @@ int for_each_str_token(const char *delimiter, const char *str,
 int str_token_count_helper(const char *token, void *arg1, void *arg2);
 
 pid_t get_tid(void);
-
-int str_is_identical(const char *str1, const char *str2);
 
 int link_pathname(char **, const char *, const char *, const char *, const char *);
 

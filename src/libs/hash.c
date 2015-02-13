@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -14,43 +14,13 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
 #include <stdlib.h>
 #include <stdio.h>
 #include "hash.h"
-
-/*
- * Prototype of the callback functions used by hash table APIs,
- * they are called with hash table'e mutex held
- */
-typedef void (*hash_cb_t)(hash_head_t *head, hash_node_t *node, void *arg);
-
-static void hash_init_head(hash_head_t *head)
-{
-	INIT_LIST_HEAD(&head->head);
-	head->count = 0;
-	pthread_mutex_init(&head->mutex, NULL);
-}
-
-static void hash_destroy_head(hash_head_t *head)
-{
-	hash_node_t *node, *n;
-
-	pthread_mutex_lock(&head->mutex);
-	if (head->count > 0) {
-		list_for_each_entry_safe(node, n, &head->head, list) {
-			list_del(&node->list);
-			free(node);
-		}
-	}
-	pthread_mutex_unlock(&head->mutex);
-
-	pthread_mutex_destroy(&head->mutex);
-	/* Hash heads are released along with the entire hash table */
-}
 
 /*
  * Check if the given number is a prime or not
@@ -120,7 +90,32 @@ static unsigned int get_prime(unsigned int num)
 	return i;
 }
 
-hash_table_t *hash_init_table(unsigned int size, hash_ops_t *op)
+static void hash_init_head(hash_head_t *head)
+{
+	INIT_LIST_HEAD(&head->head);
+	head->count = 0;
+	tsync_init(&head->sync);
+}
+
+static void hash_destroy_head(hash_head_t *head)
+{
+	hash_node_t *node, *n;
+
+	if (tsync_shutdown_entry(&head->sync) < 0) {
+		return;
+	}
+
+	list_for_each_entry_safe(node, n, &head->head, list) {
+		list_del(&node->list);
+		free(node);
+	}
+
+	tsync_cleanup(&head->sync);
+
+	/* Hash heads are released along with the entire hash table */
+}
+
+hash_table_t *hash_init_table(unsigned int size, hash_table_ops_t *op)
 {
 	hash_table_t *tab;
 	int i;
@@ -166,114 +161,124 @@ void hash_destroy_table(hash_table_t *tab)
 	free(tab);
 }
 
-/* Apply the given callback on the matching node if found */
-static void hash_helper(hash_table_t *tab, const unsigned char *key,
-						hash_cb_t cb, void *arg)
+void *hash_search(hash_table_t *tab, const unsigned char *key)
 {
+	const void *item = NULL;
 	hash_head_t *head;
-	hash_node_t *node, *n;
+	hash_node_t *node;
 
-	if (!tab || !key || !tab->op || !tab->op->get || !tab->op->cmp) {
-		return;
+	if (!tab || !key) {
+		return NULL;
 	}
 
-	head = &tab->table[tab->op->get(key, tab->size)];
+	head = &tab->table[tab->op->compute(key, tab->size)];
 
-	pthread_mutex_lock(&head->mutex);
-	list_for_each_entry_safe(node, n, &head->head, list) {
-		if (tab->op->cmp(key, node) == 0) {
-			if (cb) {
-				cb(head, node, arg);
-			}
+	if (tsync_reader_entry(&head->sync) < 0) {
+		return NULL;
+	}
 
+	list_for_each_entry(node, &head->head, list) {
+		if (tab->op->compare(key, node) == 1) {
+			item = node->item;
+			tab->op->get((void *)item);
 			break;
 		}
 	}
 
-	/* Not found, or empty collision list */
-	pthread_mutex_unlock(&head->mutex);
-}
+	tsync_reader_exit(&head->sync);
 
-static void hash_get_cb(hash_head_t *head, hash_node_t *node, void *arg)
-{
-	 *(const void **)arg = node->item;
-}
-
-const void *hash_get(hash_table_t *tab, const unsigned char *key)
-{
-	const void *item = NULL;
-
-	hash_helper(tab, key, hash_get_cb, &item);
-
-	return item;
-}
-
-static void hash_del_cb(hash_head_t *head, hash_node_t *node, void *arg)
-{
-	list_del(&node->list);
-	free(node);
-
-	head->count--;
+	return (void *)item;
 }
 
 void hash_del(hash_table_t *tab, const unsigned char *key)
 {
-	hash_helper(tab, key, hash_del_cb, NULL);
+	hash_head_t *head;
+	hash_node_t *node, *n;
+
+	if (!tab || !key) {
+		return;
+	}
+
+	head = &tab->table[tab->op->compute(key, tab->size)];
+
+	if (tsync_writer_entry(&head->sync) < 0) {
+		return;
+	}
+
+	list_for_each_entry_safe(node, n, &head->head, list) {
+		if (tab->op->compare(key, node) == 1) {
+			list_del(&node->list);
+			free(node);
+			head->count--;
+			break;
+		}
+	}
+
+	tsync_writer_exit(&head->sync);
 }
 
+/*
+ * Add an item into the given hash table
+ *
+ * Return 0 on success, < 0 for error code
+ */
 int hash_add(hash_table_t *tab, const unsigned char *key, void *item)
 {
 	hash_head_t *head;
 	hash_node_t *node, *new;
+	int ret = 0;
 
-	if (!tab || !key || !item || !tab->op || !tab->op->get || !tab->op->cmp) {
+	if (!tab || !key || !item) {
 		return -1;
 	}
 
-	head = &tab->table[tab->op->get(key, tab->size)];
+	head = &tab->table[tab->op->compute(key, tab->size)];
 
-	/*
-	 * NOTE:
-	 * The search and add operations must be atomic to avoid
-	 * race conditions.
-	 */
-	pthread_mutex_lock(&head->mutex);
+	if (tsync_writer_entry(&head->sync) < 0) {
+		return -1;
+	}
+
 	list_for_each_entry(node, &head->head, list) {
-		if (tab->op->cmp(key, node) == 0) {	/* match found */
-			pthread_mutex_unlock(&head->mutex);
-			return 0;
+		if (tab->op->compare(key, node) == 1) {
+			/* Already added, return success */
+			goto out;
 		}
 	}
 
-	/* Not found or empty collision list, add to the tail of it */
+	/* Not exist or empty collision list, add to the tail of it */
 	if (!(new = (hash_node_t *)malloc(sizeof(hash_node_t)))) {
-		pthread_mutex_unlock(&head->mutex);
-		return -1;
+		ret = -1;
+	} else {
+		new->item = item;
+		INIT_LIST_HEAD(&new->list);
+		list_add_tail(&new->list, &head->head);
+		head->count++;
 	}
 
-	new->item = item;
-	INIT_LIST_HEAD(&new->list);
-
-	list_add_tail(&new->list, &head->head);
-	head->count++;
-
-	pthread_mutex_unlock(&head->mutex);
-
-	return 0;
+out:
+	tsync_writer_exit(&head->sync);
+	return ret;
 }
 
-unsigned int hash_bkdr(const unsigned char *str, const unsigned int size)
+unsigned int hash_bkdr(const unsigned char *str, const int len,
+					   const unsigned int tab_size)
 {
 	unsigned int seed = 31;	/* 31 131 1313 13131 131313 etc */
 	unsigned int hash = 0;
+	int pos = 0;
 
-	if (!str || size == 0) {
+	if (!str || len == 0 || tab_size == 0) {
 		return 0;
 	}
 
 	while (*str) {
+		/* Skip the trailing slash */
+		if ((pos++ == len - 1) && (*str == '/')) {
+			break;
+		}
+
 		hash = hash * seed + (*str++);
 	}
 
-	return hash % size;
+	return hash % tab_size;
 }

@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX
@@ -71,6 +71,7 @@ typedef struct
 	 */
 	char *lobby;				/* hc->handle */
 	char *signup;				/* hc->handle */
+	char *signoff;				/* hc->handle */
 	char *batch;				/* user defined or hc->handle */
 	char *hist_get;				/* user defined or hc->handle */
 	char *watch_make;			/* hd->watch_handle */
@@ -181,5 +182,7 @@ int http_get_history(CURL_EXT *, Device *);
 int http_get_history_index(CURL_EXT *, Device *, xmlDoc **);
 int http_append_history(CURL_EXT *, Device *, const char *);
 int http_query_history(CURL_EXT *, Device *, const char *, char **, int *);
+
+int is_err_contract(const xmlNode *root);
 
 #endif /* OBIX_HTTP_H_ */

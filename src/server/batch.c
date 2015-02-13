@@ -1,6 +1,6 @@
 /* *****************************************************************************
- * Copyright (c) 2014 Tyler Watson <tyler.watson@nextdc.com>
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
+ * Copyright (c) 2014 Tyler Watson
  *
  * This file is part of oBIX.
  *
@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -24,59 +24,10 @@
 #include "xml_utils.h"
 #include "xml_storage.h"
 #include "server.h"
+#include "errmsg.h"
+#include "device.h"
 
-enum {
-	ERR_NO_VAL = 1,
-	ERR_BAD_VAL,
-	ERR_NO_IS,
-	ERR_NO_MEM,
-	ERR_BAD_IS,
-	ERR_NO_INPUT,
-	ERR_RECURSIVE,
-	ERR_NO_HISTORY,
-	ERR_NO_POLLCHANGES
-};
-
-static err_msg_t batch_err_msg[] = {
-	[ERR_NO_VAL] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No required val attribute in BatchIn item"
-	},
-	[ERR_BAD_VAL] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "The val attribute in BatchIn item can't be used as a valid href"
-	},
-	[ERR_NO_IS] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No required is attribute in BatchIn item"
-	},
-	[ERR_BAD_IS] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "The required is attribute is NOT recognisable"
-	},
-	[ERR_NO_MEM] = {
-		.type = OBIX_CONTRACT_ERR_SERVER,
-		.msgs = "Failed to allocate BatchOut contract"
-	},
-	[ERR_NO_INPUT] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No required BatchIn document at all"
-	},
-	[ERR_RECURSIVE] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "Recursive batch commands not supported"
-	},
-	[ERR_NO_HISTORY] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No history related requests via batch supported, "
-				"please request them through normal POST method directly"
-	},
-	[ERR_NO_POLLCHANGES] = {
-		.type = OBIX_CONTRACT_ERR_UNSUPPORTED,
-		.msgs = "No watch.pollChanges requests via batch supported, "
-				"please request them through normal POST method directly"
-	}
-};
+static const char *OBIX_WATCH_POLLCHANGES = "pollChanges";
 
 static void obix_batch_add_item(xmlNode *batchOut, xmlNode *item)
 {
@@ -109,7 +60,7 @@ static void obix_batch_add_item(xmlNode *batchOut, xmlNode *item)
 	 */
 	copy = (item->doc && item->doc->dict) ? xmlCopyNode(item, 1) : item;
 
-	if (copy && xmldb_add_child(batchOut, copy, 1, 0) == NULL) {
+	if (copy && xmldb_add_child(batchOut, copy, 1, 0) != 0) {
 		log_error("could not add item into the provided BatchOut contract.");
 
 		/*
@@ -121,17 +72,15 @@ static void obix_batch_add_item(xmlNode *batchOut, xmlNode *item)
 	}
 }
 
-static void obix_batch_process_item(obix_request_t *request,
-									xmlNode *batchItem,
-									xmlNode *batch_out)
+static void obix_batch_process_item(obix_request_t *request, xmlNode *batchItem,
+									xmlNode *batch_out, xmlChar **uri)
 {
 	xmlNode *node = NULL;
-	xmlChar *is_attr = NULL;
-	char *href = NULL;
+	xmlChar *is_attr = NULL, *href = NULL;
 	int ret = 0;
 
-	if (!(href = (char *)xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
-		ret = ERR_NO_VAL;
+	if (!(href = xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_VAL))) {
+		ret = ERR_INVALID_INPUT;
 		goto failed;
 	}
 
@@ -140,13 +89,13 @@ static void obix_batch_process_item(obix_request_t *request,
 	 * to prevent client reading the content of the entire DOM tree
 	 * by specifying "/"
 	 */
-	if (xml_is_valid_href((xmlChar *)href) == 0) {
-		ret = ERR_BAD_VAL;
+	if (xml_is_valid_href(href) == 0) {
+		ret = ERR_INVALID_HREF;
 		goto failed;
 	}
 
 	if (!(is_attr = xmlGetProp(batchItem, BAD_CAST OBIX_ATTR_IS))) {
-		ret = ERR_NO_IS;
+		ret = ERR_INVALID_INPUT;
 		goto failed;
 	}
 
@@ -154,14 +103,23 @@ static void obix_batch_process_item(obix_request_t *request,
 		node = obix_server_read(request, href);
 	} else if (xmlStrcasecmp(is_attr, BAD_CAST OBIX_CONTRACT_OP_WRITE) == 0) {
 		node = obix_server_write(request, href, batchItem->children);
+
+		/*
+		 * If writing a subnode of a device contract succeeds and it is
+		 * the first device found, cache up its URI so as to have the
+		 * relevant persistent file of the parent device updated when
+		 * the entire batch has been handled
+		 */
+		if (!*uri && xmlStrcmp(node->name, BAD_CAST OBIX_OBJ_ERR) != 0) {
+			*uri = xmlStrdup(href);
+		}
 	} else if (xmlStrcasecmp(is_attr, BAD_CAST OBIX_CONTRACT_OP_INVOKE) == 0) {
-		if (strncmp(href, OBIX_BATCH, OBIX_BATCH_LEN) == 0) {
+		if (is_given_type(href, OBIX_BATCH) == 1) {
 			/*
 			 * Prohibit recursive batch invocation
 			 */
-			ret = ERR_RECURSIVE;
-		} else if (strncmp(href, OBIX_HISTORY_SERVICE,
-						   OBIX_HISTORY_SERVICE_LEN) == 0) {
+			ret = ERR_BATCH_RECURSIVE;
+		} else if (is_given_type(href, OBIX_HISTORY) == 1) {
 			/*
 			 * Histroy handlers take care of sending back responses by
 			 * themselves which are likely too massive to be sent via
@@ -169,10 +127,9 @@ static void obix_batch_process_item(obix_request_t *request,
 			 * from the batchOut contract. Therefore no history requests
 			 * are allowed through a batch request.
 			 */
-			ret = ERR_NO_HISTORY;
-		} else if (strncmp(href, OBIX_WATCH_SERVICE,
-						   OBIX_WATCH_SERVICE_LEN) == 0 &&
-				   strstr(href, OBIX_WATCH_POLLCHANGES) != NULL) {
+			ret = ERR_BATCH_HISTORY;
+		} else if (is_given_type(href, OBIX_WATCH) == 1 &&
+				   strstr((const char *)href, OBIX_WATCH_POLLCHANGES) != NULL) {
 			/*
 			 * The polling threads handling watch.pollChanges requests will
 			 * compete against the current thread handling the batchIn contract
@@ -181,21 +138,22 @@ static void obix_batch_process_item(obix_request_t *request,
 			 * released which will result in segfault. Therefore no pollChanges
 			 * requests are allowed through a batch request.
 			 */
-			ret = ERR_NO_POLLCHANGES;
+			ret = ERR_BATCH_POLLCHANGES;
 		} else {
 			node = obix_server_invoke(request, href, batchItem->children);
 		}
 	} else {
-		ret = ERR_BAD_IS;
+		ret = ERR_INVALID_INPUT;
 	}
 
 	/* Fall Through */
 
 failed:
-	if (ret != 0) {
-		log_error("%s", batch_err_msg[ret].msgs);
-		node = obix_server_generate_error(href, batch_err_msg[ret].type,
-											 "obix:Batch", batch_err_msg[ret].msgs);
+	if (ret > 0) {
+		log_error("%s", server_err_msg[ret].msgs);
+
+		node = obix_server_generate_error(href, server_err_msg[ret].type,
+									"obix:Batch", server_err_msg[ret].msgs);
 	}
 
 	if (is_attr) {
@@ -203,7 +161,7 @@ failed:
 	}
 
 	if (href) {
-		free(href);
+		xmlFree(href);
 	}
 
 	obix_batch_add_item(batch_out, node);
@@ -213,21 +171,21 @@ failed:
  * Handles Batch operation
  *
  * NOTE: recursive batch invocation is disabled, therefore the batch
- * facility can't be redirected to and the overrideUri is ignored
+ * facility can't be redirected to and the uri parameter is ignored
  */
-xmlNode *handlerBatch(obix_request_t *request, const char *overrideUri,
+xmlNode *handlerBatch(obix_request_t *request, const xmlChar *uri,
 					  xmlNode *input)
 {
 	xmlNode *batch_out = NULL, *item;
-	xmlChar *is_attr = NULL;;
-	int ret;
+	xmlChar *is_attr = NULL, *dev_uri = NULL;
+	int ret = 0;
 
 	if (!input) {
 		ret = ERR_NO_INPUT;
 		goto failed;
 	}
 
-	if (!(batch_out = xmldb_copy_sys(OBIX_SYS_BATCH_OUT_STUB))) {
+	if (!(batch_out = xmldb_copy_sys(BATCH_OUT_STUB))) {
 		ret = ERR_NO_MEM;
 		goto failed;
 	}
@@ -235,7 +193,7 @@ xmlNode *handlerBatch(obix_request_t *request, const char *overrideUri,
 	if (xmlStrcmp(input->name, BAD_CAST OBIX_OBJ_LIST) != 0 ||
 		!(is_attr = xmlGetProp(input, BAD_CAST OBIX_ATTR_IS)) ||
 		xmlStrcmp(is_attr, BAD_CAST OBIX_CONTRACT_BATCH_IN) != 0) {
-		ret = ERR_NO_IS;
+		ret = ERR_INVALID_INPUT;
 		goto failed;
 	}
 
@@ -244,32 +202,50 @@ xmlNode *handlerBatch(obix_request_t *request, const char *overrideUri,
 	 * may have a chance to be processed
 	 */
 	for (item = input->children; item; item = item->next) {
-		if (item->type != XML_ELEMENT_NODE) {
-			continue;
-		}
-
-		if (xmlStrcmp(item->name, BAD_CAST OBIX_OBJ_URI) != 0) {
+		if (item->type != XML_ELEMENT_NODE ||
+			xmlStrcmp(item->name, BAD_CAST OBIX_OBJ_URI) != 0) {
 			continue;
 		}
 
 		/*
 		 * Keep on processing the whole batchIn contract regardless of
-		 * whether the current one generates an error contract
+		 * whether the current one generates an error contract or not
+		 *
+		 * If batch operations involve writting into devices, return
+		 * the first device's descriptor
+		 *
+		 * Normally speaking oBIX client applications should manipulate
+		 * one batch object to update the entire contract of one device
+		 * and then back it up to persistent files on the hard drive
+		 * if needed
 		 */
-		obix_batch_process_item(request, item, batch_out);
+		obix_batch_process_item(request, item, batch_out, &dev_uri);
 	}
 
-	xmlFree(is_attr);
+	if (dev_uri) {
+		/* Ignore return value since the URI may not belong to a device */
+		device_backup_uri(dev_uri);
+		xmlFree(dev_uri);
+	}
 
-	return batch_out;
+	/* Fall through */
 
 failed:
 	if (is_attr) {
 	    xmlFree(is_attr);
 	}
 
-	log_error("%s", batch_err_msg[ret].msgs);
-	return obix_server_generate_error(request->request_decoded_uri,
-									  batch_err_msg[ret].type,
-									  "obix:Batch", batch_err_msg[ret].msgs);
+	if (ret > 0) {
+		log_error("%s", server_err_msg[ret].msgs);
+
+		if (batch_out) {
+			xmlFreeNode(batch_out);
+		}
+
+		batch_out = obix_server_generate_error((xmlChar *)request->request_decoded_uri,
+									  server_err_msg[ret].type,
+									  "obix:Batch", server_err_msg[ret].msgs);
+	}
+
+	return batch_out;
 }

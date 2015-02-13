@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
  * This file is part of oBIX.
  *
@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with oBIX.  If not, see <http://www.gnu.org/licenses/>.
+ * along with oBIX. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -47,17 +47,23 @@ typedef enum {
 	WATCH_EVT_NODE_DELETED = 2
 } WATCH_EVT;
 
-xmlNode *handlerWatchServiceMake(obix_request_t *request, const char *overrideUri, xmlNode *input);
-xmlNode *handlerWatchDelete(obix_request_t *request, const char *overrideUri, xmlNode *input);
-xmlNode *handlerWatchAdd(obix_request_t *request, const char *overrideUri, xmlNode *input);
-xmlNode *handlerWatchRemove(obix_request_t *request, const char *overrideUri, xmlNode *input);
-xmlNode *handlerWatchPollChanges(obix_request_t *request, const char *overrideUri, xmlNode *input);
-xmlNode *handlerWatchPollRefresh(obix_request_t *request, const char *overrideUri, xmlNode *input);
+xmlNode *handlerWatchServiceMake(obix_request_t *request, const xmlChar *href, xmlNode *input);
+xmlNode *handlerWatchDelete(obix_request_t *request, const xmlChar *href, xmlNode *input);
+xmlNode *handlerWatchAdd(obix_request_t *request, const xmlChar *href, xmlNode *input);
+xmlNode *handlerWatchRemove(obix_request_t *request, const xmlChar *href, xmlNode *input);
+xmlNode *handlerWatchPollChanges(obix_request_t *request, const xmlChar *href, xmlNode *input);
+xmlNode *handlerWatchPollRefresh(obix_request_t *request, const xmlChar *href, xmlNode *input);
 
 int obix_watch_init(const int);
 void obix_watch_dispose(void);
 
-void xmldb_notify_watches(xmlNode *node, WATCH_EVT evt);
+void watch_notify_watches(long id, xmlNode *monitored, WATCH_EVT event);
+
+int watch_update_uri(const xmlChar *href, const xmlChar *new);
+xmlNode *watch_copy_uri(const xmlChar *href, xml_copy_flags_t flags);
+int watch_get_op_id(const xmlChar *href, long *id);
+
+int is_watch_service_make_href(const xmlChar *href);
 
 #endif /* _WATCH_HEADER_ */
 

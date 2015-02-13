@@ -17,12 +17,12 @@ set (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 SET (CMAKE_C_FLAGS "-g -Wall -Werror")
 
 # Debug build flags. cmake -DCMAKE_BUILD_TYPE=Debug .
-SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_REFCNT -DDEBUG_VALGRIND -DDEBUG_CACHE")
+SET (CMAKE_C_FLAGS_DEBUG "-g -Wall -Werror -DDEBUG -DDEBUG_VALGRIND")
 
 # Location to install header files
 SET(INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
 
-ADD_EXECUTABLE(obix-fcgi batch.c history.c obix_fcgi.c obix_request.c server.c watch.c xml_storage.c)
+ADD_EXECUTABLE(obix-fcgi batch.c history.c obix_fcgi.c obix_request.c server.c watch.c xml_storage.c device.c errmsg.c security.c)
 
 TARGET_LINK_LIBRARIES(obix-fcgi fcgi rt pthread libobix-common ${LIBS})
 

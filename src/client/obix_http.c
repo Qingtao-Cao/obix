@@ -1,5 +1,5 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  * Copyright (c) 2009 Andrey Litvinov
  *
  * This file is part of oBIX
@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>		/* write */
+#include <math.h>		/* pow */
 #include "xml_config.h"
 #include "log_utils.h"
 #include "curl_ext.h"
@@ -34,6 +35,10 @@
 static const char *OBIX_WRITE_NODE_DOC =
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
 "<%s href=\"%s\" val=\"%s\"/>\r\n";
+
+static const char *OBIX_SIGNOFF_DOC =
+"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
+"<obj href=\"%s\"/>\r\n";
 
 /*
  * The watchIn contract is used for both Watch.Add
@@ -63,6 +68,7 @@ static const char *WATCH_DELETE = "delete";
 static const char *OBIX_WATCH_OUT_LIST_NAME = "values";
 
 static const char *OBIX_LOBBY_SIGNUP = "signUp";
+static const char *OBIX_LOBBY_SIGNOFF = "signOff";
 static const char *OBIX_LOBBY_BATCH = "batch";
 static const char *OBIX_LOBBY_WATCH_SERVICE = "watchService";
 static const char *OBIX_LOBBY_HISTORY_SERVICE = "historyService";
@@ -78,12 +84,11 @@ static const char *OBIX_LOBBY_HISTORY_SERVICE_GET = "/get";
 static const char *WATCH_PWI_MIN = "min";
 static const char *WATCH_PWI_MAX = "max";
 
-/*
- * Part of the content of the display attribute of the obix:err
- * contract returned by oBIX server when a device already signed
- * up earlier
- */
-static const char *SERVER_ERRMSG_DEV_EXIST = "already exists";
+static const char *HTTP_ERR_500 = "500 - Internal Server Error";
+static const char *HTTP_ERR_503 = "503 - Service Not Available";
+
+/* The maximal number of times to retry a http request */
+static int HTTP_RETRY_MAX = 5;
 
 /*
  * Defines HTTP communication stack.
@@ -115,6 +120,74 @@ const Comm_Stack OBIX_HTTP_COMM_STACK = {
 	.query_history = http_query_history,
 };
 
+/*
+ * Return 1 if the given response contains is an error contract
+ *
+ * NOTE: in case of oBIX server error, its host web (such as lighttpd
+ * etc) server will return a html document
+ */
+int is_err_contract(const xmlNode *root)
+{
+	char *contract = xml_dump_node(root);
+	int ret = 0;
+
+	if (xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		ret = 1;
+		goto out;
+	}
+
+	if (xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_HTML) == 0 &&
+		contract && strstr(contract, HTTP_ERR_500)) {
+		log_debug("%s, possibly because oBIX server:\n"
+				  "1. may have crashed, or\n"
+				  "2. may have reached resource limit, or\n"
+				  "3. is buggy and shutdown fastcgi channel unexpectedly\n"
+				  "See lighttpd's error.log and use \"strace -ff\" to analyse "
+				  "its behaviour!", HTTP_ERR_500);
+		ret = 1;
+	}
+
+out:
+	if (contract) {
+		if (ret == 1) {
+			log_debug("Error contract returned from server:\n%s", contract);
+		}
+
+		free(contract);
+	}
+
+	return ret;
+}
+
+/*
+ * Return 1 if the given response contains a HTTP 503 type of error
+ */
+int is_service_unavailable(const xmlNode *root)
+{
+	char *contract = xml_dump_node(root);
+	static int printed = 0;
+	int ret = 0;
+
+	if (xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_HTML) == 0 &&
+		contract && strstr(contract, HTTP_ERR_503)) {
+		if (printed == 0) {
+			log_debug("%s, oBIX server too busy to handle more requests\n"
+					  "Report to its administrator to either:\n"
+					  "1. increase the backlog queue of the FCGX socket, or\n"
+					  "2. spawn more server threads", HTTP_ERR_503);
+			printed = 1;
+		}
+
+		ret = 1;
+	}
+
+	if (contract) {
+		free(contract);
+	}
+
+	return ret;
+}
+
 static Listener *_listener_get(Device *dev, const char *name)
 {
 	Listener *l;
@@ -142,6 +215,11 @@ static void http_destroy_connection_hrefs(Http_Connection *hc)
 	if (hc->signup) {
 		free(hc->signup);
 		hc->signup = NULL;
+	}
+
+	if (hc->signoff) {
+		free(hc->signoff);
+		hc->signoff = NULL;
 	}
 
 	if (hc->batch) {
@@ -268,7 +346,7 @@ int http_open_connection(Connection *conn)
 	free(ip_lobby);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Failed to read oBIX server's lobby facility");
 		ret = OBIX_ERR_SERVER_ERROR;
 		goto failed;
@@ -277,6 +355,14 @@ int http_open_connection(Connection *conn)
 	if (!(href = xml_get_child_href(root, OBIX_OBJ_OP, OBIX_LOBBY_SIGNUP)) ||
 		link_pathname(&hc->signup, hc->ip, hc->lobby, href, NULL) < 0) {
 		log_error("Failed to get href of %s from oBIX server", OBIX_LOBBY_SIGNUP);
+		ret = OBIX_ERR_NO_MEMORY;
+		goto failed;
+	}
+	free(href);
+
+	if (!(href = xml_get_child_href(root, OBIX_OBJ_OP, OBIX_LOBBY_SIGNOFF)) ||
+		link_pathname(&hc->signoff, hc->ip, hc->lobby, href, NULL) < 0) {
+		log_error("Failed to get href of %s from oBIX server", OBIX_LOBBY_SIGNOFF);
 		ret = OBIX_ERR_NO_MEMORY;
 		goto failed;
 	}
@@ -374,21 +460,49 @@ int http_unregister_device_local(Device *device)
 
 int http_unregister_device(Device *dev)
 {
-	static int count = 0;
+	Connection *conn = dev->conn;
+	Http_Connection *hc = conn->priv;
+	Http_Device *hd = dev->priv;
+	xmlDoc *doc = NULL;
+	xmlNode *root;
+	char *buf;
+	int len, ret;
 
-	/*
-	 * TODO: Raise signoff request to oBIX server to sign off
-	 * the device.
-	 *
-	 * NOTE: the Http_Device should be unconditionally deleted
-	 * now that its parent Device descriptor has been dequeued
-	 * and will be released once this function returns
-	 */
-	if (count++ < 1) {
-	    log_warning("Unfortunately driver unregistering is not supported yet.");
+	len = strlen(OBIX_SIGNOFF_DOC) + strlen(hd->href) - 2;
+
+	if (!(buf = (char *)malloc(len + 1))) {
+		log_error("Failed to assemble signOff contract");
+		return OBIX_ERR_NO_MEMORY;
+	}
+	sprintf(buf, OBIX_SIGNOFF_DOC, hd->href);
+
+	hc->handle->outputBuffer = buf;
+
+	pthread_mutex_lock(&hc->curl_mutex);
+	ret = curl_ext_postDOM(hc->handle, hc->signoff, &doc);
+	pthread_mutex_unlock(&hc->curl_mutex);
+
+	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
+		is_err_contract(root) == 1) {
+		log_error("signOff failed for Device %s on Connection %d",
+				  dev->name, conn->id);
+		ret = OBIX_ERR_SERVER_ERROR;
+	} else {
+		/*
+		 * Only delete client side descriptor after the device has
+		 * been properly signed off at the server side
+		 */
+		http_unregister_device_local(dev);
+		ret = OBIX_SUCCESS;
 	}
 
-	return http_unregister_device_local(dev);
+	if (doc) {
+		xmlFreeDoc(doc);
+	}
+
+	free(buf);
+
+	return ret;
 }
 
 int http_register_device(Device *dev, const char *data)
@@ -398,8 +512,8 @@ int http_register_device(Device *dev, const char *data)
 	Http_Device *hd;
 	xmlDoc *doc = NULL;
 	xmlNode *root;
-	char *display = NULL;
 	int ret = OBIX_ERR_SERVER_ERROR;
+	int count = 0, delay;
 
 #ifdef DEBUG
 	if (xml_is_valid_doc(data, NULL) == 0) {
@@ -413,6 +527,11 @@ int http_register_device(Device *dev, const char *data)
 	}
 	memset(hd, 0, sizeof(Http_Device));
 
+again:
+	if (doc) {
+		xmlFreeDoc(doc);
+	}
+
 	/*
 	 * Connection.mutex must be grabbed during the communication
 	 * with the oBIX server to ensure no race conditions in the
@@ -424,37 +543,40 @@ int http_register_device(Device *dev, const char *data)
 	ret = curl_ext_postDOM(hc->handle, hc->signup, &doc);
 	pthread_mutex_unlock(&hc->curl_mutex);
 
-	if (ret < 0 || !(root = xmlDocGetRootElement(doc))) {
+	/*
+	 * If the device has been registered by the same client
+	 * already, the oBIX server won't return any error contract.
+	 * This happens when clients are terminated due to error
+	 * and then restarted
+	 */
+	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
+		is_err_contract(root) == 1) {
 		log_error("SignUp failed for Device %s on Connection %d",
 				  dev->name, conn->id);
+		ret = OBIX_ERR_SERVER_ERROR;
 		goto failed;
-	}
-
-	/*
-	 * If oBIX server returned an error contract, further check if the
-	 * device has been registered.
-	 *
-	 * NOTE: must return success in this case to support the re-run
-	 * of adaptors as recovery after crash but the oBIX server is not
-	 * rebooted therefore all device contracts are still available
-	 */
-	if (xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
-		display = (char *)xmlGetProp(root, BAD_CAST OBIX_ATTR_DISPLAY);
-
-		if (!display || strstr(display, SERVER_ERRMSG_DEV_EXIST) == NULL) {
-			/* No display, or other types of error */
-			goto failed;
-		}
-
-		log_warning("Device already registered on oBIX server, NOT necessarily "
-					"registered by the previous instance of this application! "
-					"Try to live with it anyway");
 	}
 
 	if (!(hd->href = (char *)xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF))) {
-		log_error("No href in the device contract returned from oBIX server:\n%s",
-				  xml_dump_node(root));
-		goto failed;
+		/* Retry if the service is temporarily not available */
+		if (is_service_unavailable(root) == 1) {
+			if (count < HTTP_RETRY_MAX) {
+				delay = pow(2, count++);
+				log_debug("Sleep %d seconds and retry", delay);
+				sleep(delay);
+				goto again;
+			} else {
+				log_error("Retry threshold (%d) reached, %s",
+						  count, HTTP_ERR_503);
+				ret = OBIX_ERR_SERVER_ERROR;
+				goto failed;
+			}
+		} else {
+			log_error("Response has no href for Device %s on Connection %d",
+					  dev->name, conn->id);
+			ret = OBIX_ERR_SERVER_ERROR;
+			goto failed;
+		}
 	}
 
 	dev->priv = hd;
@@ -465,10 +587,6 @@ int http_register_device(Device *dev, const char *data)
 	/* Fall through */
 
 failed:
-	if (display) {
-		free(display);
-	}
-
 	if (doc) {
 		xmlFreeDoc(doc);
 	}
@@ -512,7 +630,7 @@ static int http_watch_item_helper(Device *dev, Listener *l, const int add)
 	pthread_mutex_unlock(&hd->curl_mutex);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("%s failed for Device %s on Connection %d",
 				  (add == 1) ? "Watch.Add" : "Watch.Remove",
 				  dev->name, conn->id);
@@ -633,7 +751,7 @@ static int http_remove_watch(Device *dev)
 	pthread_mutex_unlock(&hd->curl_mutex);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Watch.Delete failed for Device %s on Connection %d",
 				  dev->name, conn->id);
 		ret = OBIX_ERR_SERVER_ERROR;
@@ -675,7 +793,7 @@ static void watch_poll_task(void *arg)
 	hd->poll_handle->outputBuffer = NULL;
 	if (curl_ext_postDOM(hd->poll_handle, hd->watch_pollChanges, &doc) < 0 ||
 		!(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Watch.pollChanges failed for Device %s on Connection %d",
 				  dev->name, conn->id);
 		goto failed;
@@ -815,7 +933,7 @@ static int http_write_core(CURL_EXT *handle,
 	}
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Write operation failed for %s", href);
 		ret = OBIX_ERR_SERVER_ERROR;
 	} else {
@@ -893,7 +1011,7 @@ static int _http_create_watch(Device *dev)
 	pthread_mutex_unlock(&hd->curl_mutex);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Watch.Make failed for Device %s on Connection %d",
 				  dev->name, conn->id);
 		ret = OBIX_ERR_SERVER_ERROR;
@@ -1040,7 +1158,7 @@ int http_register_listener(Listener *l)
 	}
 
 	if ((ret = _http_add_watch_item(dev, l)) != OBIX_SUCCESS) {
-		log_error("Failed to add a watch item for %s on Device %d",
+		log_error("Failed to add a watch item for %s on Device %s",
 				  l->param, dev->name);
 		pthread_mutex_unlock(&dev->mutex);
 		goto failed;
@@ -1122,7 +1240,7 @@ int http_refresh_listeners(Device *dev, xmlDoc **doc)
 	pthread_mutex_unlock(&hd->curl_mutex);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(*doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Watch.pollRefresh failed for Device %s of Connection %d",
 				  dev->name, conn->id);
 
@@ -1170,7 +1288,7 @@ int http_read(CURL_EXT *user_handle, Device *dev, const char *param,
 	free(href);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(*doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Failed to read from Device %s on Connection %d",
 				  dev->name, conn->id);
 
@@ -1208,7 +1326,7 @@ int http_read_value(CURL_EXT *user_handle, Device *dev, const char *param,
 	}
 
 	if (!(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		ret = OBIX_ERR_SERVER_ERROR;
 		goto failed;
 	}
@@ -1288,7 +1406,7 @@ int http_get_history(CURL_EXT *user_handle, Device *dev)
 	xmlDoc *doc = NULL;
 	xmlNode *root;
 	char *buf, *href = NULL;
-	int len, ret;
+	int len, ret, count = 0, delay;
 
 	if (hd->hist_index) {	/* history facility already created */
 		return OBIX_SUCCESS;
@@ -1302,6 +1420,11 @@ int http_get_history(CURL_EXT *user_handle, Device *dev)
 	}
 	sprintf(buf, OBIX_HISTORY_GET_DOC, dev->name);
 
+again:
+	if (doc) {
+		xmlFreeDoc(doc);
+	}
+
 	handle->outputBuffer = buf;
 	if (!user_handle) {
 		pthread_mutex_lock(&hc->curl_mutex);
@@ -1310,15 +1433,35 @@ int http_get_history(CURL_EXT *user_handle, Device *dev)
 	if (!user_handle) {
 		pthread_mutex_unlock(&hc->curl_mutex);
 	}
-	free(buf);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0 ||
-		!(href = (char *)xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF))) {
+		is_err_contract(root) == 1) {
 		log_error("History.Get failed for Device %s on Connection %d",
 				  dev->name, conn->id);
 		ret = OBIX_ERR_SERVER_ERROR;
 		goto failed;
+	}
+
+	if (!(href = (char *)xmlGetProp(root, BAD_CAST OBIX_ATTR_HREF))) {
+		/* Retry if the service is temporarily not available */
+		if (is_service_unavailable(root) == 1) {
+			if (count < HTTP_RETRY_MAX) {
+				delay = pow(2, count++);
+				log_debug("Sleep %d seconds and retry", delay);
+				sleep(delay);
+				goto again;
+			} else {
+				log_error("Retry threshold (%d) reached, %s",
+						  count, HTTP_ERR_503);
+				ret = OBIX_ERR_SERVER_ERROR;
+				goto failed;
+			}
+		} else {
+			log_error("Response has no href for Device %s on Connection %d",
+					  dev->name, conn->id);
+			ret = OBIX_ERR_SERVER_ERROR;
+			goto failed;
+		}
 	}
 
 	if (link_pathname(&hd->hist_append, hc->ip, href, HIST_OP_APPEND,
@@ -1363,6 +1506,7 @@ failed:
 		}
 	}
 
+	free(buf);
 	return ret;
 }
 
@@ -1385,7 +1529,7 @@ int http_get_history_index(CURL_EXT *user_handle, Device *dev, xmlDoc **doc)
 	}
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(*doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Failed to read history index for Device %s on Connection %d",
 				  dev->name, conn->id);
 
@@ -1429,7 +1573,7 @@ int http_append_history(CURL_EXT *user_handle, Device *dev, const char *ain)
 	}
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(doc)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("History.Append failed for Device %s on Connection %d",
 				  dev->name, conn->id);
 		ret = OBIX_ERR_SERVER_ERROR;
@@ -1534,7 +1678,7 @@ int http_send_batch(CURL_EXT *user_handle, Batch *batch)
 	free(data);
 
 	if (ret < 0 || !(root = xmlDocGetRootElement(batch->out)) ||
-		xmlStrcmp(root->name, BAD_CAST OBIX_OBJ_ERR) == 0) {
+		is_err_contract(root) == 1) {
 		log_error("Batch sending failed for Connection %d", conn->id);
 		return OBIX_ERR_SERVER_ERROR;
 	}

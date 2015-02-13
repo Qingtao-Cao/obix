@@ -2,8 +2,7 @@
 
 Providing oBIX Server and client implementation for C language
  
-Copyright (c) 2014 Tyler Watson [tyler.watson@nextdc.com]    
-Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]    
+Copyright (c) 2013-2015 Qingtao Cao [qingtao.cao.au@gmail.com]
 Copyright (c) 2009 Andrey Litvinov [litvinov.andrey@gmail.com]
  
 oBIX is free software licensed under the GPLv3+ License. The text for this license can be found in the COPYING file. Also it's worthwhile to mention that the src/libs/list.h file comes from Linux kernel source tree and thus is under the GPLv2 License.
@@ -14,38 +13,46 @@ oBIX is an open source project derived from the C oBIX Tools (CoT) project devel
 
 The whole project is written in C and has tiny resource requirements. It allows the project to run on embedded Linux platforms, such as OpenWrt (http://openwrt.org).
 
-This package contains both the implementation of the oBIX Server and the client side libraries to support further oBIX adaptors development. Existing oBIX adaptors are released in a separate package of ONEDC/obix-adaptors since they are expected to evolve much faster than the oBIX package.
-
+This package contains the implementation of the oBIX Server, the client side libraries and a number of oBIX adaptors.
 
 ## 1.1 C oBIX Server
  
-C oBIX Server is a stand-alone application intended for storing building automation data from various sources. It is a core for automation systems, providing a unified Web services interface to control connected devices (security sensors, heating / ventilation systems, lights, switches, etc.). 
+C oBIX Server is a stand-alone application intended for storing building automation data from various sources. It is a core for automation systems, providing a unified Web services interface to access and control connected devices (power monitoring sensors, security sensors, heating / ventilation systems, lights, switches, etc.). 
 
-Devices are connected to the server through oBIX adaptors. These adaptors are separate applications, which convert device-specific protocol into oBIX messages. The server provides the same oBIX interface for devices (device adaptors) and UI management applications. 
+Devices are connected to the server through oBIX adaptors. These adaptors are separate applications that speak hardware-specific language to obtain data from hardware and convert into oBIX format. The server provides the same interface for oBIX adaptors and oBIX clients (e.g., UI management application).
 
-The main difference between this oBIX Server and other available implementations (such as oFMS http://www.stok.fi/eng/ofms/index.html or oX http://obix-server.sourceforge.net) is it is written in C and can be run on cheap low-resource platforms and more importantly, faster.
+This oBIX server is stable, fast and scale very well. One of the main difference between it and other available implementations (such as oFMS http://www.stok.fi/eng/ofms/index.html or oX http://obix-server.sourceforge.net) is it is written in C and has tiny footprint and therefore can be run on cheap low-resource platforms. 
 
 The list of currently implemented oBIX features includes:
- - Read, write and invoke requests handling
- - Lobby object
- - Batch operation (see docs/BATCH.md)
+ - Read, write, invoke and delete requests handling
+ - Lobby objects (for Device, Watch and History subsystems respectively)
+ - Batch operation
  - HTTP protocol binding
- - WatchService (see docs/WATCH.md)
- - Histories (see docs/HISTORY.md).
+ - Device subsystem
+ - Watch subsystem
+ - History subsystem
+ - Multi-thread support
 
-The list of things that are NOT yet supported:
+There are a lot of useful markdown documents under docs/ about use cases, tips and insights of implemented features on the oBIX server.
+
+The list of things in oBIX 1.1 specification that are NOT yet supported:
  - Alarms
  - Feeds
- - Writable points (simple writable objects can be used instead)
+ - Writable points
  - Permission based degradation
  - Localisation
- - SOAP binding.
+ - SOAP binding
+ - Security
+ - History Rollups.
 
-If a feature doesn’t appear in either of the lists above, it is probably not implemented. In addition to standard oBIX functionality, the server has the following additional features:
- - SignUp operation, accessible from the Lobby object. It allows clients (device adaptors) to publish new data to the server
- - Device lobby, showing all devices registered to the server
+If a feature doesn’t appear in either of the lists above, it is probably not implemented.
+
+In addition to standard oBIX functionality, the server has the following additional features:
+ - SignUp and signOff operations which allow clients (device adaptors) to register and unregister new data to the server respectively
+ - Persistent Devices, which enables the oBIX Server to save device contracts in hard-drive (and updated periodically). In case server crashed, it could recover from persistent devices files without requiring a restart of relevant oBIX adaptors
  - Long polling mode for Watch objects. This mode allows clients to reduce the number of poll requests and at the same time, receive immediate updates from the server. Additional information about this feature can be found
-  at http://c-obix-tools.googlecode.com/files/long_polling.pdf.
+  at http://c-obix-tools.googlecode.com/files/long_polling.pdf
+ - Multi-thread support, which significantly boosts the performance and scalability of the oBIX Server by spawning multiple server threads to accept and handle FCGI requests in parallel.
 
 # 2. System Requirements
  
@@ -54,6 +61,9 @@ This project has been created for running on Linux platforms. It was tested on v
 Other Linux distributions for embedded devices were not tested but may possibly be used if all project dependencies are satisfied.
 
 The project has the following libraries or packages dependencies:
+ - libcsv (for BMS adaptor only)
+ - libmodbus-devel (for MGATE adaptor only)
+ - libcurl (for adaptors and other client side applications only)
  - fcgi-devel
  - libxml2-devel
  - glibc-devel
@@ -80,7 +90,8 @@ Below is a short description of the main files in the package:
 * src/
 
     * docs/ - Further documentation.
-	* client/ - Source for oBIX client library
+	* client/ - Source for oBIX client library.
+	* adaptors/ - Source for oBIX adaptors.
     * libs/ - Source for oBIX common library shared by both server and client sides.
     * server/ - Source for oBIX Server.
 	* tools/ - Some useful simple programs to aid in development or testing.
@@ -99,24 +110,32 @@ Below is a short description of the main files in the package:
 
 ## 3.1 Layout of Resource Folder
 
-	res/
+The organisation of the oBIX resource folder looks like below:
+
+	/etc/obix/res/
+	├── adaptors
+	│   ├── bms_adaptor_devices_config.xml
+	│   ├── bms_adaptor_history_template.xml
+	│   ├── example_adaptor_devices_config.xml
+	│   ├── example_adaptor_history_template.xml
+	│   ├── generic_server_config.xml
+	│   └── mg_adaptor_devices_config.xml
 	├── obix-fcgi.conf
 	├── OpenWrt-SDK
-	│  	└── README
+	│   └── README
 	└── server
-    	├── core
-	    │   ├── server_lobby.xml
-    	│   └── server_sys_objects.xml
-	    ├── devices
-    	│   └── server_test_device.xml
-	    ├── histories
-	    ├── server_config.xml
-    	└── sys
-        	├── server_about.xml
-	        ├── server_def.xml
-    	    ├── server_devices.xml
-        	├── server_history.xml
-	        └── server_watch.xml
+	    ├── core
+    	│   ├── server_lobby.xml
+	    │   └── server_sys_objects.xml
+    	├── server_config.xml
+		├── devices -> /tmp/spare/obix/devices
+		├── histories -> /tmp/spare/obix/histories/
+	    └── sys
+    	    ├── server_about.xml
+        	├── server_def.xml
+	        ├── server_history.xml
+    	    └── server_watch.xml
+
 
 * obix-fcgi.conf 
 
@@ -124,19 +143,23 @@ Below is a short description of the main files in the package:
 
 * server/server_config.xml
 
-    The main configuration file of the oBIX Server. Static server configuration files will be loaded in sequence:
-
-        core -> sys -> devices
+    The main configuration file containing various settings that control the scalability and performance of the oBIX Server. System administrators are highly recommended to tune these settings according to their specific scenario (e.g., the number of devices that are likely registered on the oBIX Server)
 
 * server/devices/
 
-    In the future, the oBIX Server is likely to support 'Persistent Device' and will have device contracts saved as separate files in this folder on the hard drive and loaded into the global XML database at start-up.
+	Periodically backed up device contracts registered onto the oBIX Server.
 
-* histories/
+Note: This folder does not exist in the source code and is created at installation. For the sake of hard disk performance a standalone hard disk had better be mounted onto this folder
+
+* server/histories/
 
     Contains history facilities for various devices. Each device will have its own separate sub-folder that contains an index file and a number of raw history data files named by the date when they are generated. For details see docs/HISTORY.md
 
 Note: This folder does not exist in the source code and is created at installation. For the sake of hard disk performance a standalone hard disk had better be mounted onto this folder because history facilities are likely to consume a vast amount of space during a long period of time.
+
+* adaptors/
+
+	Contains configuration files for various oBIX adaptors.
 
 # 4. Build Instructions
 
@@ -175,8 +198,6 @@ The default install path for documentation is /usr/share/doc/obix. To change thi
     $ sudo make install
     
 See redhat/obix.spec for further details.
-
-
 
 **RPM build**
 
@@ -273,9 +294,8 @@ The "-o cat" option helps highlight the actual message by suppressing meta data 
 
 		$ sudo tail /var/log/lighttpd/error.log
 
-* Strace is very handy to nail down the reason why lighttpd failed to start oBIX Server:
+* Strace is very handy to understand lighttpd behaviour, providing an insight into why it failed to start the oBIX server, or how it run into a broken fastcgi channel.
 
-		$ cd /etc/lighttpd
 		$ sudo strace -ff -o strace lighttpd -f /etc/lighttpd/lighttpd.conf
 
 	The above command will have multiple strace.<TID> files generated under
@@ -283,7 +303,6 @@ The "-o cat" option helps highlight the actual message by suppressing meta data 
 
 * Moreover, if the lighttpd thread that tries to execute oBIX Server segfaults, it is also desirable to have coredump generated. To enable this, use the following commands:
 
-		$ cd /etc/lighttpd
 		$ ulimit -c unlimited
 		$ sudo lighttpd -f /etc/lighttpd/lighttpd.conf
 
@@ -293,4 +312,4 @@ The "-o cat" option helps highlight the actual message by suppressing meta data 
 
 * If obix-fcgi binary failed to find libobix.so, its path can be specified in the "bin-environment" setting of the obix-fcgi.conf file.
 
-* If the oBIX server oops on the fly, gdb can be used to attach to a running instance of the obix-fcgi binary and capture the calltrace on the spot.
+* If the oBIX server oops on the fly, gdb can be used to attach to a running instance of the obix-fcgi binary and capture the calltrace on the spot. One example of how gdb is used to debug multi-thread related problems can be found at docs/MULTI_THREADS.md

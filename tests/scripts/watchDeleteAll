@@ -9,6 +9,6 @@ for i in `curl http://localhost:4242/obix/watchService | \
 		  xmllint --format - | \
 		  grep LongPollWatch | \
 		  awk -F 'href="watch' '{print $2}' | \
-		  awk -F '" ' '{print $1}'`; do \
+		  awk -F '"' '{print $1}'`; do \
 	./watchDeleteSingle -w $i > null 2>&1; \
 done

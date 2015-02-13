@@ -1,20 +1,20 @@
 /* *****************************************************************************
- * Copyright (c) 2013-2014 Qingtao Cao [harry.cao@nextdc.com]
+ * Copyright (c) 2013-2015 Qingtao Cao
  *
- * This file is part of obix-adaptors
+ * This file is part of obix.
  *
- * obix-adaptors is free software: you can redistribute it and/or modify
+ * obix is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * obix-adaptors is distributed in the hope that it will be useful,
+ * obix is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with obix-adaptors.  If not, see <http://www.gnu.org/licenses/>.
+ * along with obix. If not, see <http://www.gnu.org/licenses/>.
  *
  * *****************************************************************************/
 
@@ -318,6 +318,12 @@ typedef struct mg_bcm {
 	 */
 	char *history_name;
 
+	/*
+	 * the flag used during clean up process to unregister those
+	 * devices that have actually been registered
+	 */
+	int registered;
+
 	/* starting slave ID of this device */
 	int slave_id;
 
@@ -429,6 +435,12 @@ typedef struct mg_bm {
 	 */
 	char *history_name;
 
+	/*
+	 * the flag used during clean up process to unregister those
+	 * devices that have actually been registered
+	 */
+	int registered;
+
 	/* next time to append history record */
 	time_t htime;
 
@@ -471,37 +483,27 @@ static const char *MG_BCM_OFFLINED = "DEVICE OFFLINED";
 /*
  * oBIX contract of a Veris BCM, the name of each attribute must be
  * the same as those indicated above.
- *
- * Note,
- * 1. Any attribute that needs to be updated at the runtime would
- * have to be declared as writable, or otherwise oBIX server will
- * regard them as read-only.
- *
- * In particular, those static AUX information from serial number
- * to location string would have to be declared as writable as well
- * so that they also can be updated once relevant BCM is brought
- * on-line which used to be disconnected at program start-up.
  */
 static const char *OBIX_BCM_CONTRACT =
 "<obj name=\"%s\" href=\"/obix/deviceRoot%s%s/\" is=\"nextdc:veris-bcm\">\r\n"
 "<int name=\"SlaveID\" href=\"SlaveID\" val=\"%d\"/>\r\n"
-"<int name=\"SerialNumber\" href=\"SerialNumber\" val=\"0x%x\" writable=\"true\"/>\r\n"
-"<int name=\"Firmware\" href=\"Firmware\" val=\"0x%.8x\" writable=\"true\"/>\r\n"
-"<int name=\"Model\" href=\"Model\" val=\"%d\" writable=\"true\"/>\r\n"
-"<int name=\"CTConfig\" href=\"CTConfig\" val=\"%d\" writable=\"true\"/>\r\n"
-"<str name=\"Location\" href=\"Location\" val=\"%s\" writable=\"true\"/>\r\n"
-"<real name=\"ACFreq\" href=\"ACFreq\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltL-N\" href=\"VoltL-N\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltL-L\" href=\"VoltL-L\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltA\" href=\"VoltA\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltB\" href=\"VoltB\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"VoltC\" href=\"VoltC\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kWh\" href=\"kWh\" displayName=\"Total kWh for 3 phases\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kW\" href=\"kW\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"CurrentAverage\" href=\"CurrentAverage\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"TotalCurrent\" href=\"TotalCurrent\" val=\"%f\" writable=\"true\"/>\r\n"
-"<abstime name=\"LastUpdated\" href=\"LastUpdated\" val=\"%s\" writable=\"true\"/>\r\n"
-"<bool name=\"Online\" href=\"OnLine\" val=\"%s\" writable=\"true\"/>\r\n"
+"<int name=\"SerialNumber\" href=\"SerialNumber\" val=\"0x%x\"/>\r\n"
+"<int name=\"Firmware\" href=\"Firmware\" val=\"0x%.8x\"/>\r\n"
+"<int name=\"Model\" href=\"Model\" val=\"%d\"/>\r\n"
+"<int name=\"CTConfig\" href=\"CTConfig\" val=\"%d\"/>\r\n"
+"<str name=\"Location\" href=\"Location\" val=\"%s\"/>\r\n"
+"<real name=\"ACFreq\" href=\"ACFreq\" val=\"%f\"/>\r\n"
+"<real name=\"VoltL-N\" href=\"VoltL-N\" val=\"%f\"/>\r\n"
+"<real name=\"VoltL-L\" href=\"VoltL-L\" val=\"%f\"/>\r\n"
+"<real name=\"VoltA\" href=\"VoltA\" val=\"%f\"/>\r\n"
+"<real name=\"VoltB\" href=\"VoltB\" val=\"%f\"/>\r\n"
+"<real name=\"VoltC\" href=\"VoltC\" val=\"%f\"/>\r\n"
+"<real name=\"kWh\" href=\"kWh\" displayName=\"Total kWh for 3 phases\" val=\"%f\"/>\r\n"
+"<real name=\"kW\" href=\"kW\" val=\"%f\"/>\r\n"
+"<real name=\"CurrentAverage\" href=\"CurrentAverage\" val=\"%f\"/>\r\n"
+"<real name=\"TotalCurrent\" href=\"TotalCurrent\" val=\"%f\"/>\r\n"
+"<abstime name=\"LastUpdated\" href=\"LastUpdated\" val=\"%s\"/>\r\n"
+"<bool name=\"Online\" href=\"OnLine\" val=\"%s\"/>\r\n"
 "<list name=\"Meters\" href=\"Meters\" of=\"nextdc:Meter\"/>\r\n"
 "</obj>\r\n";
 
@@ -519,11 +521,11 @@ static const char *mg_bm_attr[] = {
  */
 static const char *OBIX_BM_CONTRACT =
 "<obj name=\"%s\" href=\"/obix/deviceRoot%s%s/Meters/%s/\" is=\"nextdc:veris-meter\">\r\n"
-"<real name=\"kWh\" href=\"kWh\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"kW\" href=\"kW\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"V\" href=\"V\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"PF\" href=\"PF\" val=\"%f\" writable=\"true\"/>\r\n"
-"<real name=\"I\" href=\"I\" val=\"%f\" writable=\"true\"/>\r\n"
+"<real name=\"kWh\" href=\"kWh\" val=\"%f\"/>\r\n"
+"<real name=\"kW\" href=\"kW\" val=\"%f\"/>\r\n"
+"<real name=\"V\" href=\"V\" val=\"%f\"/>\r\n"
+"<real name=\"PF\" href=\"PF\" val=\"%f\"/>\r\n"
+"<real name=\"I\" href=\"I\" val=\"%f\"/>\r\n"
 "</obj>\r\n";
 
 static void mg_collector_task(void *);
@@ -1217,13 +1219,6 @@ failed:
 	return NULL;
 }
 
-static void mg_unregister_bm(mg_bm_t *bm)
-{
-	obix_unregister_device(OBIX_CONNECTION_ID, bm->history_name);
-
-	/* History records would always be preserved */
-}
-
 /*
  * Register a BM to oBIX server and have a history facility
  * setup for it
@@ -1257,14 +1252,16 @@ static int mg_register_bm(mg_bm_t *bm)
 	free(dev_data);
 
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to register BM %s", bm->name);
 		return ret;
+	} else {
+		bm->registered = 1;
 	}
 
 	ret = obix_get_history(NULL, OBIX_CONNECTION_ID, bm->history_name);
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to create a history facility for %s", bm->name);
-		mg_unregister_bm(bm);
+		log_error("Failed to create a history facility for %s on BCM %s",
+				  bm->name, bcm->name);
+		/* Clean up of the registered BM will be done before the program exists */
 	}
 
 	return ret;
@@ -1277,7 +1274,11 @@ static void mg_unregister_bcm(mg_bcm_t *bcm)
 
 	for (i = 0; i < MG_PANELS_PER_BCM; i++) {
 		list_for_each_entry(bm, &bcm->devices[i], list) {
-			mg_unregister_bm(bm);
+			if (bm->registered == 0) {
+				continue;
+			}
+
+			obix_unregister_device(OBIX_CONNECTION_ID, bm->history_name);
 		}
 	}
 
@@ -1432,20 +1433,21 @@ static int mg_register_bcm(obix_mg_t *mg, mg_bcm_t *bcm)
 	free(dev_data);
 
 	if (ret != OBIX_SUCCESS) {
-		log_error("Failed to register BCM %s", bcm->name);
 		return ret;
+	} else {
+		bcm->registered = 1;
 	}
 
 	for (i = 0; i < MG_PANELS_PER_BCM; i++) {
 		list_for_each_entry(bm, &bcm->devices[i], list) {
 			if ((ret = mg_register_bm(bm)) != OBIX_SUCCESS) {
-				break;
+				/*
+				 * Return directly to avoid double cleanup, which is done
+				 * by the caller
+				*/
+				return ret;
 			}
 		}
-	}
-
-	if (ret != OBIX_SUCCESS) {
-		mg_unregister_bcm(bcm);
 	}
 
 	return ret;
@@ -1461,6 +1463,10 @@ static void mg_unregister_devices(obix_mg_t *mg)
 
 	list_for_each_entry(bus, &mg->devices, list) {
 		list_for_each_entry(bcm, &bus->devices, list) {
+			if (bcm->registered == 0) {
+				continue;
+			}
+
 			mg_unregister_bcm(bcm);
 		}
 	}
@@ -1499,11 +1505,14 @@ static int mg_register_devices(obix_mg_t *mg)
 		log_debug("Register devices on modbus %s", bus->name);
 		list_for_each_entry(bcm, &bus->devices, list) {
 			if ((ret = mg_register_bcm(mg, bcm)) != OBIX_SUCCESS) {
-				break;
+				goto failed;
 			}
 		}
 	}
 
+	/* Fall through */
+
+failed:
 	if (ret != OBIX_SUCCESS) {
 		mg_unregister_devices(mg);
 	}
@@ -2107,6 +2116,12 @@ static void obix_updater_task_helper(mg_bcm_t *bcm)
 
 	if (obix_update_aux(bcm) != OBIX_SUCCESS) {
 		log_error("Failed to update AUX status on %s", bcm->name);
+	}
+
+	if (bcm->off_line == 1) {
+		log_warning("BCM %s offlined, skip updating all its BM contracts "
+					"and relevant history facilities", bcm->name);
+		return;
 	}
 
 	if (obix_update_bm(bcm) != OBIX_SUCCESS) {
