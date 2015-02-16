@@ -6,7 +6,7 @@
 # By far only one uri can be specified by this script, however
 # a watch object may have been monitoring a number of objects.
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
 usage()
@@ -56,4 +56,4 @@ curl $verbose -XPOST --data "
 		<uri val=\"$uri\"/>
 	</list>
 </obj> " \
-http://localhost:4242/obix/watchService/$folder/watch$watch/remove
+http://localhost/obix/watchService/$folder/watch$watch/remove

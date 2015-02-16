@@ -7,7 +7,7 @@
 # the watch subsystem supports a watch object keeping an eye on
 # arbitary number of objects
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
 usage()
@@ -57,4 +57,4 @@ curl $verbose -XPOST --data "
 		<uri val=\"$uri\"/>
 	</list>
 </obj> " \
-http://localhost:4242/obix/watchService/$folder/watch$watch/add
+http://localhost/obix/watchService/$folder/watch$watch/add

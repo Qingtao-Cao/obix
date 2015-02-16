@@ -3,7 +3,7 @@
 # A simple shell script to test History.Query facility to get
 # all history data of the specified device.
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
 usage()
@@ -42,4 +42,4 @@ device=${device#/obix/historyService/histories/}
 device=${device#/}
 device=${device%/}
 
-curl $verbose -XPOST --data '' http://localhost:4242/obix/historyService/histories/$device/query
+curl $verbose -XPOST --data '' http://localhost/obix/historyService/histories/$device/query

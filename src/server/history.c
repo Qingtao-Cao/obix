@@ -293,17 +293,17 @@ static int add_abs_count(obix_hist_file_t *file, int added)
  * potential improvement will require creating iovecs array for arbitrary
  * number of records, making it not that appealing.
  *
- * Return > 0 on success, < 0 otherwise
+ * Return 0 on success, > 0 for error code
  */
 static int write_logfile(obix_hist_file_t *file, xmlNode *record)
 {
-	int fd, ret = -1;
 	char *data;
 	struct iovec iov[2];
+	int fd, ret = ERR_HISTORY_IO;
 
 	if (!(data = xml_dump_node(record))) {
 		log_error("Failed to dump record content");
-		return -1;
+		return ERR_NO_MEM;
 	}
 
 	iov[0].iov_base = data;
@@ -311,11 +311,26 @@ static int write_logfile(obix_hist_file_t *file, xmlNode *record)
 	iov[1].iov_base = (char *)HIST_RECORD_SEPARATOR;
 	iov[1].iov_len = strlen(HIST_RECORD_SEPARATOR);
 
-	if ((fd = open(file->filepath, O_APPEND | O_WRONLY | O_SYNC)) > 0) {
-		ret = writev(fd, iov, 2);
-		close(fd);
+	errno = 0;
+	if ((fd = open(file->filepath, O_APPEND | O_WRONLY | O_SYNC)) < 0) {
+		log_error("Failed to open %s because of %s", file->filepath,
+				  strerror(errno));
+		goto failed;
 	}
 
+	errno = 0;
+	if (writev(fd, iov, 2) < 0) {
+		log_error("Failed to append %s because of %s", file->filepath,
+				  strerror(errno));
+	} else {
+		ret = 0;
+	}
+
+	close(fd);
+
+	/* Fall through */
+
+failed:
 	free(data);
 	return ret;
 }
@@ -886,8 +901,7 @@ static int __hist_append_dev(obix_hist_dev_t *dev, xmlNode *input, int *added)
 			}
 		}
 
-		if (write_logfile(file, record) < 0) {
-			ret = ERR_HISTORY_IO;
+		if ((ret = write_logfile(file, record)) > 0) {
 			goto failed;
 		}
 

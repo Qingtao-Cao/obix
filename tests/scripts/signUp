@@ -23,7 +23,7 @@
 # if you pass an argument to this script it will be prepended to the 
 # location of the xml file, see ${1} below in curl command
 
-curl -XPOST --data "@${1}example_device.xml" http://localhost:4242/obix/signUp | grep err 
+curl -XPOST --data "@${1}example_device.xml" http://localhost/obix/signUp | grep err 
 RETVAL=$?
 
 # If grep found err in output then we have an error, and exit test script with 1

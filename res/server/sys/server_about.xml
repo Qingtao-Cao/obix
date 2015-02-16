@@ -23,5 +23,5 @@
 	<str name="name" href="name" val="oBIX Server with Multi-thread Support"/>
 	<abstime name="current_time" href="current_time"/>
 	<abstime name="boot_time" href="boot_time"/>
-	<uri name="project" href="project" val="https://github.com/Qingtao-Cao/obix"/>
+	<uri name="project" href="project" val="https://github.com/Qingtao-Cao/obix.git"/>
 </obj>

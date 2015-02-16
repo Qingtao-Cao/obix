@@ -719,35 +719,44 @@ int xml_is_valid_href(const xmlChar *href)
 int xml_write_file(const char *path, int flags, const char *data, int size)
 {
 	struct iovec iov[2];
-	int fd;
-	int ret = -1;
+	int fd, ret = -1;
 
 	iov[0].iov_base = (char *)XML_HEADER;
 	iov[0].iov_len = XML_HEADER_LEN;
 	iov[1].iov_base = (char *)data;
 	iov[1].iov_len = size;
 
+	errno = 0;
+	if ((fd = open(path, flags)) < 0) {
+		log_error("Failed to open %s because of %s", path,
+				  strerror(errno));
+		return -1;
+	}
+
+	errno = 0;
+	if (writev(fd, iov, 2) < 0) {
+		log_error("Failed to write into %s because of %s", path,
+				  strerror(errno));
+		goto failed;
+	}
+
 	/*
 	 * NOTE: without the usage of O_TRUNC, the latest file size must be
 	 * explicitly setup in order to get rid of any leftover of previous
 	 * snapshot, otherwise the updated XML file will become mal-formed!
 	 */
-	if ((fd = open(path, flags)) >= 0) {
-		errno = 0;
-		if ((ret = writev(fd, iov, 2)) < 0) {
-			log_error("Failed to write into %s due to %s",
-					  path, strerror(errno));
-		} else {
-			errno = 0;
-			if (ftruncate(fd, size + XML_HEADER_LEN) < 0) {
-				log_warning("Failed to truncate %s due to %s",
-							path, strerror(errno));
-			}
-		}
-
-		close(fd);
+	errno = 0;
+	if (ftruncate(fd, size + XML_HEADER_LEN) < 0) {
+		log_error("Failed to truncate %s because of %s", path,
+				  strerror(errno));
+	} else {
+		ret = 0;
 	}
 
+	/* Fall through */
+
+failed:
+	close(fd);
 	return ret;
 }
 

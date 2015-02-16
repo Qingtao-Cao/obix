@@ -2,7 +2,7 @@
 #
 # A simple shell script to create a number of watch objects.
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
 usage()

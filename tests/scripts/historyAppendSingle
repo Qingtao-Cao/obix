@@ -3,7 +3,7 @@
 # A simple shell script to test History.Append facility to append
 # one single history record to the specified device.
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
 usage()
@@ -74,6 +74,6 @@ curl $verbose -XPOST --data "
 		</obj>
 	</list>
 </obj>" \
-http://localhost:4242/obix/historyService/histories/$device/append
+http://localhost/obix/historyService/histories/$device/append
 
 echo

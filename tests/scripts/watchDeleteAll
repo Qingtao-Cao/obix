@@ -2,10 +2,10 @@
 #
 # A simple shell script to delete all watch objects
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
-for i in `curl http://localhost:4242/obix/watchService | \
+for i in `curl http://localhost/obix/watchService | \
 		  xmllint --format - | \
 		  grep LongPollWatch | \
 		  awk -F 'href="watch' '{print $2}' | \
