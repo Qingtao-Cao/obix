@@ -23,6 +23,6 @@
 import pycurl
 
 c = pycurl.Curl()
-c.setopt(c.URL, 'localhost:4242/obix')
+c.setopt(c.URL, 'localhost/obix')
 c.perform()
 

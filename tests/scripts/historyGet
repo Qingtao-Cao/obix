@@ -2,7 +2,7 @@
 #
 # A simple shell script to test History.Get facility
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
 usage()
@@ -42,4 +42,4 @@ device=${device#/obix/historyService/histories}
 # No quotation marks around $verbose or otherwise curl
 # will complain about malformed URL if it is empty
 curl $verbose -XPOST --data "<obj> <str name=\"dev_id\" val=\"$device\"/> </obj>" \
-	http://localhost:4242/obix/historyService/get
+	http://localhost/obix/historyService/get

@@ -28,4 +28,4 @@
 # document if it contains a lot of normal requests. If this input document is
 # malformed, the oBIX server may fail to process all requests in it.
 
-curl -XPOST --data '@batch_in.xml' -H "Expect: " http://localhost:4242/obix/batch
+curl -XPOST --data '@batch_in.xml' -H "Expect: " http://localhost/obix/batch

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -x
 
-OBIX_TEST_URL_BASE="http://localhost:4242"
+OBIX_TEST_URL_BASE="http://localhost"
 OBIX_TEST_URL="$OBIX_TEST_URL_BASE/obix"
 
 ##

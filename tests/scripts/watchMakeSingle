@@ -2,7 +2,7 @@
 #
 # A simple shell script to create a single watch object
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
 usage()
@@ -30,4 +30,4 @@ shift $((OPTIND - 1))
 # No quotation marks around $verbose or otherwise curl
 # will complain about malformed URL if it is empty
 
-curl $verbose -XPOST --data '' http://localhost:4242/obix/watchService/make
+curl $verbose -XPOST --data '' http://localhost/obix/watchService/make

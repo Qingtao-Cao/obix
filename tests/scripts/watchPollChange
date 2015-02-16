@@ -2,7 +2,7 @@
 #
 # A simple shell script to test Watch.pollChange facility
 #
-# Qingtao Cao <qingtao.cao@nextdc.com>
+# Copyright (c) 2013-2015 Qingtao Cao
 #
 
 usage()
@@ -42,4 +42,4 @@ folder=`expr $watch / $setsize`
 # No quotation marks around $verbose or otherwise curl
 # will complain about malformed URL if it is empty
 
-curl $verbose -XPOST --data '' http://localhost:4242/obix/watchService/$folder/watch$watch/pollChanges
+curl $verbose -XPOST --data '' http://localhost/obix/watchService/$folder/watch$watch/pollChanges
