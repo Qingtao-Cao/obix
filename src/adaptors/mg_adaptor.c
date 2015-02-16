@@ -1797,7 +1797,7 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 		}
 	}
 
-	if (timeout == mg->collector_max_timeout) {
+	if (timeout >= mg->collector_max_timeout) {
 		log_warning("Failed to read AUX register table, perhaps BCM %s "
 					"has been unplugged? Mark it as off-line", bcm->name);
 		bcm->off_line = 1;
@@ -1815,7 +1815,7 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 		}
 	}
 
-	if (timeout == mg->collector_max_timeout) {
+	if (timeout >= mg->collector_max_timeout) {
 		log_warning("Failed to read AUX register table, perhaps BCM %s "
 					"has been unplugged? Mark it as off-line", bcm->name);
 		bcm->off_line = 1;
