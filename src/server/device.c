@@ -442,7 +442,7 @@ static int __device_write_meta(obix_dev_t *dev)
 
 	if (xml_write_file(dev->meta, OPEN_FLAG_SYNC, buf, len) < 0) {
 		log_error("Failed to write meta file at %s", dev->meta);
-		ret = ERR_NO_MEM;
+		ret = ERR_DISK_IO;
 	}
 
 	free(buf);
@@ -531,7 +531,7 @@ static int __device_write_file(obix_dev_t *dev, time_t now)
 
 	if (xml_write_file(dev->file, OPEN_FLAG_ASYNC, buf, strlen(buf)) < 0) {
 		log_error("Failed to write device file at %s", dev->file);
-		ret = ERR_NO_MEM;
+		ret = ERR_DISK_IO;
 	}
 
 	/*
