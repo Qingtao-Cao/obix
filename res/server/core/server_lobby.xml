@@ -44,6 +44,10 @@
 		-->
 		<obj name="M1" href="M1">
 			<obj name="DH1" href="DH1" display="Data Hall 1"/>
+			<obj name="DH2" href="DH2" display="Data Hall 2"/>
+			<obj name="DH3" href="DH3" display="Data Hall 3"/>
+			<obj name="DH4" href="DH4" display="Data Hall 4"/>
+			<obj name="DH5" href="DH5" display="Data Hall 5"/>
 		</obj>
 	</obj>
 	<ref name="about" href="/obix/about" is="obix:About"/>
