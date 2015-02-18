@@ -1777,9 +1777,9 @@ static int mg_collect_bm(mg_bcm_t *bcm)
 static void mg_collector_task_helper(mg_bcm_t *bcm)
 {
 	obix_mg_t *mg = mg_get_mg_bcm(bcm);
-	int timeout = 0;
+	int ret, timeout = 0;
 
-	while (mg_collect_aux(bcm) < 0) {
+	while ((ret = mg_collect_aux(bcm)) < 0) {
 		/*
 		 * If the current BCM is believed to have been off-lined,
 		 * then just re-try once
@@ -1797,15 +1797,17 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 		}
 	}
 
-	if (timeout >= mg->collector_max_timeout) {
+	if (ret < 0) {
 		log_warning("Failed to read AUX register table, perhaps BCM %s "
 					"has been unplugged? Mark it as off-line", bcm->name);
 		bcm->off_line = 1;
 		return;
+	} else {
+		bcm->off_line = 0;
 	}
 
 	timeout = 0;
-	while (mg_collect_bm(bcm) < 0) {
+	while ((ret = mg_collect_bm(bcm)) < 0) {
 		bcm->timeout++;
 
 		if (timeout++ < mg->collector_max_timeout) {
@@ -1815,18 +1817,12 @@ static void mg_collector_task_helper(mg_bcm_t *bcm)
 		}
 	}
 
-	if (timeout >= mg->collector_max_timeout) {
+	if (ret < 0) {
 		log_warning("Failed to read AUX register table, perhaps BCM %s "
 					"has been unplugged? Mark it as off-line", bcm->name);
 		bcm->off_line = 1;
 		return;
-	}
-
-	/*
-	 * Successfully read from the device, mark it on-line again so that
-	 * obix_updater could resume posting it status to oBIX server.
-	 */
-	if (bcm->off_line == 1) {
+	} else {
 		bcm->off_line = 0;
 	}
 
