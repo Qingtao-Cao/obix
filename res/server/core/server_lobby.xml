@@ -40,8 +40,19 @@
 		-->
 		<obj name="test" href="test"/>
 		<!--
-			A placeholder for one particular data centre
+			A placeholder for the hierarchy of data centres. In theroy a standalone
+			oBIX client application should setup the infrastructure by signing up
+			high-level device contracts before running any oBIX adaptors so that
+			they can register their own devices properly
 		-->
+		<obj name="B1" href="B1">
+			<obj name="L1" href="L1" display="Data Lane 1"/>
+			<obj name="L2" href="L2" display="Data Lane 2"/>
+			<obj name="L3" href="L3" display="Data Lane 3"/>
+			<obj name="L4" href="L4" display="Data Lane 4"/>
+			<obj name="L5" href="L5" display="Data Lane 5"/>
+			<obj name="L6" href="L6" display="Data Lane 6"/>
+		</obj>
 		<obj name="M1" href="M1">
 			<obj name="DH1" href="DH1" display="Data Hall 1"/>
 			<obj name="DH2" href="DH2" display="Data Hall 2"/>

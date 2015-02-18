@@ -58,7 +58,7 @@
 		NOTE: Administrators are highly recommended to tune this value according
 		to the workload in their specific environment
 	-->
-	<multi_threads val="10"/>
+	<multi_threads val="20"/>
 
 	<!--
 		Mandatory tag, defining maximum number of oBIX server threads for long-poll
