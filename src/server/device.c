@@ -1308,8 +1308,6 @@ int device_add(xmlNode *input, const xmlChar *href, const char *requester_id,
 	list_for_each_entry(dev, &parent->children, siblings) {
 		if (is_str_identical(dev->href, href, 1) == 1) {
 			tsync_writer_exit(&parent->sync);
-			log_debug("Device of %s already signed up by %s",
-					  href, dev->owner_id);
 			ret = (strcmp(dev->owner_id, requester_id) == 0) ?
 						ERR_DEVICE_EXISTS : ERR_DEVICE_CONFLICT_OWNER;
 			goto failed;
