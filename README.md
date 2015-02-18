@@ -82,24 +82,24 @@ Below is a short description of the main files in the package:
 
 * README.md
 
-    This file. Contains project description.
+	This file. Contains project description.
 
 * COPYING
 
-    Contains licensing terms for the project.
+	Contains licensing terms for the project.
  
 * src/
 
-    * docs/ - Further documentation.
+	* docs/ - Further documentation.
 	* client/ - Source for oBIX client library.
 	* adaptors/ - Source for oBIX adaptors.
-    * libs/ - Source for oBIX common library shared by both server and client sides.
-    * server/ - Source for oBIX Server.
+	* libs/ - Source for oBIX common library shared by both server and client sides.
+	* server/ - Source for oBIX Server.
 	* tools/ - Some useful simple programs to aid in development or testing.
 
 * res/
 
-    Resources folder. Various configuration files. See below.
+	Resources folder. Various configuration files. See below.
 
 * tests/scripts/
 
@@ -136,11 +136,11 @@ The organisation of the oBIX resource folder looks like below:
 
 * obix-fcgi.conf 
 
-    Provides the required FCGI settings of oBIX Server for lighttpd. For further details refer to Section 5.
+	Provides the required FCGI settings of oBIX Server for lighttpd. For further details refer to Section 5.
 
 * server/server_config.xml
 
-    The main configuration file containing various settings that control the scalability and performance of the oBIX Server. System administrators are highly recommended to tune these settings according to their specific scenario (e.g., the number of devices that are likely registered on the oBIX Server)
+	The main configuration file containing various settings that control the scalability and performance of the oBIX Server. System administrators are highly recommended to tune these settings according to their specific scenario (e.g., the number of devices that are likely registered on the oBIX Server)
 
 * server/devices/
 
@@ -150,7 +150,7 @@ Note: This folder does not exist in the source code and is created at installati
 
 * server/histories/
 
-    Contains history facilities for various devices. Each device will have its own separate sub-folder that contains an index file and a number of raw history data files named by the date when they are generated. For details see docs/HISTORY.md
+	Contains history facilities for various devices. Each device will have its own separate sub-folder that contains an index file and a number of raw history data files named by the date when they are generated. For details see docs/HISTORY.md
 
 Note: This folder does not exist in the source code and is created at installation. For the sake of hard disk performance a standalone hard disk had better be mounted onto this folder because history facilities are likely to consume a vast amount of space during a long period of time.
 
@@ -180,19 +180,19 @@ Note: CMAKE_C_FLAGS_DEBUG defined in the top level CMakeList.txt seems unable to
 
 The make install target copies the executable, libraries, headers, and res directory.
 
-    $ sudo make install
+	$ sudo make install
     
 The default install path for the libraries is /usr/lib. To change this to /usr/lib64, set the LIB_SUFFIX option on the command line:
 
-    $ cmake -DLIB_SUFFIX="64" .
-    $ make
-    $ sudo make install
+	$ cmake -DLIB_SUFFIX="64" .
+	$ make
+	$ sudo make install
 
 The default install path for documentation is /usr/share/doc/obix. To change this to /usr/share/doc/obix-$version, set the PROJECT_DOC_DIR_SUFFIX:
 
-    $ cmake -D-DPROJECT_DOC_DIR_SUFFIX
-    $ make
-    $ sudo make install
+	$ cmake -D-DPROJECT_DOC_DIR_SUFFIX
+	$ make
+	$ sudo make install
     
 See redhat/obix.spec for further details.
 
@@ -200,7 +200,7 @@ See redhat/obix.spec for further details.
 
 Fedora/RHEL systems can use the specfile redhat/obix.spec, and create a local tarball from git. In this example there is a local git tag named "1.0":
 
-    git archive --format=tar --prefix=obix-1.0/ 1.0 | gzip >obix-1.0.tar.gz
+	git archive --format=tar --prefix=obix-1.0/ 1.0 | gzip >obix-1.0.tar.gz
 
 # 5. Running oBIX Server
 
@@ -218,23 +218,35 @@ To configure a standalone instance:
 
 3. Edit /etc/lighttpd/modules.conf file and add a line to include /etc/lighttpd/conf.d/obix-fcgi.conf:
 
-        include "conf.d/obix-fcgi.conf"
-    
+	include "conf.d/obix-fcgi.conf"
+
+4. Edit /etc/lighttpd/lighttpd.conf file and increase the limit on the maximal open file descriptors to 4096 if the oBIX server is busy
+
+	server.max-fds = 4096
+
+By default the limit is the system-wide 1024 which may result in "Too many open files" type of error. If SELinux is enabled the following command need to be run once:
+
+	$ sudo setsebool -P httpd_setrlimit on
+
 4. Start lighttpd:
 
-        $ sudo service lighttpd start
+	$ sudo service lighttpd start
     
-    Or
-    
-        $ sudo /sbin/lighttpd -f /etc/lighttpd/lighttpd.conf
+Or
+
+	$ sudo /sbin/lighttpd -f /etc/lighttpd/lighttpd.conf
     
 5. Check that oBIX Server has started. The lobby object will we accessible from the browser:
 
-        http://localhost/obix
+	http://localhost/obix
     
-    Or via curl
+Or via curl
     
-        $ curl http://localhost/obix/
+	$ curl http://localhost/obix/
+
+6. Check the limit of open files on lighttpd via procfs, both the soft and hard limits should be 4096 now.
+
+	$ grep "open files" /proc/`pgrep obix-fcgi`/limits
 
 Now you can run any of the scripts in the directory **tests/scripts**.
 
@@ -244,9 +256,7 @@ Lighttpd will use port 80 by default. You need to open this port on your firewal
 
 If you are using iptables, this command will temporarily allow port 80:
 
-```
-/sbin/iptables -A INPUT -m state --state NEW -p tcp --dport 80 -j ACCEPT
-```
+	$ /sbin/iptables -A INPUT -m state --state NEW -p tcp --dport 80 -j ACCEPT
 
 ## 5.3 Troubleshooting (Standalone Lighttpd Instance)
 
@@ -254,29 +264,28 @@ Note: the path to obix-fcgi binary, the lighttpd's configuration and log folders
 
 * On Fedora oBIX Server logs could be observed by journalctl:
 
-		$ journalctl -f /usr/bin/obix-fcgi -o cat
+	$ journalctl -f /usr/bin/obix-fcgi -o cat
 
 The "-o cat" option helps highlight the actual message by suppressing meta data such as a timestamp.
 
 * Once lighttpd is started, use the following command to check the status of the oBIX Server:
 
-		$ ps -eLf | grep lighttpd
+	$ ps -eLf | grep lighttpd
 
 * Normally multiple oBIX Server threads would be displayed. However, if no oBIX Server threads are running, it can be helpful to get to know relevant lighttpd error messages:
 
-		$ sudo tail /var/log/lighttpd/error.log
+	$ sudo tail /var/log/lighttpd/error.log
 
 * Strace is very handy to understand lighttpd behaviour, providing an insight into why it failed to start the oBIX server, or how it run into a broken fastcgi channel.
 
-		$ sudo strace -ff -o strace lighttpd -f /etc/lighttpd/lighttpd.conf
+	$ sudo strace -ff -o strace lighttpd -f /etc/lighttpd/lighttpd.conf
 
-	The above command will have multiple strace.<TID> files generated under
-	the current directory. Examine the tail part of each to identify the culprit.
+	The above command will have multiple strace.<TID> files generated under the current directory. Examine the tail part of each to identify the culprit.
 
 * Moreover, if the lighttpd thread that tries to execute oBIX Server segfaults, it is also desirable to have coredump generated. To enable this, use the following commands:
 
-		$ ulimit -c unlimited
-		$ sudo lighttpd -f /etc/lighttpd/lighttpd.conf
+	$ ulimit -c unlimited
+	$ sudo lighttpd -f /etc/lighttpd/lighttpd.conf
 
 	Then gdb can be used to analyse the backtrace recorded in the core file.
 
